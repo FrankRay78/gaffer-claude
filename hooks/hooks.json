@@ -1,0 +1,17 @@
+{
+  "description": "gaffer hooks — no-chmod refuses an executable-bit chmod on every Bash call and names `bash script.sh` as the alternative. Registered without an `if` clause: the hook's own segment scan does the filtering, and no-chmod.tests.sh asserts this wiring.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/no-chmod.sh\"",
+            "statusMessage": "Checking for a gated executable-bit chmod..."
+          }
+        ]
+      }
+    ]
+  }
+}

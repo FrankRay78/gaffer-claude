@@ -1,0 +1,6 @@
+# Scratch files the commands write when run inside this repository.
+.claude/scratch/
+
+# Editor swap files.
+*.swp
+*.swo

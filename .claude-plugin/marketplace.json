@@ -1,0 +1,17 @@
+{
+  "name": "gaffer-claude",
+  "owner": {
+    "name": "Frank Ray"
+  },
+  "metadata": {
+    "description": "The marketplace that ships the gaffer plugin from this repository. Install with `claude plugin install gaffer@gaffer-claude`."
+  },
+  "plugins": [
+    {
+      "name": "gaffer",
+      "source": "./",
+      "description": "SDLC commands, a diagnose skill and the no-chmod hook. Commands are typed as /gaffer:<name>.",
+      "category": "development"
+    }
+  ]
+}

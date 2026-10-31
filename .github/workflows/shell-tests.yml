@@ -1,0 +1,131 @@
+name: Shell Tests
+
+# Every committed `*.tests.sh` matrix runs here. The scripts are discovered by name rather than
+# listed, so a new matrix is gated the moment it is committed and each failure names its own
+# script. A second job validates the plugin manifests: every JSON file the plugin ships parses,
+# and `claude plugin validate` accepts the layout.
+
+on:
+  pull_request:
+    branches: [ "main" ]
+  push:
+    branches: [ "main" ]
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    name: Discover matrices
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      scripts: ${{ steps.find.outputs.scripts }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Find every committed *.tests.sh
+      id: find
+      # Discovering nothing is a failure, not a pass: the plugin has a matrix and this workflow
+      # promises it runs, so an empty result means the pattern or the naming convention has
+      # drifted — the one outcome that would otherwise report green having verified nothing.
+      # -z keeps paths raw, so a name core.quotePath would C-quote cannot corrupt the JSON.
+      run: |
+        set -euo pipefail
+        scripts=$(git ls-files -z '*.tests.sh' | jq -Rs -c 'split("\u0000") | map(select(length > 0))')
+        count=$(jq -r 'length' <<<"$scripts")
+        echo "Discovered $count: $scripts"
+        if [ "$count" -eq 0 ]; then
+          echo "::error::No *.tests.sh found — the discovery pattern or the naming convention has drifted."
+          exit 1
+        fi
+        echo "scripts=$scripts" >> "$GITHUB_OUTPUT"
+
+  run:
+    name: ${{ matrix.script }}
+    needs: discover
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      # Every matrix runs to completion and names its own failure, so one red script never hides
+      # the verdict of the others.
+      fail-fast: false
+      matrix:
+        script: ${{ fromJSON(needs.discover.outputs.scripts) }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run ${{ matrix.script }}
+      # Run via `bash`, as the plugin runs its hook: nothing here relies on a committed executable
+      # bit. The script name comes from repository content, so it is passed through the
+      # environment and quoted rather than interpolated into the shell text.
+      env:
+        SCRIPT: ${{ matrix.script }}
+      run: |
+        set -euo pipefail
+        bash "$SCRIPT"
+
+  manifests:
+    name: Plugin manifests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Every shipped JSON file parses
+      run: |
+        set -euo pipefail
+        git ls-files -z '*.json' | xargs -0 -n1 sh -c 'jq -e . "$0" > /dev/null && echo "ok $0"'
+
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: 22
+
+    - name: Validate the plugin layout
+      # `claude plugin validate` reads the manifests and layout; it needs no sign-in. Directory
+      # warnings (icon, listing metadata) do not fail it, and the plugin is not submitted to a
+      # directory, so the default profile is the right one.
+      run: |
+        set -euo pipefail
+        npm install -g @anthropic-ai/claude-code
+        claude plugin validate .
+
+  # The one check with a stable name, so branch protection has something to require: the matrix
+  # job's own names are derived from filenames and change whenever a matrix is added or renamed.
+  gate:
+    name: shell-tests
+    needs: [ discover, run, manifests ]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+    - name: Every matrix ran and passed
+      # Compared against `success` explicitly: to GitHub, `skipped` and `cancelled` are not
+      # failures, and either would otherwise pass this gate without a matrix having run.
+      env:
+        DISCOVER_RESULT: ${{ needs.discover.result }}
+        RUN_RESULT: ${{ needs.run.result }}
+        MANIFESTS_RESULT: ${{ needs.manifests.result }}
+      run: |
+        set -euo pipefail
+        if [ "$DISCOVER_RESULT" != success ]; then
+          echo "::error::Discovery did not succeed ($DISCOVER_RESULT) — no matrix ran."
+          exit 1
+        fi
+        if [ "$RUN_RESULT" != success ]; then
+          echo "::error::One or more matrices did not pass ($RUN_RESULT); see the per-script jobs."
+          exit 1
+        fi
+        if [ "$MANIFESTS_RESULT" != success ]; then
+          echo "::error::The manifest checks did not pass ($MANIFESTS_RESULT)."
+          exit 1
+        fi
+        echo "Every discovered matrix and the manifest checks passed."
