@@ -120,6 +120,6 @@ Two sections pay for themselves first: *Testing* (your test projects, naming sch
 
 ## Where next
 
-- [`workflow.md`](workflow.md) — how the stages fit together, and what a chain that runs them must do.
+- [`workflow.md`](workflow.md) — how the stages fit together, and what a chain that runs them must do; [`chain.md`](chain.md) — the chain itself, and the runner that fires it from a timer.
 - The prompts under [`commands/`](../commands/) — everything each command needs, reads, changes and ends with.
 - [`unattended.md`](unattended.md) — before you let any of this run with nobody watching, and the CI pattern.
