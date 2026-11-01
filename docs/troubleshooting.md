@@ -7,7 +7,7 @@ The failures that come up, what each means, and what to do. The chain and runner
 The plugin is not installed, or is installed and not enabled for this repository.
 
 - `claude plugin list` should name `gaffer@gaffer-claude`. If it does not: `claude plugin marketplace add FrankRay78/gaffer-claude` then `claude plugin install gaffer@gaffer-claude`.
-- The repository's `.claude/settings.json` should carry `"gaffer@gaffer-claude": true` under `enabledPlugins`. A committed entry enables but does not download, so a fresh machine still runs the two install commands once.
+- The repository's `.claude/settings.json` should carry the marketplace under `extraKnownMarketplaces` and `"gaffer@gaffer-claude": true` under `enabledPlugins`. With both, Claude Code fetches and loads the plugin when the project is opened and trusted; with only the second, it has nowhere to fetch from. A project not yet trusted, or a machine with no route to GitHub, gets no commands either.
 - A checkout can stand in for an installed copy for one session: `claude --plugin-dir /path/to/gaffer-claude`.
 
 ## `conventions missing: Build, test and format`
