@@ -17,6 +17,7 @@ How this plugin is changed. It has one author and a short list of repositories t
 - `claude plugin validate .` after any edit to the manifests or the layout.
 - CI ([`.github/workflows/shell-tests.yml`](../.github/workflows/shell-tests.yml)) runs every committed `*.tests.sh`, discovered by name, and validates the manifests. A script that gains a matrix is gated the moment the matrix is committed. The `shell-tests` job is the one stable check name.
 - A command has no automated test. Try a changed command in a consuming repository with `claude --plugin-dir <this checkout>` before merging, and say in the pull request what you ran.
+- A pull request the maintainer opens is reviewed by `/gaffer:review-pr` ([`.github/workflows/review-pr.yml`](../.github/workflows/review-pr.yml)), run from `main`'s copy of the plugin, so a change to a command is reviewed by the version it replaces and takes effect only on merge. The review advises; it is not a required check. A follow-up round is `/gaffer:review-followup <N>`, run by hand.
 
 ## `main` is protected
 
