@@ -23,6 +23,30 @@ The commands run on conventions and review criteria, read section by section fro
 
 `REVIEW.md`: *Where it runs* · *Severity* · *What not to flag* · *Risk tier* · *Always a person* · *Contracts* · *Context to load* · *Change map* · *Tests*.
 
+**Which command reads which heading.** The command's own table is authoritative; this is the index across them, so a repository writing a section knows which commands it reaches.
+
+| Heading | Read by |
+|---|---|
+| *Build, test and format* | `build`, `verify` |
+| *Test-driven development* | `build` |
+| *Testing* | `build`, `audit-codebase`, `capture-learnings` |
+| *Acceptance criteria* | `draftissue`, `build`, `audit-codebase` |
+| *Code quality* | `build` |
+| *Dependencies* | `build`, `audit-codebase` |
+| *Public API and breaking changes* | `build`, `audit-codebase` |
+| *Commit messages* | `build`, `verify` |
+| *Documentation* | `build` |
+| *Change-intent records* | `build`, `raise-pr` |
+| *Scratch files* | `draftissue`, `reviewissue`, `confirmissue`, `raise-pr` |
+| *Pull requests* | `raise-pr` |
+| *Issue sources*, *Issue concerns* | `draftissue` |
+| *Issue review checks* | `reviewissue` |
+| *Audit* | `audit-codebase` |
+| *Diagnose* | the `diagnose` skill |
+| *Hooks, scripts and plugins* | `verify` |
+| `REVIEW.md` → *Where it runs* | `review-pr`, `review-followup`, `verify` |
+| `REVIEW.md` → every other heading | `review-pr`, and `review-followup` through the `review-pr` steps it invokes |
+
 **Trust.** The repository's files are read from the root of the repository the command runs in, and trusted as the command files are: never from a worktree made for a review, and in CI from the default branch's copy, which the workflow puts in place before the agent starts. A change to either file always needs a person at review. The defaults are read from the plugin, so a repository changes a default only by extending or replacing a section in its own file.
 
 ## 3. The hook the plugin ships
@@ -48,4 +72,4 @@ Not configurable; a repository that differs changes the command, by an issue her
 
 ## What does not cross
 
-A chain script, a scheduled runner, CI workflows and a repository's own hooks are the repository's: anything run by CI, a timer or a human stays where it runs, or reads a checkout of the plugin at the pinned commit — never the versioned plugin cache. Learnings cross by issue, never by an edit to a plugin checkout from a consuming repository.
+A chain script, a scheduled runner, CI workflows and a repository's own hooks are the repository's: anything run by CI, a timer or a human stays where it runs, and loads the plugin from a checkout of this repository's `main` — a fresh clone in CI, a clone the runner brings up to date before each firing — never from whatever copy happens to be installed on the machine. [`ci.md`](ci.md) has the CI pattern. Learnings cross by issue, never by an edit to a plugin checkout from a consuming repository.
