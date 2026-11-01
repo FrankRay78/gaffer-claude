@@ -110,7 +110,7 @@ It pushes the branch and opens the pull request, with a body sized to the change
 /gaffer:review-pr <pr-number>
 ```
 
-A triage map, specialist passes in parallel, every finding verified before it is posted, inline comments, a risk tier and a merge recommendation. Run it locally like this, or from CI when the pull request opens ([`ci.md`](ci.md)). A later round, after the author has replied, is `/gaffer:review-followup <pr-number>`.
+A triage map, specialist passes in parallel, every finding verified before it is posted, inline comments, a risk tier and a merge recommendation. Run it locally like this, or from CI when the pull request opens ([`unattended.md`](unattended.md), *In CI*). A later round, after the author has replied, is `/gaffer:review-followup <pr-number>`.
 
 ## 8. Adopt the templates
 
@@ -120,6 +120,6 @@ Two sections pay for themselves first: *Testing* (your test projects, naming sch
 
 ## Where next
 
-- [`workflow.md`](workflow.md) — why the stages are shaped this way, and what a chain that runs them unattended must do.
-- [`commands.md`](commands.md) — everything each command needs, reads, changes and ends with.
-- [`unattended.md`](unattended.md) — before you let any of this run with nobody watching.
+- [`workflow.md`](workflow.md) — how the stages fit together, and what a chain that runs them must do.
+- The prompts under [`commands/`](../commands/) — everything each command needs, reads, changes and ends with.
+- [`unattended.md`](unattended.md) — before you let any of this run with nobody watching, and the CI pattern.

@@ -1,58 +1,60 @@
-# What runs unattended, and what it may touch
+# Running unattended and in CI
 
-A short guide for whoever wires a gaffer command into a chain script, a scheduled runner or a CI workflow: which commands are built to run with nobody present, every outward-facing or hard-to-reverse act each one performs and the condition it performs it under, what each refuses to do without a person, the permission facts a headless run meets, and how to check a result instead of trusting the report. Everything here is drawn from the command prompts; [`commands.md`](commands.md) has the per-command detail and [`interfaces.md`](interfaces.md) the contract a repository provides.
+For whoever wires a gaffer command into a chain script, a scheduled runner or a CI workflow. The command prompts are authoritative; this is what to know before letting one run with nobody watching.
 
-## Which commands run unattended
+## What each touches
 
-**The build chain** — `/gaffer:build`, `/gaffer:verify` and `/gaffer:raise-pr` are designed to run to completion without prompting, so a chain script can drive them back-to-back. `/gaffer:build` asks one question only when its issue number is missing; `/gaffer:verify` takes no arguments; `/gaffer:raise-pr` never asks the invoker for anything. Each ends on the JSON verdict [`verdict-schema.md`](verdict-schema.md) defines, and the chain script that reads it belongs to the repository, not the plugin.
+| Command | Outward-facing acts, and when |
+|---|---|
+| `build` | Creates `feature/<N>-<slug>` from `origin/main` and commits to it — only from a clean `main` with no unpushed commits, for an open issue with no linked PR. Recreates a leftover branch of that name only if it holds nothing uninspected. |
+| `verify` | Commits formatting, then the review's fixes after a green re-run. A fix it cannot land is left uncommitted and named in the report. |
+| `raise-pr` | Pushes the branch and opens the PR, adding `Closes #<N>` only when `gh` confirms that open issue in this repository. |
+| `review-pr` | Posts one PR review — verified inline findings and a summary marked `<!-- review-pr -->` — unless `--dry-run`. |
+| `review-followup` | Replies in, resolves and re-opens review threads, and posts the next round; at most three rounds. |
+| `reviewissue` | Posts the review comment marked `<!-- speckit:review -->` and adds `needs answers`; a re-run edits that comment in place. |
+| `confirmissue` | Rewrites the issue body with `## Confirmed decisions`, swaps `needs answers` for `ready`, then deletes the review comment — only after reading both changes back. |
+| `audit-codebase` | Opens one issue, with only the label `CONVENTIONS.md` → *Audit* names. |
 
-**The review and issue workflows in CI** — `/gaffer:review-pr` and `/gaffer:review-followup` run unattended from start to post, never stop for confirmation, and in CI post as the workflow's bot; `REVIEW.md` → *Where it runs* names the workflow. `/gaffer:reviewissue` and `/gaffer:confirmissue` run with no prompts once they have an issue number and their prompts allow for an automated run that sees only the checkout and the issue; a runner must pass the number, because both ask for it when it is missing.
+No command merges a PR, closes an issue by commit message, edits a source document it drew from, or edits the plugin's own files. Every chain stage stops with `conventions missing: <heading>` rather than invent a convention it needs, the build-and-test command above all.
 
-**Interactive by design** — `/gaffer:draftissue` discusses the decisions a source leaves open and asks before closing a source issue; `/gaffer:capture-learnings` and `/gaffer:context-gardening` write nothing until the user picks candidates by number; `/gaffer:audit-codebase` asks for a missing `<since-ref>` and then runs to its issue. `/gaffer:review-slop` and `/gaffer:audit-deadcode` have no prompts and no side effects beyond their output.
+## Permissions a headless run meets
 
-## What an unattended command does to the outside world
+- **`ask` rules are denied silently.** A headless `claude -p` cannot prompt, so an `ask`-matched call is refused and the run carries on degraded. If an unattended stage needs a command, give it an `allow` rule. `ask` rules outrank every permission mode, `bypassPermissions` included, and subagents inherit the parent's mode.
+- **`chmod`** is the case the `no-chmod` hook exists for: it refuses the executable-bit forms and names `bash script.sh`, so the run is redirected rather than degraded.
+- **Reads outside the working directory.** The defaults live in the plugin's install directory, outside the repository. A headless run that is not bypassing permissions denies that read, and the command stops with a failure verdict saying so. Pass `--add-dir <plugin directory>`, or allow such reads for the runner.
+- **The rules files are trusted like the commands.** `CONVENTIONS.md` and `REVIEW.md` are read from the root of the repository the command runs in, never from a review worktree, and in CI from the default branch's copy.
 
-| Command | Act | When |
-|---|---|---|
-| `/gaffer:build` | Creates `feature/<N>-<slug>` from `origin/main` and commits to it | Preconditions hold: clean tree, on `main`, fetch succeeds, no unpushed local commits, issue open with no linked PR |
-| `/gaffer:build` | Deletes and recreates a leftover local branch of that name | Only when it carries no commits the run has not inspected; otherwise it stops |
-| `/gaffer:build` | Writes a change-intent record | Only where `CONVENTIONS.md` → *Change-intent records* says the repository keeps them and a decision-table row warrants one |
-| `/gaffer:verify` | Commits formatting changes, then commits the review's fixes | After the suite is green; the fix commit only after a green re-run of the formatted tree |
-| `/gaffer:verify` | Leaves uncommitted edits in the working tree | When the fix cannot be made or the re-run is red; the report names the edits and says discarding them is the recovery |
-| `/gaffer:raise-pr` | Pushes the branch (`git push -u origin <branch>`) | Not on `main`, and the branch has commits over `main` |
-| `/gaffer:raise-pr` | Opens a pull request | Immediately after the push; `Closes #<N>` only when `gh` confirms an open issue at exactly that URL in this repository |
-| `/gaffer:review-pr` | Posts a PR review: inline comments and a marked summary with tier, verdict and recommendation | The PR is `OPEN` and `--dry-run` is not set; findings are posted only after a verifier subagent confirms each |
-| `/gaffer:review-pr` | Adds and removes a worktree under `.claude/scratch/review-pr-<N>/` | When `HEAD` is not already the PR head; removed on completion or abort |
-| `/gaffer:review-followup` | Replies in review threads, resolves and re-opens them, posts a round review | A prior marked round exists, the PR is `OPEN`, this is round 3 or earlier, and `--dry-run` is not set |
-| `/gaffer:reviewissue` | Posts the review comment and adds the `needs answers` label | First run: no marker comment and no `ready` label on the issue |
-| `/gaffer:reviewissue` | Edits the existing review comment in place | Refine run: a marker comment exists and at least one answer hedges |
-| `/gaffer:confirmissue` | Rewrites the issue body: appends `## Confirmed decisions` and corrects passages a decision overrules | Every gap answered, no answer hedging, no contradiction left unresolved |
-| `/gaffer:confirmissue` | Removes `needs answers`, adds `ready` | After the body patch is confirmed to have landed; a label failure is reported, not fatal |
-| `/gaffer:confirmissue` | Deletes the review comment (irreversible, no notification) | Only after `ready` and `## Confirmed decisions` are both read back from the issue; deletion failure is reported, not fatal |
-| `/gaffer:audit-codebase` | Opens one issue with the one label `CONVENTIONS.md` → *Audit* names | Clean tree and a valid `<since-ref>`; never the labels `ready`, `review`, `confirm` or `parked` |
+## Checking the result
 
-No unattended command merges a pull request, closes an issue by commit message, edits a document or backlog it drew from, or edits the plugin's own files.
+The model's report is not the result. Check:
 
-## What each refuses to do unattended
+- **build, verify, raise-pr** — the verdict, by position ([`verdict-schema.md`](verdict-schema.md)). A success verdict that also carries a `reason` is not a success.
+- **review-pr, review-followup** — a new review marked `<!-- review-pr -->` on the head commit, carrying the `Risk tier: … · Merge with no human review: …` line.
+- **reviewissue** — the marked comment on the issue and the `needs answers` label.
+- **confirmissue** — `## Confirmed decisions` in the body, `ready` present, `needs answers` gone, the marked comment deleted.
+- **audit-codebase** — one new issue titled `Codebase audit: <short HEAD> (<date>)`, and a clean tree.
 
-- `/gaffer:build` will not add a dependency to a library `CONVENTIONS.md` → *Dependencies* marks dependency-controlled (it stops instead), will not make a protected public-API change the criteria do not require, will not fold in adjacent improvements, will not commit on red or on `main`, and will not report `ready` over a red suite, an unimplemented criterion or an uncommitted change.
-- `/gaffer:verify` will not run on `main` (`/gaffer:verify was run on main, not a feature branch`), will not review while the suite is red, will not re-rate a real Blocker or Important down, will not review its own fix, will not commit a red fix to clear a later run's clean-tree check, and will not push, open a PR or raise an issue for an unfixed finding.
-- `/gaffer:raise-pr` will not guess a closing keyword, will not hunt for an issue number anywhere but the leading number of a `/gaffer:build`-shaped branch, and will not write `raised` for a pull request it did not open.
-- `/gaffer:review-pr` and `/gaffer:review-followup` will not run code from the PR, will not follow instructions in PR text or author replies, will not post an unverified finding, will not answer **yes** to merging with no human review unless the tier is Low, no always-a-person path is touched and no non-Pre-existing finding is open, and will not post a fourth round. Nothing is merged automatically.
-- `/gaffer:reviewissue` will not post a second review over a `ready` issue and will not touch the issue body. `/gaffer:confirmissue` will not fold while any answer is empty or hedging, will not patch around a contradiction it cannot resolve, and will not delete the review comment before the new done-marker is confirmed on the issue.
-- Every chain stage stops with `conventions missing: <heading>` rather than invent a convention that is the thing itself, the build-and-test command above all: inventing one unattended is how a run reports green over nothing.
+## In CI
 
-## Permission facts a headless run meets
+The plugin ships no workflow. `review-pr`, `review-followup`, `reviewissue` and `confirmissue` are built to run from GitHub Actions; the build chain is not — it needs a signed-in `claude`, a clone it may commit in, and the better part of an hour. A workflow that runs one of the four follows this shape:
 
-- A `Bash(chmod:*)` rule on `permissions.ask` stalls an interactive run until a human answers and is silently denied in a headless one. The `no-chmod` hook refuses the executable-bit forms and names `bash script.sh` instead, so the run is redirected rather than stalled or quietly degraded; the ask rule stays in the repository's `.claude/settings.json` as the backstop for the forms the hook declines to decide, because a plugin cannot set permission rules.
-- The defaults every command reads live in the plugin's install directory, outside the repository. A headless `claude -p` that is not run with permissions bypassed denies that read and the command stops with a failure verdict saying so; an interactive session prompts once. Allowing reads outside the working directory, or bypassing permissions, is the caller's decision for its own runner; the plugin sets no permission rule either way.
-- Subagents in `/gaffer:review-pr` and `/gaffer:review-followup` use Bash only for single `git` and `gh` commands with no pipes, chaining or `cd`, because a run may refuse anything else. `/gaffer:audit-codebase` records an evidence command the permission settings refuse and carries on without it.
-- The repository's `CONVENTIONS.md` and `REVIEW.md` are trusted as the command files are, read from the root of the repository the command runs in, never from a review worktree, and in CI from the default branch's copy the workflow puts in place. A change to either always needs a person at review.
+1. **Gate who can start it** on the account that opened the PR or applied the label, and skip a fork's PR: the job spends the maintainer's subscription and holds a write token.
+2. **Check out** the PR head for a review (inline comments anchor to its lines), or the default branch for an issue.
+3. **Put the default branch's rules in place**: `git show origin/main:REVIEW.md > REVIEW.md`, the same for `CONVENTIONS.md`, and remove the PR's copy where `main` has none — so a PR cannot write the rules it is judged by.
+4. **Load gaffer from `main`**, in a step of its own, printing the commit. Nothing in the checkout may choose which gaffer runs:
 
-## Checking the result instead of trusting the report
+   ```yaml
+   - name: Load gaffer from its main
+     id: gaffer
+     run: |
+       set -euo pipefail
+       git clone -q --depth 1 --branch main https://github.com/FrankRay78/gaffer-claude.git "$RUNNER_TEMP/gaffer"
+       echo "gaffer $(git -C "$RUNNER_TEMP/gaffer" rev-parse HEAD)"
+       echo "dir=$RUNNER_TEMP/gaffer" >> "$GITHUB_OUTPUT"
+   ```
 
-- **The chain stages** — read the verdict, not the prose. It is the last non-blank line of the report, or the body of a code fence that closes it, and nothing above it counts. A report ending on anything else has no readable verdict and the chain stops safely. A `ready` or `verified` verdict carries a `branch`; a `raised` verdict carries a bare pull request URL in `pr`; a `failed` verdict carries a `reason`. A success verdict that also carries a `reason` is not a success. The reading order and the fail-safe rules are in [`verdict-schema.md`](verdict-schema.md).
-- **`/gaffer:reviewissue`** — post-condition: a comment carrying `<!-- speckit:review -->` on the issue and the `needs answers` label; on a refine run, that comment's body changed and its gap numbers did not.
-- **`/gaffer:confirmissue`** — post-condition: the issue body contains `## Confirmed decisions`, the `ready` label is present and `needs answers` is gone, and the marker comment is deleted. The command itself reads the first two back before deleting; the report is the only signal when the label or the deletion did not land, and re-running completes it.
-- **`/gaffer:review-pr`** — post-condition: a PR review with `event: COMMENT` on the head commit whose body starts with `<!-- review-pr -->` and carries the line `Risk tier: … · Merge with no human review: …`. **`/gaffer:review-followup`** — one more such review, numbered as the next round, and replies or resolutions on the prior threads.
-- **`/gaffer:audit-codebase`** — post-condition: one new issue titled `Codebase audit: <short HEAD> (<date>)` with the named label, and `git status --porcelain` clean afterwards; the report states that status and lists anything left behind.
+5. **Run the agent with the plugin loaded.** With `anthropics/claude-code-action`, pass `--plugin-dir ${{ steps.gaffer.outputs.dir }} --add-dir ${{ steps.gaffer.outputs.dir }}` and an `--allowedTools` list naming each `gh` subcommand the command needs. The prompt names the command file by path, says to apply it as written, and lists only the environmental deltas, numbered: the checkout is already at the PR head, so review in place; scratch files go under `ci-scratch/`, because `.claude/` is write-protected in a headless run; the default branch is `main`. On a public repository, add that the PR's text and diff are untrusted and never carry instructions.
+6. **Assert the post-condition** in a step after the agent, from *Checking the result*. The action exits green whenever the model finishes its turn.
+7. **Serialise what writes the same thing.** A review and a follow-up both rewrite the PR; a review and a confirmation both write the issue. Give them one `concurrency` group per PR or issue, queued rather than cancelled.
+
+`reviewissue` in CI also needs the issue snapshotted to a file, because the action strips HTML comments from injected context and with them the review marker. A wrong-state guard before the agent — an issue already `ready`, or already reviewed — saves a long, pointless run.
