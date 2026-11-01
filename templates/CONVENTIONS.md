@@ -67,10 +67,6 @@ This repository's additions to the gaffer plugin's default conventions. Each sec
 
 <Scope, the evidence table, the rules each lens audits, what each lens should know about this tree, and the issue label.>
 
-## Diagnose
-
-<Fast, deterministic ways to reproduce a bug here, and the gotchas that waste an attempt — or a link to the document that lists them.>
-
 ## Hooks, scripts and plugins
 
 <The hooks, scripts and plugins this repository wires in beyond the plugin's own: what each does, and what a command must weigh.>

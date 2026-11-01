@@ -33,11 +33,10 @@ To change it, edit the file, apply with `gh api -X PUT repos/FrankRay78/gaffer-c
 ```
 .claude-plugin/   plugin.json and marketplace.json
 commands/         the slash commands, one markdown file each
-skills/diagnose/  the diagnose skill
 hooks/            hooks.json, no-chmod.sh and its test matrix
 defaults/         the CONVENTIONS.md and REVIEW.md the commands run on when a repository says nothing
 templates/        copyable starting points for a repository's own two files
 docs/             the guides
 ```
 
-Commands are kept as `commands/*.md` rather than skills: each is a workflow a person invokes by name, with no supporting files, and the move from a repository's `.claude/commands/` was a move, not a rewrite. The one skill, `diagnose`, is model-invocable and stays a skill.
+Commands are kept as `commands/*.md` rather than skills: each is a workflow a person invokes by name, with no supporting files, and the move from a repository's `.claude/commands/` was a move, not a rewrite.

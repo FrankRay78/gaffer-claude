@@ -1,6 +1,6 @@
 # gaffer
 
-A personal SDLC toolbox for Claude Code, packaged as a plugin so any repository can install it: the issue stage (`draftissue` → `reviewissue` → `confirmissue`), the build chain (`build` → `verify` → `raise-pr`, each ending on a machine-readable verdict a script can chain), a verified pull-request review with follow-up rounds, the periodic audits, a `diagnose` skill for hard bugs, and one hook that keeps an unattended run from stalling on `chmod`.
+A personal SDLC toolbox for Claude Code, packaged as a plugin so any repository can install it: the issue stage (`draftissue` → `reviewissue` → `confirmissue`), the build chain (`build` → `verify` → `raise-pr`, each ending on a machine-readable verdict a script can chain), a verified pull-request review with follow-up rounds, the periodic audits, and one hook that keeps an unattended run from stalling on `chmod`.
 
 > **Personal toolbox — breaking changes at any time.** This plugin exists to serve its author's repositories. Any command, heading, default, verdict field or hook may change or disappear in any commit, with no deprecation period and no notice beyond the pull request that makes the change, which says what breaks and for whom. A consumer that cannot absorb that pins a commit, as *Installing* describes.
 
@@ -28,11 +28,10 @@ Commands are typed as `/gaffer:<name>`. [`docs/commands.md`](docs/commands.md) i
 | `/gaffer:review-slop` | Reviews a branch diff for AI-generated slop and emits a cleaned diff. |
 | `/gaffer:audit-codebase` | Whole-tree audit across five lenses, every finding challenged before it is reported, raised as one issue. |
 | `/gaffer:audit-deadcode` | Dead-code audit from the real entry points, producing `DEADCODE.md`. |
-| `/gaffer:bugmagnet` | Systematic test-coverage and edge-case discovery for one module. |
 | `/gaffer:capture-learnings` | Mines a session and a branch for durable learnings and applies the approved ones. |
 | `/gaffer:context-gardening` | Prunes `CLAUDE.md`, its linked docs and `.claude/memory/`. |
 
-Plus the **`diagnose` skill** (`/gaffer:diagnose`): a reproduce → minimise → hypothesise → instrument → fix → regression-test loop, and the **`no-chmod` hook**, which runs on every Bash call and refuses a `chmod` that would set the executable bit, naming `bash script.sh` as the alternative, so an unattended run is redirected rather than stalled on a permission prompt.
+Plus the **`no-chmod` hook**, which runs on every Bash call and refuses a `chmod` that would set the executable bit, naming `bash script.sh` as the alternative, so an unattended run is redirected rather than stalled on a permission prompt.
 
 The build chain's three stages end their reports on one JSON verdict; the schema is [`docs/verdict-schema.md`](docs/verdict-schema.md). A chain script that reads those verdicts and drives the stages is not part of the plugin: it stays in the repository that runs it.
 
@@ -104,7 +103,6 @@ Everything that crosses between the plugin and a repository goes through one of 
 ```
 .claude-plugin/   plugin.json and marketplace.json
 commands/         the slash commands
-skills/diagnose/  the diagnose skill
 hooks/            hooks.json, no-chmod.sh and its test matrix
 defaults/         the CONVENTIONS.md and REVIEW.md the commands run on when a repository says nothing
 templates/        copyable starting points for a repository's own two files

@@ -8,7 +8,7 @@ A short guide for whoever wires a gaffer command into a chain script, a schedule
 
 **The review and issue workflows in CI** — `/gaffer:review-pr` and `/gaffer:review-followup` run unattended from start to post, never stop for confirmation, and in CI post as the workflow's bot; `REVIEW.md` → *Where it runs* names the workflow. `/gaffer:reviewissue` and `/gaffer:confirmissue` run with no prompts once they have an issue number and their prompts allow for an automated run that sees only the checkout and the issue; a runner must pass the number, because both ask for it when it is missing.
 
-**Interactive by design** — `/gaffer:draftissue` discusses the decisions a source leaves open and asks before closing a source issue; `/gaffer:bugmagnet` pauses at the end of every phase; `/gaffer:capture-learnings` and `/gaffer:context-gardening` write nothing until the user picks candidates by number; `/gaffer:audit-codebase` asks for a missing `<since-ref>` and then runs to its issue; the `diagnose` skill shows its hypotheses but proceeds without a reply and stops only when it cannot build a feedback loop. `/gaffer:review-slop` and `/gaffer:audit-deadcode` have no prompts and no side effects beyond their output.
+**Interactive by design** — `/gaffer:draftissue` discusses the decisions a source leaves open and asks before closing a source issue; `/gaffer:capture-learnings` and `/gaffer:context-gardening` write nothing until the user picks candidates by number; `/gaffer:audit-codebase` asks for a missing `<since-ref>` and then runs to its issue. `/gaffer:review-slop` and `/gaffer:audit-deadcode` have no prompts and no side effects beyond their output.
 
 ## What an unattended command does to the outside world
 
