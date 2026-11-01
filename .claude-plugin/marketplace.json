@@ -10,7 +10,7 @@
     {
       "name": "gaffer",
       "source": "./",
-      "description": "SDLC commands, a diagnose skill and the no-chmod hook. Commands are typed as /gaffer:<name>.",
+      "description": "SDLC commands and the no-chmod hook. Commands are typed as /gaffer:<name>.",
       "category": "development"
     }
   ]

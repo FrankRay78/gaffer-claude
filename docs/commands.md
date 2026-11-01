@@ -1,6 +1,6 @@
 # Command reference
 
-One section per command, in the order a piece of work meets them: the issue stage, the build chain, the pull-request review, the periodic audits and the session tools, then the `diagnose` skill and the `no-chmod` hook. Each section is derived from the command's own prompt under `commands/`; what is not stated there is not stated here. Every command is typed `/gaffer:<name>`.
+One section per command, in the order a piece of work meets them: the issue stage, the build chain, the pull-request review, the periodic audits and the session tools, then the `no-chmod` hook. Each section is derived from the command's own prompt under `commands/`; what is not stated there is not stated here. Every command is typed `/gaffer:<name>`.
 
 Reading the bullets:
 
@@ -112,15 +112,6 @@ A reason quoted in backticks is the exact text the command puts in a `failed` ve
 - **Ends with** — the `DEADCODE.md` report: Summary, Files to Delete, Functions/Methods to Delete, Classes to Delete, Variables/Constants to Delete, Verification Notes, Estimated Impact. Only items it is certain are unused are listed.
 - **Unattended?** — It has no prompts. It errs on the side of caution where it has any doubt.
 
-## bugmagnet
-
-- **Invoke** — `/gaffer:bugmagnet <implementation-file-path>`. Language and test framework are detected from the extension and the project.
-- **Needs** — the implementation file, its test file (it asks whether to create one if none exists), and the project's test runner; a coverage tool where the project has one, run for a baseline. It reads README and CONTRIBUTING files for testing guidelines.
-- **Reads** — no conventions table. The implementation file and files it references within the project, existing tests, coverage configuration, and any additional files the user names.
-- **Changes or posts** — adds tests to the existing test file, one or a small group at a time, each run immediately; documents a discovered bug as a skipped test with a `- BUG` suffix and a comment holding root cause, location, current code, proposed fix and expected against actual; phase 4 tests go in a suite named `bugmagnet session <current date>` or an existing exploratory suite. It never changes the implementation file and never crosses project boundaries. Three attempts per test, then document and move on.
-- **Ends with** — a Test Coverage Summary: tests added by category, passing and skipped counts, key findings, and each discovered bug with location, root cause, fix and minimal reproduction, plus a separate bug summary with impact assessment.
-- **Unattended?** — No. It pauses for confirmation at the end of each phase, asks for additional context files, asks which gap tests to implement, asks the user to decide unclear expected behaviour, and asks before advanced coverage.
-
 ## capture-learnings
 
 - **Invoke** — `/gaffer:capture-learnings`. No arguments; run at the end of a session, after a feature or after `/gaffer:raise-pr`.
@@ -138,15 +129,6 @@ A reason quoted in backticks is the exact text the command puts in a `failed` ve
 - **Changes or posts** — only approved candidates: edits to the target file with the drafted replacement; a new reference file under `docs/` with a one-line link left in place for a promotion; deletion of a memory file together with its `MEMORY.md` pointer.
 - **Ends with** — the files changed and the candidates applied against skipped, or `No gardening applied.`
 - **Unattended?** — No. It is advisory: it lists up to about 15 candidates and writes nothing before the user replies with numbers, `all` or `none`.
-
-## The diagnose skill
-
-- **Invoke** — `/gaffer:diagnose`, or model-invoked when the user says "diagnose this", "debug this", reports a bug or describes a performance regression. It is a skill, not a command, so it has no argument form.
-- **Needs** — a fast, deterministic, agent-runnable pass/fail signal for the bug, which Phase 1 builds before anything else and refuses to proceed without. The last-resort human-in-the-loop form refers to `scripts/hitl-loop.template.sh`.
-- **Reads** — `CONVENTIONS.md` → *Diagnose*, the plugin default then the repository's section, and any document it links; then the project's own navigation (`CLAUDE.md`, README, top-level docs).
-- **Changes or posts** — a feedback loop (a failing test, script or harness); tagged instrumentation (`[DEBUG-<id>]`) that must all be removed before done; a regression test written before the fix where a correct seam exists, with the absence of a seam recorded as a finding where none does; the fix; throwaway prototypes deleted or moved to a marked debug location; the confirmed hypothesis stated in the commit or PR message.
-- **Ends with** — the Phase 6 checklist: original repro no longer reproduces, regression test passes or its missing seam is documented, instrumentation removed, prototypes gone, the correct hypothesis recorded, and a post-mortem on what would have prevented the bug.
-- **Unattended?** — Mostly. It shows its 3 to 5 ranked hypotheses to the user before testing them but does not block on a reply, proceeding with its own ranking when the user is away. It stops and asks when it genuinely cannot build a loop, listing what it tried and what it needs: an environment, a captured artefact, or permission to add temporary production instrumentation.
 
 ## The no-chmod hook
 

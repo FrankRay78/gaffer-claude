@@ -12,14 +12,14 @@ The commands run on conventions and review criteria, read section by section fro
 
 | File | Plugin default | Repository addition | Read by |
 |---|---|---|---|
-| Conventions | `${CLAUDE_PLUGIN_ROOT}/defaults/CONVENTIONS.md` | `CONVENTIONS.md` at the repository root | `build`, `verify`, `raise-pr`, `draftissue`, `reviewissue`, `audit-codebase`, the `diagnose` skill |
+| Conventions | `${CLAUDE_PLUGIN_ROOT}/defaults/CONVENTIONS.md` | `CONVENTIONS.md` at the repository root | `build`, `verify`, `raise-pr`, `draftissue`, `reviewissue`, `audit-codebase` |
 | Review criteria | `${CLAUDE_PLUGIN_ROOT}/defaults/REVIEW.md` | `REVIEW.md` at the repository root | `review-pr`, `review-followup`, and `verify` for *Where it runs* |
 
 **How the two combine.** For each heading a command reads, the default section is read first, then the repository's section under the same heading, and the two are applied together: the repository's is an addition and wins where they conflict. A repository section whose first line is exactly `Replaces the default.` is read instead of the default section. A repository with no file, or no section under a heading, runs on the default alone. Where the default also has nothing (*No default*), the step runs on the command's generic rule alone and the report names the heading; where the convention is the thing itself and there is no generic rule — the build-and-test command — the command stops with the reason `conventions missing: <heading>`. A section under a heading neither file documents is read too, and applied where its text says.
 
 **The heading set.** The headings are recommended, not mandatory: a repository adopts them one section at a time. The defaults files document each, and each command's *Repository conventions* or *Repository criteria* table names the ones it reads.
 
-`CONVENTIONS.md`: *Build, test and format* · *Test-driven development* · *Testing* · *Acceptance criteria* · *Code quality* · *Dependencies* · *Public API and breaking changes* · *Commit messages* · *Documentation* · *Change-intent records* · *Scratch files* · *Pull requests* · *Issue sources* · *Issue concerns* · *Issue review checks* · *Audit* · *Diagnose* · *Hooks, scripts and plugins*.
+`CONVENTIONS.md`: *Build, test and format* · *Test-driven development* · *Testing* · *Acceptance criteria* · *Code quality* · *Dependencies* · *Public API and breaking changes* · *Commit messages* · *Documentation* · *Change-intent records* · *Scratch files* · *Pull requests* · *Issue sources* · *Issue concerns* · *Issue review checks* · *Audit* · *Hooks, scripts and plugins*.
 
 `REVIEW.md`: *Where it runs* · *Severity* · *What not to flag* · *Risk tier* · *Always a person* · *Contracts* · *Context to load* · *Change map* · *Tests*.
 
@@ -42,7 +42,6 @@ The commands run on conventions and review criteria, read section by section fro
 | *Issue sources*, *Issue concerns* | `draftissue` |
 | *Issue review checks* | `reviewissue` |
 | *Audit* | `audit-codebase` |
-| *Diagnose* | the `diagnose` skill |
 | *Hooks, scripts and plugins* | `verify` |
 | `REVIEW.md` → *Where it runs* | `review-pr`, `review-followup`, `verify` |
 | `REVIEW.md` → every other heading | `review-pr`, and `review-followup` through the `review-pr` steps it invokes |

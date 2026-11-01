@@ -78,10 +78,6 @@ Nothing beyond `/reviewissue`'s generic categories by default. A repository list
 
 By default `/audit-codebase` reads every tracked file, takes no evidence beyond the build-and-test command under *Build, test and format*, holds the code to the rules under the headings above and whatever `CLAUDE.md` states as the project's rules, knows nothing about the tree in advance, and raises its issue with no label. A repository that has more says so here: the paths in scope, an evidence table of the tools that already decide a question, the rules each lens audits, what each lens should know about this tree before it starts (a known flaky test, symbols a generator consumes, fixtures that look like traceability markers), and the one label the issue carries.
 
-## Diagnose
-
-No repository-specific feedback-loop builders by default: the `diagnose` skill works from its generic list. A repository that has fast, deterministic ways to reproduce a bug — a test filter, a snapshot loop, a replayed fixture, a local service — lists them here, or links a document that does, with the gotchas that waste a reproduction attempt.
-
 ## Hooks, scripts and plugins
 
 The plugin ships one hook, `no-chmod`, registered on every Bash call: it refuses a `chmod` that would set the executable bit and names `bash script.sh` as the alternative. A plugin cannot set permission rules, so a repository keeps `Bash(chmod:*)` on `permissions.ask` in its own `.claude/settings.json` as the fail-open backstop for the forms the hook declines to decide. The reviewers `/verify` spawns come from the `pr-review-toolkit` plugin, which the repository installs. No hook re-runs the suite when a pull request is created, and no hook blocks a commit, unless the repository adds one and names it here with whatever else of its own it wires in.
