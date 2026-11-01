@@ -75,7 +75,7 @@ By default every stage runs under the repository's own permission rules, and a h
    git clone https://github.com/FrankRay78/gaffer-claude.git ~/Repos/gaffer-runner
    ```
 
-3. Commit the settings file to the repository, with `clone` and `writers` at least, and create the labels once — `ready` already exists where the issue stage has run:
+3. Commit the settings file to the repository, with `clone` and `writers` at least, and bring the runner's clone to the `main` that holds it (`git -C ~/Repos/<repo>-runner fetch origin && git -C ~/Repos/<repo>-runner checkout -f -B main origin/main`) — the runner reads the file from the clone as the previous firing left it, so a change takes effect one firing after it merges, and the first firing needs it there already. Create the labels once; `ready` already exists where the issue stage has run:
 
    ```bash
    gh label create parked --description "The chain runner stopped on this issue; remove to retry"
@@ -93,12 +93,13 @@ By default every stage runs under the repository's own permission rules, and a h
    [Service]
    Type=oneshot
    Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
-   ExecStartPre=/usr/bin/git -C %h/Repos/gaffer-runner pull -q --ff-only
+   ExecStartPre=/bin/mkdir -p %h/.local/state/gaffer-chain/<repo>-runner
+   ExecStartPre=/usr/bin/flock -n %h/.local/state/gaffer-chain/<repo>-runner/lock /usr/bin/git -C %h/Repos/gaffer-runner pull -q --ff-only
    ExecStart=/bin/bash %h/Repos/gaffer-runner/chain/chain-next.sh %h/Repos/<repo>-runner/.gaffer/chain.json
    TimeoutStartSec=infinity
    ```
 
-   with a timer of `OnCalendar=*:0/15`. A firing while a run is in progress does nothing: systemd does not start an active service twice, and the lock covers a run started by hand.
+   with a timer of `OnCalendar=*:0/15`. A firing while a run is in progress does nothing: systemd does not start an active service twice, and the lock covers a run started by hand — including the update step, which takes the runner's own lock so a run in progress is never updated beneath; a held lock fails the step, and the firing with it, which is right.
 
 To retry a parked issue, remove the label. To finish a parked attempt instead of rebuilding it, fetch its `attempt/<N>-<stamp>` branch from the runner's clone into a checkout of your own, rebase it onto `main`, and run the stages the chain did not finish by hand — leaving `parked` on until the pull request is open, or the next firing rebuilds the issue beside it.
 
