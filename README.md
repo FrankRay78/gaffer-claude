@@ -45,7 +45,7 @@ claude plugin marketplace add FrankRay78/gaffer-claude
 claude plugin install gaffer@gaffer-claude
 ```
 
-To turn it on for everyone who opens a repository, commit this to the repository's `.claude/settings.json` (collaborators still run the install command once; a committed entry enables but does not download):
+To turn it on for everyone who opens a repository, commit this to the repository's `.claude/settings.json`. When the project is opened and trusted, Claude Code fetches the marketplace and loads the plugin from it, so a fresh clone offers the `/gaffer:` commands with no install step; the install commands above are for using the plugin outside such a repository:
 
 ```json
 {

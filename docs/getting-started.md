@@ -19,7 +19,7 @@ claude plugin install pr-review-toolkit@claude-plugins-official
 
 ## 2. Enable it for the repository
 
-In the repository's `.claude/settings.json`, so every clone and every collaborator gets the commands without a per-machine step (they still run the two install commands once):
+In the repository's `.claude/settings.json`, so every clone and every collaborator gets the commands with no per-machine step: when the project is opened and trusted, Claude Code fetches the marketplace and loads the plugin from it. Step 1 is then only needed to use the plugin outside this repository.
 
 ```json
 {
