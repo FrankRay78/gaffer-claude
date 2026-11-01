@@ -19,7 +19,7 @@ claude plugin install pr-review-toolkit@claude-plugins-official
 
 ## 2. Enable it for the repository
 
-In the repository's `.claude/settings.json`, so every clone and every collaborator gets the commands with no per-machine step: when the project is opened and trusted, Claude Code fetches the marketplace and loads the plugin from it. Step 1 is then only needed to use the plugin outside this repository.
+In the repository's `.claude/settings.json`, so the plugin is enabled for every clone and every collaborator. Committing it does not install the plugin: when the project is opened and trusted, Claude Code fetches the marketplace it names, but each collaborator still runs step 1 once on their machine, and a session before that offers no `/gaffer:` commands.
 
 ```json
 {
