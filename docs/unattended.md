@@ -14,6 +14,8 @@ For whoever wires a gaffer command into a chain script, a scheduled runner or a 
 | `reviewissue` | Posts the review comment marked `<!-- speckit:review -->` and adds `needs answers`; a re-run edits that comment in place. |
 | `confirmissue` | Rewrites the issue body with `## Confirmed decisions`, swaps `needs answers` for `ready`, then deletes the review comment — only after reading both changes back. |
 | `audit-codebase` | Opens one issue, with only the label `CONVENTIONS.md` → *Audit* names. |
+| `chain/chain.sh` | Nothing of its own: the three stages above, in order, stopping at the first that fails. |
+| `chain/chain-next.sh` | Resets its own dedicated clone, runs the chain there, and on failure labels the issue `parked` with a comment. Never pushes, merges or deletes on GitHub. |
 
 No command merges a PR, closes an issue by commit message, edits a source document it drew from, or edits the plugin's own files. Every chain stage stops with `conventions missing: <heading>` rather than invent a convention it needs, the build-and-test command above all.
 
@@ -36,7 +38,7 @@ The model's report is not the result. Check:
 
 ## In CI
 
-The plugin ships no workflow. `review-pr`, `review-followup`, `reviewissue` and `confirmissue` are built to run from GitHub Actions; the build chain is not — it needs a signed-in `claude`, a clone it may commit in, and the better part of an hour. A workflow that runs one of the four follows this shape:
+The plugin ships no workflow. `review-pr`, `review-followup`, `reviewissue` and `confirmissue` are built to run from GitHub Actions; the build chain is not — it needs a signed-in `claude`, a clone it may commit in, and the better part of an hour, which is what [`chain.md`](chain.md)'s runner on a timer is for. A workflow that runs one of the four follows this shape:
 
 1. **Gate who can start it** on the account that opened the PR or applied the label, and skip a fork's PR: the job spends the maintainer's subscription and holds a write token.
 2. **Check out** the PR head for a review (inline comments anchor to its lines), or the default branch for an issue.

@@ -4,7 +4,7 @@ Everything that crosses between gaffer and a repository goes through one of thes
 
 ## 1. The verdict schema
 
-`/gaffer:build`, `/gaffer:verify` and `/gaffer:raise-pr` end their report on one JSON object, read by a caller's chain script. [`verdict-schema.md`](verdict-schema.md) is its one statement.
+`/gaffer:build`, `/gaffer:verify` and `/gaffer:raise-pr` end their report on one JSON object, read by the chain under [`chain/`](../chain/). [`verdict-schema.md`](verdict-schema.md) is its one statement.
 
 ## 2. `CONVENTIONS.md` and `REVIEW.md`
 
@@ -20,7 +20,11 @@ The commands read conventions and review criteria section by section, from the p
 
 `hooks/hooks.json` runs `no-chmod.sh` on every Bash call. It refuses a `chmod` that sets the executable bit, naming `bash script.sh`, and fails open on a missing tool or bad input. Its test matrix, `hooks/no-chmod.tests.sh`, is the specification, including its known limits. The repository keeps `Bash(chmod:*)` on `permissions.ask` as the backstop. The plugin ships no other hook and no script; a repository's own gates stay in the repository, named under `CONVENTIONS.md` → *Hooks, scripts and plugins* so the commands weigh them.
 
-## 4. Conventions the commands assume
+## 4. The chain settings file
+
+`.gaffer/chain.json` in the repository, read by the chain scripts and by nothing inside a session: the runner's clone and the accounts whose issues it may build, with defaults for the labels, each stage's model and effort, the permissions opt-in and where state is kept. [`chain.md`](chain.md) → *The settings file* is its one statement; a key the runner does not know is refused.
+
+## 5. Conventions the commands assume
 
 Not configurable; a repository that differs changes the command, by an issue here.
 
@@ -33,4 +37,4 @@ Not configurable; a repository that differs changes the command, by an issue her
 
 ## What does not cross
 
-A chain script, a scheduled runner, CI workflows and a repository's own hooks are the repository's. Each loads the plugin from a checkout of `main` it controls, never from whatever copy is installed on the machine. **Learnings cross by issue**: when a command is wrong, the fix is an issue or PR here, never an edit to a plugin checkout from a consuming repository.
+How the chain is scheduled, CI workflows and a repository's own hooks are the repository's. Each loads the plugin from a checkout of `main` it controls, never from whatever copy is installed on the machine — the chain scripts from the checkout they sit in, a CI job from a clone it makes. **Learnings cross by issue**: when a command is wrong, the fix is an issue or PR here, never an edit to a plugin checkout from a consuming repository.

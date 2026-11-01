@@ -32,6 +32,14 @@ Run the script as `bash script.sh`, or record the bit on a committed file with `
 
 The action exits green whenever the model finishes. Add the post-condition step ([`unattended.md`](unattended.md), *In CI*), then read the log for the refused tool call — usually a `gh` subcommand missing from `--allowedTools`, or a scratch path under `.claude/`.
 
+## The runner parked an issue
+
+Read the comment: it names the stage, the reason and the log on the build machine, and whether a branch was kept or pushed. Fix what it names, then remove the `parked` label and the next firing builds the issue again from scratch. A comment saying the usage limit was reached needs only the label removed once the limit has reset ([`chain.md`](chain.md)).
+
+## The runner refused to start
+
+Its message names what it refused on, before anything was selected: a settings key missing, misspelt or wrongly shaped; a plugin checkout that is not on `main`, has local edits or commits, or has no `origin/main`; a clone not marked `chain-next.dedicated`; or a missing tool — `flock` on macOS, most often. Nothing was reset and no issue was parked.
+
 ## A command behaved wrongly for this repository
 
 If the generic rule is wrong, or the command misread a section under the right heading, raise an issue here with the command, the input and what it did. Until the fix lands, a repository section under the matching heading is the workaround, since the repository's file wins. Never edit an installed copy: the next update overwrites it.

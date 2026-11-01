@@ -1,13 +1,13 @@
 # gaffer
 
-A personal SDLC toolbox for Claude Code, packaged as a plugin so any repository can install it: the issue stage (`draftissue` → `reviewissue` → `confirmissue`), the build chain (`build` → `verify` → `raise-pr`, each ending on a machine-readable verdict a script can chain), a verified pull-request review with follow-up rounds, the periodic audits, and one hook that keeps an unattended run from stalling on `chmod`.
+A personal SDLC toolbox for Claude Code, packaged as a plugin so any repository can install it: the issue stage (`draftissue` → `reviewissue` → `confirmissue`), the build chain (`build` → `verify` → `raise-pr`, each ending on a machine-readable verdict), the scripts that run that chain unattended from a timer, a verified pull-request review with follow-up rounds, the periodic audits, and one hook that keeps an unattended run from stalling on `chmod`.
 
 > **Personal toolbox — breaking changes at any time.** Any command, heading, default, verdict field or hook may change or disappear in any commit, with no notice beyond the pull request that makes the change, which says what breaks and for whom. A consumer that cannot absorb that pins a commit, as *Installing* describes.
 
 ## Why it is different
 
 - **The confirmed issue is the specification.** No spec folder, plan file or task list: the issue stage settles outcome-level acceptance criteria on the issue itself, checked against the codebase before a branch exists, and the build and verify stages implement and check exactly those.
-- **Every unattended stage ends on a verdict a script can read.** `build`, `verify` and `raise-pr` close their report with one JSON object, read by position so nothing the report quotes can be mistaken for the stage's decision. The chain that reads it belongs to the repository that runs it, not the plugin.
+- **Every unattended stage ends on a verdict a script can read.** `build`, `verify` and `raise-pr` close their report with one JSON object, read by position so nothing the report quotes can be mistaken for the stage's decision. The chain that reads it ships here too, under [`chain/`](chain/), and is run from a checkout of this repository so the reader and the writers are always one commit.
 - **Repository specifics are data, not prompt text.** The commands run on defaults shipped here; a repository extends them with a `CONVENTIONS.md` and a `REVIEW.md` of its own, section by section. A fix to a command is a change here and reaches every repository that tracks it.
 - **It is built to run with nobody watching.** The build stages, the pull-request review and the issue gate run headless, check their own post-conditions rather than trusting the model's report, and stop rather than guess when a convention they need is missing.
 
@@ -31,7 +31,7 @@ Commands are typed as `/gaffer:<name>`. Each command's prompt under [`commands/`
 | `capture-learnings` | Mines a session and a branch for durable learnings and applies the approved ones. | No — you pick candidates |
 | `context-gardening` | Prunes `CLAUDE.md`, its linked docs and `.claude/memory/`. | No — you pick candidates |
 
-Plus the **`no-chmod` hook**, which refuses a `chmod` that would set the executable bit and names `bash script.sh` instead, so an unattended run is redirected rather than stalled on a permission prompt.
+Plus the **`no-chmod` hook**, which refuses a `chmod` that would set the executable bit and names `bash script.sh` instead, so an unattended run is redirected rather than stalled on a permission prompt, and **the chain** under [`chain/`](chain/): `chain.sh` runs the three build stages for one issue, `chain-next.sh` picks the next ready issue from a timer and parks the ones that fail. Both are run from a clone of this repository, not from the installed plugin ([`docs/chain.md`](docs/chain.md)).
 
 ## Installing
 
@@ -74,6 +74,7 @@ How the repository's `CONVENTIONS.md` and `REVIEW.md` combine with the defaults 
 - [`docs/workflow.md`](docs/workflow.md) — how the stages fit together, and why they are shaped this way.
 - [`docs/interfaces.md`](docs/interfaces.md) — everything that crosses between the plugin and a repository.
 - [`docs/verdict-schema.md`](docs/verdict-schema.md) — the verdict the build chain ends on, and how to read it.
+- [`docs/chain.md`](docs/chain.md) — running the build chain unattended: the two scripts, their settings file, the permissions opt-in and a scheduler.
 - [`docs/unattended.md`](docs/unattended.md) — running commands with nobody watching: what each touches, permissions, and the CI pattern.
 - [`docs/troubleshooting.md`](docs/troubleshooting.md) — the common failures.
 - [`docs/contributing.md`](docs/contributing.md) — how the plugin itself is changed.
@@ -84,6 +85,7 @@ How the repository's `CONVENTIONS.md` and `REVIEW.md` combine with the defaults 
 .claude-plugin/   plugin.json and marketplace.json
 commands/         the slash commands
 hooks/            hooks.json, no-chmod.sh and its test matrix
+chain/            chain.sh, chain-next.sh and their test matrices — run from a clone, not from the installed plugin
 defaults/         the CONVENTIONS.md and REVIEW.md the commands run on when a repository says nothing
 templates/        copyable starting points for a repository's own two files
 docs/             the guides above
