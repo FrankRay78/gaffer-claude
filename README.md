@@ -6,6 +6,8 @@ A personal SDLC toolbox for Claude Code, packaged as a plugin so any repository 
 
 > **Personal toolbox — breaking changes at any time.** Any command, heading, default, verdict field or hook may change or disappear in any commit, with no notice beyond the pull request that makes the change, which says what breaks and for whom. A consumer that cannot absorb that pins a commit, as *Installing* describes.
 
+**New here?** [Getting started](docs/getting-started.md) takes you from installing the plugin to a first run on the defaults, then to adopting the templates.
+
 ## Why it is different
 
 - **The confirmed issue is the specification.** No spec folder, plan file or task list: the issue stage settles outcome-level acceptance criteria on the issue itself, checked against the codebase before a branch exists, and the build and verify stages implement and check exactly those.
