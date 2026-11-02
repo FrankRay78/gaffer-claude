@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/gaffer-mark.svg" width="160" alt=""></p>
+
 # gaffer
 
 A personal SDLC toolbox for Claude Code, packaged as a plugin so any repository can install it: the issue stage (`draftissue` → `reviewissue` → `confirmissue`), the build chain (`build` → `verify` → `raise-pr`, each ending on a machine-readable verdict), the scripts that run that chain unattended from a timer, a verified pull-request review with follow-up rounds, the periodic audits, and one hook that keeps an unattended run from stalling on `chmod`.
