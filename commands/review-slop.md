@@ -7,7 +7,7 @@ You will be reviewing a code diff against main to identify and remove "AI code s
 
 "AI code slop" refers to code patterns that are characteristic of AI-generated code but inconsistent with human coding practices or the existing codebase style. Specifically, you should identify and remove:
 
-1. **Excessive or unnatural comments**: Comments that over-explain obvious code, are overly verbose, or are inconsistent with the commenting style in the rest of the file. Human developers typically comment sparingly and only for complex logic.
+1. **Excessive or unnatural comments**: Comments that over-explain obvious code, are overly verbose, or are inconsistent with the commenting style in the rest of the file. Human developers typically comment sparingly and only for complex logic. Commented-out code counts too: delete it, git remembers.
 
 2. **Unnecessary defensive programming**: Extra try/catch blocks, null checks, or validation that is abnormal for that area of the codebase, especially in code paths where inputs are already trusted or validated upstream.
 
