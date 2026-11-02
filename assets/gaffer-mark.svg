@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="t">
+  <title id="t">gaffer</title>
+  <defs><clipPath id="badge"><circle cx="128" cy="128" r="124"/></clipPath></defs>
+  <circle cx="128" cy="128" r="124" fill="#22314f"/>
+  <g clip-path="url(#badge)" stroke="#1d1813" stroke-width="6" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M30 262 Q36 222 92 214 L164 214 Q220 222 226 262 Z" fill="#ff7a1a"/>
+    <path d="M84 216 L76 262 M172 216 L180 262" stroke="#e6e9ee" stroke-width="12"/>
+    <g transform="translate(200 138) rotate(28)">
+      <rect x="-7" y="-30" width="14" height="52" fill="#e8503a"/>
+      <rect x="-7" y="-44" width="14" height="14" rx="3" fill="#f59ab0"/>
+      <path d="M-7 -30 H7" fill="none"/>
+      <path d="M-7 22 L0 40 L7 22 Z" fill="#f3d9a4"/>
+    </g>
+    <circle cx="66" cy="170" r="14" fill="#efb488"/>
+    <circle cx="190" cy="170" r="14" fill="#efb488"/>
+    <circle cx="128" cy="166" r="62" fill="#f6c9a0"/>
+    <path d="M94 148 Q106 139 120 146 M136 146 Q150 139 162 148" fill="none" stroke="#5a3d2b" stroke-width="9"/>
+    <ellipse cx="108" cy="163" rx="5" ry="7" fill="#1d1813" stroke="none"/>
+    <ellipse cx="148" cy="163" rx="5" ry="7" fill="#1d1813" stroke="none"/>
+    <path d="M86 200 Q98 184 128 192 Q158 184 170 200 Q162 211 146 206 Q136 204 128 199 Q120 204 110 206 Q94 211 86 200 Z" fill="#5a3d2b"/>
+    <ellipse cx="128" cy="181" rx="13" ry="11" fill="#eba57c"/>
+    <path d="M116 217 Q128 225 140 217" fill="none" stroke-width="5"/>
+    <path d="M62 128 C62 68 194 68 194 128 Z" fill="#ffbf1f"/>
+    <path d="M117 128 L117 80 Q128 68 139 80 L139 128 Z" fill="#f0a500"/>
+    <rect x="44" y="120" width="168" height="16" rx="8" fill="#ffbf1f"/>
+    <path d="M80 112 Q83 94 99 87" fill="none" stroke="#fff1bf" stroke-width="7"/>
+  </g>
+  <circle cx="128" cy="128" r="124" fill="none" stroke="#1d1813" stroke-width="6"/>
+</svg>
