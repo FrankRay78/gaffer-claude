@@ -11,6 +11,7 @@ The approach is a *harness*: an agent constrained by context, feedback loops and
 ## The stages
 
 **The issue stage**, on `main`, with a person:
+
 1. `/gaffer:draftissue` (optional) — an idea, a document or a backlog item becomes a needs-first issue: user, job, scenarios, scope, acceptance criteria. No technical design.
 2. `/gaffer:reviewissue` — reads the codebase and posts the gaps the issue leaves open, each with a recommendation. The author answers inline.
 3. `/gaffer:confirmissue` — folds the answers into *Confirmed decisions* and labels the issue `ready`.
@@ -18,11 +19,13 @@ The approach is a *harness*: an agent constrained by context, feedback loops and
 The confirmed issue **is** the specification. There is no separate spec, plan or task list.
 
 **The build chain**, unattended:
+
 4. `/gaffer:build <N>` — branch, failing tests first, implementation, docs, all committed. Ends on a green, committed branch.
 5. `/gaffer:verify` — format, whole suite (the gate), one clean-context review, fix, re-run, commit. Ends on a green, reviewed branch; does not push.
 6. `/gaffer:raise-pr` — push and open the PR. A separate stage because it is the one outward-facing act; everything before it is safe to re-run.
 
 **The review**, asynchronous:
+
 7. `/gaffer:review-pr` — a verified multi-pass review of the open PR, with a risk tier and a verdict on whether it may merge with no human review. `/gaffer:review-followup` runs later rounds. A person merges.
 
 **Periodic**, not per feature: `/gaffer:capture-learnings` at a supervised checkpoint after several features; `/gaffer:audit-codebase` and `/gaffer:audit-deadcode` after a batch of merges or before a release; `/gaffer:context-gardening` quarterly.
