@@ -88,7 +88,7 @@ The plugin's own files are read from `${CLAUDE_PLUGIN_ROOT}`: the setup script `
 
 6. **Raise the pull request, or report that nothing is missing.**
    - **Nothing changed** — `git status --porcelain --untracked-files=all` is empty: switch back to the default branch, delete the init branch, raise nothing, and report that the repository is already set up. Say whether `labels` created any label, since that happens outside any pull request, and name any `ignored:` file.
-   - **Otherwise**: stage, by name, only what this run wrote — `CONVENTIONS.md` and `REVIEW.md` where step 5 wrote them, and each file `files` reported `added:` that is not also `ignored:` — never `git add -A`. Commit as `Set up gaffer: conventions, review criteria and settings`, push with `-u`, and open a pull request against the default branch titled `Set up gaffer`. Write the body to the scratch file `CONVENTIONS.md` → *Scratch files* names (`init-pr-body.md` by default) with the `Write` tool and pass it with `--body-file`. The body is:
+   - **Otherwise**: stage, by name, only what this run wrote, never `git add -A`: of `CONVENTIONS.md`, `REVIEW.md`, `CLAUDE.md`, `.gitignore`, `.claude/settings.json` and `.claude/memory/MEMORY.md`, each one this run created or changed and that `files` did not report `ignored:`. Commit as `Set up gaffer: conventions, review criteria and settings`, push with `-u`, and open a pull request against the default branch titled `Set up gaffer`. Write the body to the scratch file `CONVENTIONS.md` → *Scratch files* names (`init-pr-body.md` by default) with the `Write` tool and pass it with `--body-file`. The body is:
 
      ```markdown
      Recommendations from `/gaffer:init`, read from what this repository already contains. Edit anything on this branch before merging, or close the pull request to discard it. A heading marked *nothing found* runs on the plugin's default until you write a section for it.
@@ -109,7 +109,7 @@ The plugin's own files are read from `${CLAUDE_PLUGIN_ROOT}`: the setup script `
 
      ## Setup
 
-     - <each `added:` line from `files`, in plain words>
+     - <each `added:` line from `files` whose file is not also `ignored:`, in plain words>
      - <each `ignored:` file: "`<path>` is git-ignored here, so this pull request cannot carry it; un-ignore it or add it by hand">
 
      ## Labels

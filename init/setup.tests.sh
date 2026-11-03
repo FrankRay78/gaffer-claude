@@ -42,7 +42,7 @@ export PATH="$SB/bin:$PATH"
 
 # A PATH with everything setup.sh needs except jq, for the cases that check jq is required.
 mkdir -p "$SB/nojq"
-for t in git gh grep sed tail mktemp mv rm mkdir cat dirname env; do ln -s "$(command -v "$t")" "$SB/nojq/$t"; done
+for t in bash git gh grep sed tail mktemp mv rm mkdir cat dirname env; do ln -s "$(command -v "$t")" "$SB/nojq/$t"; done
 BASH_BIN=$(command -v bash)
 
 PASS=0; FAIL=0
@@ -137,6 +137,9 @@ fresh; printf '.claude/\n' > "$R/.gitignore"; run files "$R"
 ok "scratch already ignored by a wider rule → gitignore untouched" '[ "$(cat "$R/.gitignore")" = ".claude/" ] && grep -q "^present: .claude/scratch/ git-ignored" <<<"$OUT"'
 ok "files written under an ignored .claude/ are reported as ignored" 'grep -qx "ignored: .claude/settings.json" <<<"$OUT" && grep -qx "ignored: .claude/memory/MEMORY.md" <<<"$OUT"'
 ok "a file that is not ignored is not reported as ignored" '! grep -q "^ignored: CLAUDE.md" <<<"$OUT"'
+fresh; printf '.claude/\n' > "$R/.gitignore"; mkdir -p "$R/.claude"; echo '{}' > "$R/.claude/settings.json"
+git -C "$R" add .gitignore && git -C "$R" add -f .claude/settings.json && git -C "$R" commit -qm tracked; run files "$R"
+ok "a tracked file under an ignored .claude/ is not reported as ignored" '! grep -q "^ignored: .claude/settings.json" <<<"$OUT" && grep -qx "ignored: .claude/memory/MEMORY.md" <<<"$OUT"'
 fresh; run files "$R"
 ok "nothing ignored on a plain repository → no ignored lines" '! grep -q "^ignored:" <<<"$OUT"'
 

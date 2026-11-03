@@ -74,7 +74,7 @@ do_check() {
   # --untracked-files=all: a status.showUntrackedFiles=no setting must not hide untracked files.
   [ -z "$(git status --porcelain --untracked-files=all)" ] || { echo "not ready: the working tree has uncommitted changes"; exit 1; }
   git rev-parse --verify -q "refs/remotes/origin/$default" >/dev/null \
-    || { echo "not ready: no origin/$default to compare with (run \`git fetch origin\`)"; exit 1; }
+    || { echo "not ready: no origin/$default to compare with (gaffer needs the GitHub remote named origin, fetched)"; exit 1; }
   ahead=$(git rev-list --count "origin/$default..HEAD")
   [ "$ahead" = 0 ] || { echo "not ready: '$default' has $ahead commit(s) not on origin/$default; push or drop them first"; exit 1; }
   echo "ready: $default"
@@ -170,14 +170,15 @@ do_files() {
   # leaves it out when the repository gave it nothing to say.
   if [ -f CONVENTIONS.md ]; then ensure_import CONVENTIONS.md; else echo "skipped: CLAUDE.md import of CONVENTIONS.md (no CONVENTIONS.md)"; fi
   ensure_import "$MEMORY_INDEX"
-  report_ignored .claude/settings.json "$MEMORY_INDEX" CLAUDE.md
+  report_ignored .claude/settings.json "$MEMORY_INDEX" CLAUDE.md .gitignore CONVENTIONS.md REVIEW.md
 }
 
-# A file git ignores never reaches the pull request, even though it is written here.
+# A file git ignores never reaches the pull request, even though it is written here. A file git
+# already tracks is not ignored, whatever the patterns say, so no --no-index here.
 report_ignored() {
   local f
   for f in "$@"; do
-    if [ -e "$f" ] && git check-ignore -q --no-index "$f" 2>/dev/null; then echo "ignored: $f"; fi
+    if [ -e "$f" ] && git check-ignore -q "$f" 2>/dev/null; then echo "ignored: $f"; fi
   done
 }
 
