@@ -94,7 +94,9 @@ The order of preference for where a learning lands: **fix the rule that misfired
 
    **Deterministic** — these change how the harness or test suite behaves, so **propose, then apply only on explicit approval**; never silently edit `settings.json`. For a hook, permission, or env change, invoke the `update-config` skill with the concrete rule. For a code-shape or invariant rule, add the test following `CONVENTIONS.md` → *Testing* and *Test-driven development* — including a RED run proving it fails on the violation.
 
-   **Memory** — write (or update) a file in `.claude/memory/`:
+   **Memory** — first check that a session will ever read it. Claude Code does not load `.claude/memory/` on its own; a repository loads the index by importing it from `CLAUDE.md` with a line reading `@.claude/memory/MEMORY.md`. The import counts when it sits in `CLAUDE.md` or `.claude/CLAUDE.md`, directly or in a file either imports with `@`, and does not count inside a code fence or code span, where Claude Code does not evaluate it. If no such import exists, tell the user that nothing loads the index, and propose adding the line — to the end of whichever of those two files exists, or as a new `CLAUDE.md` holding only that line when neither does. Apply it only on approval. If they decline, still write the entry, and say in step 10 that no session will see it until the import is added.
+
+   Then write (or update) a file in `.claude/memory/`:
 
    ```markdown
    ---
@@ -109,6 +111,6 @@ The order of preference for where a learning lands: **fix the rule that misfired
    **How to apply:** [when this should influence future behaviour]
    ```
 
-   Link related entries with `[[name]]`. For a **Both** candidate, point the memory's **How to apply** at the enforcing mechanism. Then add a pointer to `.claude/memory/MEMORY.md` — one flat list, one line per entry, under ~150 characters, format `- [Title](file.md) — one-line hook`. No section headings; the list is not categorised.
+   Link related entries with `[[name]]`. For a **Both** candidate, point the memory's **How to apply** at the enforcing mechanism. Then add a pointer to `.claude/memory/MEMORY.md`, creating it when this is the folder's first entry — one flat list, one line per entry, under ~150 characters, format `- [Title](file.md) — one-line hook`. No section headings; the list is not categorised.
 
-10. **Output result**: List rules amended, mechanisms applied or proposed, memory entries added or updated, and anything deleted as stale. If nothing was approved, output: "No learnings captured."
+10. **Output result**: List rules amended, mechanisms applied or proposed, memory entries added or updated, whether the `CLAUDE.md` import was added or is still missing, and anything deleted as stale. If nothing was approved, output: "No learnings captured."

@@ -35,6 +35,14 @@ The `ask` rule is the backstop behind the plugin's `no-chmod` hook: the hook ref
 
 Three more things the commands assume, all cheap: `.claude/scratch/` is git-ignored (every command writes its working files there), `main` is the default branch, and `git`, `gh` (signed in) and `jq` are on the path. The full list is under *What a repository needs* in the [README](../README.md).
 
+Last, load project memory. `/gaffer:capture-learnings` writes durable learnings to `.claude/memory/` and indexes them in `.claude/memory/MEMORY.md`, but Claude Code does not read that folder on its own. Import the index from the repository's `CLAUDE.md`, creating it if there is none:
+
+```markdown
+@.claude/memory/MEMORY.md
+```
+
+The import is harmless before the first entry exists, and `/gaffer:capture-learnings` creates `MEMORY.md` when it writes one. Without the line, every entry is written where no session reads it.
+
 ## 3. Create the labels
 
 The issue stage moves an issue through two labels, and an unattended runner uses a third:

@@ -29,7 +29,7 @@ The commands read conventions and review criteria section by section, from the p
 Not configurable; a repository that differs changes the command, by an issue here.
 
 - `CLAUDE.md` at the root is the project context every command reads first.
-- `.claude/memory/` holds durable learnings, one file per fact, indexed in `MEMORY.md`.
+- `.claude/memory/` holds durable learnings, one file per fact, indexed in `MEMORY.md`, which `CLAUDE.md` loads into every session with the line `@.claude/memory/MEMORY.md`. Claude Code does not read the folder on its own.
 - `.claude/scratch/`, git-ignored, holds every working file.
 - `main` is the default branch; `build` branches from `origin/main` and names branches `feature/<N>-<slug>`, which `raise-pr` reads the issue number from.
 - Labels `needs answers` and `ready` carry the issue stage's state. `audit-codebase` never applies `ready`, `review`, `confirm` or `parked`, because automation may react to them.
