@@ -67,7 +67,7 @@ To enable it for every clone of a repository, commit this to its `.claude/settin
 - **The `pr-review-toolkit` plugin**: `/gaffer:verify` spawns its reviewers by their `pr-review-toolkit:` names.
 - **`Bash(chmod:*)` on `permissions.ask`** in `.claude/settings.json`, as the backstop for the forms the hook declines to decide; a plugin cannot set permission rules.
 - **`.claude/scratch/` git-ignored**, for every command's working files.
-- **`main` as the default branch**, `CLAUDE.md` for project context, and `.claude/memory/` for durable learnings.
+- **`main` as the default branch**, `CLAUDE.md` for project context, and `.claude/memory/` for durable learnings, loaded by an `@.claude/memory/MEMORY.md` line in `CLAUDE.md`. Without that line no session sees an entry.
 - **A build-and-test command** under *Build, test and format* in the repository's `CONVENTIONS.md` before the build stage is used. It is the one convention with no default: `build` and `verify` stop rather than invent one.
 
 How the repository's `CONVENTIONS.md` and `REVIEW.md` combine with the defaults is in [`docs/interfaces.md`](docs/interfaces.md); copy [`templates/`](templates/) to start them.
