@@ -1,6 +1,6 @@
 {
   "name": "gaffer",
-  "description": "A personal SDLC toolbox for Claude Code: issue drafting, review and confirmation; build, verify and raise-pr stages that end on a machine-readable verdict; a verified pull-request review with follow-up rounds; whole-codebase and dead-code audits; and a hook that keeps unattended runs from stalling on chmod. A repository extends the plugin's default CONVENTIONS.md and REVIEW.md with files of its own.",
+  "description": "A personal SDLC toolbox for Claude Code: repository setup from what it already contains; issue drafting, review and confirmation; build, verify and raise-pr stages that end on a machine-readable verdict; a verified pull-request review with follow-up rounds; whole-codebase and dead-code audits; and a hook that keeps unattended runs from stalling on chmod. A repository extends the plugin's default CONVENTIONS.md and REVIEW.md with files of its own.",
   "keywords": [
     "sdlc",
     "tdd",
