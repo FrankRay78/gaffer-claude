@@ -2,11 +2,11 @@
 
 # gaffer
 
-A personal SDLC toolbox for Claude Code, packaged as a plugin so any repository can install it: the issue stage (`draftissue` → `reviewissue` → `confirmissue`), the build chain (`build` → `verify` → `raise-pr`, each ending on a machine-readable verdict), the scripts that run that chain unattended from a timer, a verified pull-request review with follow-up rounds, the periodic audits, and one hook that keeps an unattended run from stalling on `chmod`.
+A personal SDLC toolbox for Claude Code, packaged as a plugin so any repository can install it: a setup command that starts a repository's conventions from what it already contains, the issue stage (`draftissue` → `reviewissue` → `confirmissue`), the build chain (`build` → `verify` → `raise-pr`, each ending on a machine-readable verdict), the scripts that run that chain unattended from a timer, a verified pull-request review with follow-up rounds, the periodic audits, and one hook that keeps an unattended run from stalling on `chmod`.
 
 > **Personal toolbox — breaking changes at any time.** Any command, heading, default, verdict field or hook may change or disappear in any commit, with no notice beyond the pull request that makes the change, which says what breaks and for whom. A consumer that cannot absorb that pins a commit, as *Installing* describes.
 
-**New here?** [Getting started](docs/getting-started.md) takes you from installing the plugin to a first run on the defaults, then to adopting the templates.
+**New here?** [Getting started](docs/getting-started.md) takes you from installing the plugin, through `/gaffer:init` setting the repository up from what it already contains, to a first run.
 
 ## Why it is different
 
@@ -21,6 +21,7 @@ Commands are typed as `/gaffer:<name>`. Each command's prompt under [`commands/`
 
 | Command | What it does | Unattended? |
 |---|---|---|
+| `init` | Sets a repository up from what it already contains: settings, git-ignore line, `CLAUDE.md` imports, labels, and a `CONVENTIONS.md` and `REVIEW.md` pointing at its own files, as a pull request of recommendations. Re-run, it reports what is missing. | Yes |
 | `draftissue` | Turns an idea, a document, a backlog item or an old issue into a needs-first GitHub issue and raises it. | No — discusses open decisions |
 | `reviewissue` | Reviews an issue before building: posts the gaps and a recommendation for each as an inline-answerable comment, labels it `needs answers`. | Yes, given an issue number |
 | `confirmissue` | Folds the answered review into *Confirmed decisions* on the issue, labels it `ready`, deletes the review comment. | Yes, given an issue number |
@@ -70,11 +71,11 @@ To enable it for every clone of a repository, commit this to its `.claude/settin
 - **`main` as the default branch**, `CLAUDE.md` for project context, and `.claude/memory/` for durable learnings, loaded by an `@.claude/memory/MEMORY.md` line in `CLAUDE.md`. Without that line no session sees an entry.
 - **A build-and-test command** under *Build, test and format* in the repository's `CONVENTIONS.md` before the build stage is used. It is the one convention with no default: `build` and `verify` stop rather than invent one.
 
-How the repository's `CONVENTIONS.md` and `REVIEW.md` combine with the defaults is in [`docs/interfaces.md`](docs/interfaces.md); copy [`templates/`](templates/) to start them.
+`/gaffer:init` puts all of these in place except the tools and the plugin installs, and states the build-and-test command where a file in the repository already runs one. How the repository's `CONVENTIONS.md` and `REVIEW.md` combine with the defaults is in [`docs/interfaces.md`](docs/interfaces.md); `/gaffer:init` starts them, and [`templates/`](templates/) holds every heading for the ones it leaves to you.
 
 ## Documentation
 
-- [`docs/getting-started.md`](docs/getting-started.md) — install, a first run on the defaults, then adopting the templates.
+- [`docs/getting-started.md`](docs/getting-started.md) — install, `/gaffer:init`, a first run, then filling in what init could not.
 - [`docs/workflow.md`](docs/workflow.md) — how the stages fit together, and why they are shaped this way.
 - [`docs/interfaces.md`](docs/interfaces.md) — everything that crosses between the plugin and a repository.
 - [`docs/verdict-schema.md`](docs/verdict-schema.md) — the verdict the build chain ends on, and how to read it.
@@ -90,6 +91,7 @@ How the repository's `CONVENTIONS.md` and `REVIEW.md` combine with the defaults 
 commands/         the slash commands
 hooks/            hooks.json, no-chmod.sh and its test matrix
 chain/            chain.sh, chain-next.sh and their test matrices — run from a clone, not from the installed plugin
+init/             setup.sh, the mechanical part of /gaffer:init, and its test matrix
 defaults/         the CONVENTIONS.md and REVIEW.md the commands run on when a repository says nothing
 templates/        copyable starting points for a repository's own two files
 docs/             the guides above

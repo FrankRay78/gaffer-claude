@@ -56,7 +56,7 @@ This project keeps none by default, so `/build` writes none and `/raise-pr` link
 
 ## Scratch files
 
-`.claude/scratch/` at the repository root, git-ignored; the `Write` tool creates it when it is missing. The files the commands write there: `/raise-pr` the pull request body to `raise-pr-body.md`; `/draftissue` the issue body to `gh-issue-body-<slug>.md`, where the slug is a short kebab-case form of the title; `/reviewissue` the review comment to `reviewissue-body.md`; `/confirmissue` the issue body to `confirmissue-body.md` and the patch to `confirmissue-patch.json`; `/review-pr` its review to `review-pr-<N>.json` and a worktree to `review-pr-<N>/`; `/audit-codebase` its working files under `audit/`. A repository that keeps scratch files elsewhere, or ignores them differently, says so here.
+`.claude/scratch/` at the repository root, git-ignored; the `Write` tool creates it when it is missing. The files the commands write there: `/raise-pr` the pull request body to `raise-pr-body.md`; `/init` its pull request body to `init-pr-body.md`; `/draftissue` the issue body to `gh-issue-body-<slug>.md`, where the slug is a short kebab-case form of the title; `/reviewissue` the review comment to `reviewissue-body.md`; `/confirmissue` the issue body to `confirmissue-body.md` and the patch to `confirmissue-patch.json`; `/review-pr` its review to `review-pr-<N>.json` and a worktree to `review-pr-<N>/`; `/audit-codebase` its working files under `audit/`. A repository that keeps scratch files elsewhere, or ignores them differently, says so here.
 
 ## Pull requests
 
