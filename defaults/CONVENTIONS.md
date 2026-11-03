@@ -32,7 +32,7 @@ A repository names here its test projects, naming scheme, testing guide, any sna
 
 ## Code quality
 
-No default rules beyond what the codebase shows: `/build` follows the patterns in the files it touches, validates inputs early, never swallows an exception, and leaves the build with no new warning. A repository states its standards, its cross-platform or runtime constraints, and any build-time guarantee here.
+No default rules beyond what the codebase shows: `/build` follows the patterns in the files it touches, validates inputs early, never swallows an exception, leaves no commented-out code — delete it, git remembers — and leaves the build with no new warning. A repository states its standards, its cross-platform or runtime constraints, and any build-time guarantee here.
 
 ## Dependencies
 
