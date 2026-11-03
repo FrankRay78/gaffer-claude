@@ -18,10 +18,14 @@
 # OUTPUT. One line per item, `<status>: <item>`, so the command can list the outcome in the pull
 # request body. `files` and `labels` print `added:` for something they put in place and `present:`
 # for something already there; `check` prints `ready: <default branch>` or `not ready: <reason>`.
+# `files` also prints `ignored: <path>` for any file it manages that the repository git-ignores,
+# since a pull request cannot carry it, and `skipped:` for the CONVENTIONS.md import when there is
+# no CONVENTIONS.md.
 #
 # IDEMPOTENT. Anything already present is left exactly as it is, including a setting the
 # repository has deliberately turned off: a second run of `files` changes no byte. A file is only
-# rewritten when something in it is missing.
+# rewritten when something in it is missing; .claude/settings.json is then re-serialised by jq, so
+# its entries are kept but its indentation may change.
 #
 # EXIT. 0 on success (including `ready`); 1 on `not ready`, an unreadable settings file, or a gh
 # failure, with nothing changed by the step that failed; 2 on bad usage.
@@ -59,14 +63,20 @@ top=$(git rev-parse --show-toplevel 2>/dev/null) || fail "not a git repository: 
 # check
 # ---------------------------------------------------------------------------------------------
 do_check() {
-  local branch default
+  local branch default ahead
+  command -v jq >/dev/null || { echo "not ready: jq is not on the path"; exit 1; }
   gh auth status >/dev/null 2>&1 || { echo "not ready: gh is not signed in (run \`gh auth login\`)"; exit 1; }
   default=$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name 2>/dev/null) \
     && [ -n "$default" ] \
     || { echo "not ready: no GitHub repository found for this remote (gh repo view failed)"; exit 1; }
   branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
   [ "$branch" = "$default" ] || { echo "not ready: on branch '$branch', not the default branch '$default'"; exit 1; }
-  [ -z "$(git status --porcelain)" ] || { echo "not ready: the working tree has uncommitted changes"; exit 1; }
+  # --untracked-files=all: a status.showUntrackedFiles=no setting must not hide untracked files.
+  [ -z "$(git status --porcelain --untracked-files=all)" ] || { echo "not ready: the working tree has uncommitted changes"; exit 1; }
+  git rev-parse --verify -q "refs/remotes/origin/$default" >/dev/null \
+    || { echo "not ready: no origin/$default to compare with (run \`git fetch origin\`)"; exit 1; }
+  ahead=$(git rev-list --count "origin/$default..HEAD")
+  [ "$ahead" = 0 ] || { echo "not ready: '$default' has $ahead commit(s) not on origin/$default; push or drop them first"; exit 1; }
   echo "ready: $default"
 }
 
@@ -160,6 +170,15 @@ do_files() {
   # leaves it out when the repository gave it nothing to say.
   if [ -f CONVENTIONS.md ]; then ensure_import CONVENTIONS.md; else echo "skipped: CLAUDE.md import of CONVENTIONS.md (no CONVENTIONS.md)"; fi
   ensure_import "$MEMORY_INDEX"
+  report_ignored .claude/settings.json "$MEMORY_INDEX" CLAUDE.md
+}
+
+# A file git ignores never reaches the pull request, even though it is written here.
+report_ignored() {
+  local f
+  for f in "$@"; do
+    if [ -e "$f" ] && git check-ignore -q --no-index "$f" 2>/dev/null; then echo "ignored: $f"; fi
+  done
 }
 
 # ---------------------------------------------------------------------------------------------
@@ -167,10 +186,11 @@ do_files() {
 # ---------------------------------------------------------------------------------------------
 do_labels() {
   local existing entry name desc
+  # GitHub label names are case-insensitive: an existing `Ready` is the `ready` label.
   existing=$(gh label list --limit 1000 --json name --jq '.[].name' 2>/dev/null) || fail "could not list labels (gh label list failed)"
   for entry in "${LABELS[@]}"; do
     name=${entry%%|*}; desc=${entry#*|}
-    if grep -qxF "$name" <<<"$existing"; then
+    if grep -qixF "$name" <<<"$existing"; then
       echo "present: label $name"
     else
       gh label create "$name" --description "$desc" >/dev/null 2>&1 || fail "could not create label '$name'"

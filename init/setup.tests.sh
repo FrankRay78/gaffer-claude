@@ -18,8 +18,11 @@ trap 'rm -rf "$SB"' EXIT
 
 # The stub gh. Behaviour is driven by files in $STUB_DIR: auth-fail makes `gh auth status` fail,
 # repo-fail makes `gh repo view` fail, default-branch holds the default branch name (main if
-# absent), labels holds one existing label per line, and label-create-fail makes creation fail.
-# Created labels are appended to labels, so a second run sees them.
+# absent), labels holds one existing label per line, label-list-fail makes listing fail, and
+# label-create-fail makes creation fail. Created labels are appended to labels, so a second run
+# sees them. Every call is logged, so a case can check the flags a call carried: the stub's replies
+# assume them (a bare branch name, one label per line), and a call that dropped one would get JSON
+# from the real gh.
 mkdir -p "$SB/bin"
 cat > "$SB/bin/gh" <<'STUB'
 #!/usr/bin/env bash
@@ -28,7 +31,8 @@ case "$1 $2" in
   "auth status") [ -f "$STUB_DIR/auth-fail" ] && exit 1; exit 0 ;;
   "repo view")   [ -f "$STUB_DIR/repo-fail" ] && { echo "no remote" >&2; exit 1; }
                  cat "$STUB_DIR/default-branch" 2>/dev/null || echo main ;;
-  "label list")  [ -f "$STUB_DIR/labels" ] && cat "$STUB_DIR/labels"; exit 0 ;;
+  "label list")  [ -f "$STUB_DIR/label-list-fail" ] && exit 1
+                 [ -f "$STUB_DIR/labels" ] && cat "$STUB_DIR/labels"; exit 0 ;;
   "label create") [ -f "$STUB_DIR/label-create-fail" ] && exit 1; printf '%s\n' "$3" >> "$STUB_DIR/labels" ;;
   *) echo "stub gh: unexpected $*" >&2; exit 1 ;;
 esac
@@ -36,12 +40,17 @@ STUB
 chmod +x "$SB/bin/gh"
 export PATH="$SB/bin:$PATH"
 
+# A PATH with everything setup.sh needs except jq, for the cases that check jq is required.
+mkdir -p "$SB/nojq"
+for t in git gh grep sed tail mktemp mv rm mkdir cat dirname env; do ln -s "$(command -v "$t")" "$SB/nojq/$t"; done
+BASH_BIN=$(command -v bash)
+
 PASS=0; FAIL=0
 ok() {
   if eval "$2"; then PASS=$((PASS + 1)); echo "  ok   $1"; else FAIL=$((FAIL + 1)); echo "  FAIL $1"; echo "       output: $OUT"; fi
 }
 
-# A fresh repository with one commit on main, and a fresh stub state.
+# A fresh repository with one commit on main, pushed to a bare origin, and a fresh stub state.
 N=0
 fresh() {
   N=$((N + 1))
@@ -52,6 +61,9 @@ fresh() {
   git -C "$R" config user.name t
   echo "# project" > "$R/README.md"
   git -C "$R" add -A && git -C "$R" commit -qm init
+  git init -q --bare "$SB/origin$N.git"
+  git -C "$R" remote add origin "$SB/origin$N.git"
+  git -C "$R" push -q -u origin main 2>/dev/null
 }
 run() { OUT=$(bash "$SETUP" "$@" 2>&1); RC=$?; }
 snapshot() { (cd "$R" && find . -path ./.git -prune -o -type f -print0 | sort -z | xargs -0 sha256sum); }
@@ -61,11 +73,23 @@ fresh; run check "$R";                         ok "clean default branch → read
 fresh; echo x > "$R/x"; run check "$R";        ok "untracked file → not ready" '[ $RC = 1 ] && grep -q "uncommitted" <<<"$OUT"'
 fresh; echo y >> "$R/README.md"; run check "$R"; ok "modified file → not ready" '[ $RC = 1 ] && grep -q "uncommitted" <<<"$OUT"'
 fresh; git -C "$R" switch -qc other; run check "$R"; ok "not on the default branch → not ready" '[ $RC = 1 ] && grep -q "not the default branch" <<<"$OUT"'
-fresh; echo trunk > "$STUB_DIR/default-branch"; git -C "$R" branch -m trunk; run check "$R"; ok "default branch other than main → ready" '[ $RC = 0 ] && [ "$OUT" = "ready: trunk" ]'
+fresh; echo trunk > "$STUB_DIR/default-branch"; git -C "$R" branch -m trunk; git -C "$R" push -q origin trunk 2>/dev/null; run check "$R"; ok "default branch other than main → ready" '[ $RC = 0 ] && [ "$OUT" = "ready: trunk" ]'
 fresh; touch "$STUB_DIR/auth-fail"; run check "$R"; ok "gh not signed in → not ready" '[ $RC = 1 ] && grep -q "not signed in" <<<"$OUT"'
 fresh; touch "$STUB_DIR/repo-fail"; run check "$R"; ok "no GitHub repository → not ready" '[ $RC = 1 ] && grep -q "no GitHub repository" <<<"$OUT"'
 fresh; mkdir "$R/sub"; run check "$R/sub";     ok "not the work-tree root → error" '[ $RC = 1 ] && grep -q "not the root" <<<"$OUT"'
+mkdir -p "$SB/plain"; run files "$SB/plain";    ok "not a git repository → error" '[ $RC = 1 ] && grep -q "not a git repository" <<<"$OUT"'
 fresh; run frobnicate "$R";                    ok "unknown mode → usage" '[ $RC = 2 ]'
+fresh; git -C "$R" config status.showUntrackedFiles no; echo x > "$R/x"; run check "$R"
+ok "untracked file hidden by status.showUntrackedFiles=no → still not ready" '[ $RC = 1 ] && grep -q "uncommitted" <<<"$OUT"'
+fresh; echo z > "$R/z"; git -C "$R" add z; git -C "$R" commit -qm local; run check "$R"
+ok "local commit not on origin → not ready" '[ $RC = 1 ] && grep -q "1 commit(s) not on origin/main" <<<"$OUT"'
+fresh; git -C "$R" remote remove origin; run check "$R"
+ok "no origin branch to compare with → not ready" '[ $RC = 1 ] && grep -q "no origin/main" <<<"$OUT"'
+fresh; before=$(snapshot); OUT=$(PATH="$SB/nojq" "$BASH_BIN" "$SETUP" check "$R" 2>&1); RC=$?
+ok "jq missing → not ready, before gh is asked anything" '[ $RC = 1 ] && grep -q "jq is not on the path" <<<"$OUT" && [ ! -s "$STUB_DIR/gh-log" ]'
+ok "check changes nothing" '[ "$(snapshot)" = "$before" ]'
+fresh; run check "$R"
+ok "default branch is read as a bare name (--jq)" 'grep -qxF "repo|view|--json|defaultBranchRef|--jq|.defaultBranchRef.name|" "$STUB_DIR/gh-log"'
 
 echo "files, on a repository with nothing:"
 fresh; run files "$R"
@@ -98,12 +122,23 @@ ok "ask rule appended after existing ones" 'jq -e ".permissions.ask == [\"Bash(r
 
 fresh; mkdir -p "$R/.claude"; echo '[1,2' > "$R/.claude/settings.json"; before=$(snapshot); run files "$R"
 ok "unreadable settings → error, nothing changed" '[ $RC = 1 ] && grep -q "not a JSON object" <<<"$OUT" && [ "$(snapshot)" = "$before" ]'
+fresh; mkdir -p "$R/.claude"; echo '[1,2]' > "$R/.claude/settings.json"; before=$(snapshot); run files "$R"
+ok "settings that are JSON but not an object → error, nothing changed" '[ $RC = 1 ] && grep -q "not a JSON object" <<<"$OUT" && [ "$(snapshot)" = "$before" ]'
+fresh; mkdir -p "$R/.claude"; echo '{"extraKnownMarketplaces":{"gaffer-claude":{"source":{"source":"directory","path":"/x"}}},"permissions":{"ask":["Bash(rm:*)","Bash(chmod:*)"]}}' > "$R/.claude/settings.json"; run files "$R"
+ok "an existing gaffer marketplace entry is kept as it is" 'jq -e ".extraKnownMarketplaces[\"gaffer-claude\"].source.path == \"/x\"" "$R/.claude/settings.json" >/dev/null'
+ok "chmod rule already among other ask rules → not added again" 'jq -e ".permissions.ask == [\"Bash(rm:*)\", \"Bash(chmod:*)\"]" "$R/.claude/settings.json" >/dev/null'
+fresh; before=$(snapshot); OUT=$(PATH="$SB/nojq" "$BASH_BIN" "$SETUP" files "$R" 2>&1); RC=$?
+ok "jq missing → files refuses, nothing changed" '[ $RC = 1 ] && grep -q "jq is not on the path" <<<"$OUT" && [ "$(snapshot)" = "$before" ]'
 
 fresh; printf 'bin/' > "$R/.gitignore"; run files "$R"
 ok "gitignore without a final newline gets one before the new line" '[ "$(cat "$R/.gitignore")" = "$(printf "bin/\n.claude/scratch/")" ]'
 
 fresh; printf '.claude/\n' > "$R/.gitignore"; run files "$R"
 ok "scratch already ignored by a wider rule → gitignore untouched" '[ "$(cat "$R/.gitignore")" = ".claude/" ] && grep -q "^present: .claude/scratch/ git-ignored" <<<"$OUT"'
+ok "files written under an ignored .claude/ are reported as ignored" 'grep -qx "ignored: .claude/settings.json" <<<"$OUT" && grep -qx "ignored: .claude/memory/MEMORY.md" <<<"$OUT"'
+ok "a file that is not ignored is not reported as ignored" '! grep -q "^ignored: CLAUDE.md" <<<"$OUT"'
+fresh; run files "$R"
+ok "nothing ignored on a plain repository → no ignored lines" '! grep -q "^ignored:" <<<"$OUT"'
 
 fresh; printf '# Project\n\nSome context.' > "$R/CLAUDE.md"; echo "# Conventions" > "$R/CONVENTIONS.md"; run files "$R"
 ok "existing CLAUDE.md content kept" '[ "$(head -3 "$R/CLAUDE.md")" = "$(printf "# Project\n\nSome context.")" ]'
@@ -120,10 +155,15 @@ echo "labels:"
 fresh; printf 'bug\nready\n' > "$STUB_DIR/labels"; run labels "$R"
 ok "creates only the missing labels" '[ $RC = 0 ] && grep -qx "added: label needs answers" <<<"$OUT" && grep -qx "added: label parked" <<<"$OUT" && grep -qx "present: label ready" <<<"$OUT"'
 ok "each created label carries a description" '[ "$(grep -c "^label|create|.*|--description|.\+|$" "$STUB_DIR/gh-log")" = 2 ]'
+ok "labels are listed by name, beyond the default page (--limit, --json, --jq)" 'grep -qxF "label|list|--limit|1000|--json|name|--jq|.[].name|" "$STUB_DIR/gh-log"'
 run labels "$R"
-ok "second run creates nothing" '! grep -q "^added:" <<<"$OUT" && [ "$(grep -c "^label|create" "$STUB_DIR/gh-log")" = 2 ]'
+ok "second run creates nothing" '[ $RC = 0 ] && ! grep -q "^added:" <<<"$OUT" && [ "$(grep -c "^present: label" <<<"$OUT")" = 3 ] && [ "$(grep -c "^label|create" "$STUB_DIR/gh-log")" = 2 ]'
+fresh; printf 'Ready\nNEEDS ANSWERS\n' > "$STUB_DIR/labels"; run labels "$R"
+ok "an existing label in another case counts as present" '[ $RC = 0 ] && grep -qx "present: label ready" <<<"$OUT" && grep -qx "present: label needs answers" <<<"$OUT" && [ "$(grep -c "^label|create" "$STUB_DIR/gh-log")" = 1 ]'
 fresh; touch "$STUB_DIR/label-create-fail"; run labels "$R"
-ok "gh failure → exit 1 naming the label" '[ $RC = 1 ] && grep -q "could not create label" <<<"$OUT"'
+ok "gh failure → exit 1 naming the label" '[ $RC = 1 ] && grep -qF "could not create label '"'"'needs answers'"'"'" <<<"$OUT"'
+fresh; touch "$STUB_DIR/label-list-fail"; run labels "$R"
+ok "listing failure → exit 1, nothing created" '[ $RC = 1 ] && grep -q "could not list labels" <<<"$OUT" && ! grep -q "^label|create" "$STUB_DIR/gh-log"'
 
 echo
 echo "$PASS passed, $FAIL failed"
