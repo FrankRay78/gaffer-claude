@@ -6,7 +6,7 @@
 
 ## `conventions missing: Build, test and format`
 
-`/gaffer:build` or `/gaffer:verify` stopped because no build-and-test command is stated — the one convention with no default. Add the section to the repository's `CONVENTIONS.md`, as [`getting-started.md`](getting-started.md) step 5 shows.
+`/gaffer:build` or `/gaffer:verify` stopped because no build-and-test command is stated — the one convention with no default. Add the section to the repository's `CONVENTIONS.md`, as [`getting-started.md`](getting-started.md) step 4 shows, or re-run `/gaffer:init` if a file in the repository already runs it.
 
 ## `/gaffer:build` stops without starting
 

@@ -18,7 +18,7 @@ The commands read conventions and review criteria section by section, from the p
 
 ## 3. The hook
 
-`hooks/hooks.json` runs `no-chmod.sh` on every Bash call. It refuses a `chmod` that sets the executable bit, naming `bash script.sh`, and fails open on a missing tool or bad input. Its test matrix, `hooks/no-chmod.tests.sh`, is the specification, including its known limits. The repository keeps `Bash(chmod:*)` on `permissions.ask` as the backstop. The plugin ships no other hook and no script; a repository's own gates stay in the repository, named under `CONVENTIONS.md` → *Hooks, scripts and plugins* so the commands weigh them.
+`hooks/hooks.json` runs `no-chmod.sh` on every Bash call. It refuses a `chmod` that sets the executable bit, naming `bash script.sh`, and fails open on a missing tool or bad input. Its test matrix, `hooks/no-chmod.tests.sh`, is the specification, including its known limits. The repository keeps `Bash(chmod:*)` on `permissions.ask` as the backstop. The plugin ships no other hook. Its one other script run inside a session, `init/setup.sh`, is called only by `/gaffer:init` and writes only the files and labels §5 assumes. A repository's own gates stay in the repository, named under `CONVENTIONS.md` → *Hooks, scripts and plugins* so the commands weigh them.
 
 ## 4. The chain settings file
 

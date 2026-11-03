@@ -6,6 +6,7 @@ For whoever wires a gaffer command into a chain script, a scheduled runner or a 
 
 | Command | Outward-facing acts, and when |
 |---|---|
+| `init` | Creates a `gaffer/init-<timestamp>` branch, commits, pushes and opens one pull request — only from a clean default branch — and creates any missing `needs answers`, `ready` and `parked` labels. Raises nothing when nothing is missing. |
 | `build` | Creates `feature/<N>-<slug>` from `origin/main` and commits to it — only from a clean `main` with no unpushed commits, for an open issue with no linked PR. Recreates a leftover branch of that name only if it holds nothing uninspected. |
 | `verify` | Commits formatting, then the review's fixes after a green re-run. A fix it cannot land is left uncommitted and named in the report. |
 | `raise-pr` | Pushes the branch and opens the PR, adding `Closes #<N>` only when `gh` confirms that open issue in this repository. |
