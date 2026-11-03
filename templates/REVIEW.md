@@ -1,10 +1,10 @@
 # Review criteria
 
-This repository's additions to the gaffer plugin's default review criteria. Each section sits under a heading the plugin's `defaults/REVIEW.md` documents — the part of `/review-pr`'s method it extends — and is read together with the plugin's section of the same name; this file wins where the two conflict. A section whose first line is exactly `Replaces the default.` is read instead of the plugin's section. Delete any section this repository has nothing to add under. In CI the review reads the default branch's copy of this file, never the pull request's, so a change here takes effect on merge, and is itself a change that always needs the maintainer.
+This repository's additions to the gaffer plugin's default review criteria. Each section sits under a heading the plugin's `defaults/REVIEW.md` documents — the part of `/gaffer:review-pr`'s method it extends — and is read together with the plugin's section of the same name; this file wins where the two conflict. A section whose first line is exactly `Replaces the default.` is read instead of the plugin's section. Delete any section this repository has nothing to add under. In CI the review reads the default branch's copy of this file, never the pull request's, so a change here takes effect on merge, and is itself a change that always needs the maintainer.
 
 ## Where it runs
 
-<Which workflow runs `/review-pr` and `/review-followup`, on what trigger, as whom, and how it puts the default branch's copy of this file in place — or delete the section if both are run by hand.>
+<Which workflow runs `/gaffer:review-pr` and `/gaffer:review-followup`, on what trigger, as whom, and how it puts the default branch's copy of this file in place — or delete the section if both are run by hand.>
 
 ## Severity
 

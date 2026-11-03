@@ -4,7 +4,7 @@ This repository's additions to the gaffer plugin's default conventions. Each sec
 
 ## Build, test and format
 
-- **Build-and-test command** — `<the one command that builds and runs the whole suite>`, run from the repository root. Required: `/build` and `/verify` stop without it.
+- **Build-and-test command** — `<the one command that builds and runs the whole suite>`, run from the repository root. Required: `/gaffer:build` and `/gaffer:verify` stop without it.
 - **Formatter** — `<the command CI checks, or delete this line to run with none>`.
 
 ## Test-driven development
@@ -41,7 +41,7 @@ This repository's additions to the gaffer plugin's default conventions. Each sec
 
 ## Change-intent records
 
-<"This project keeps them", the convention whose decision table `/build` runs, and where the records live — or delete the section to keep none.>
+<"This project keeps them", the convention whose decision table `/gaffer:build` runs, and where the records live — or delete the section to keep none.>
 
 ## Scratch files
 
@@ -61,7 +61,7 @@ This repository's additions to the gaffer plugin's default conventions. Each sec
 
 ## Issue review checks
 
-<The checks `/reviewissue` considers beyond its generic categories.>
+<The checks `/gaffer:reviewissue` considers beyond its generic categories.>
 
 ## Audit
 
