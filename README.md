@@ -15,6 +15,10 @@ A personal SDLC toolbox for Claude Code, packaged as a plugin so any repository 
 - **Repository specifics are data, not prompt text.** The commands run on defaults shipped here; a repository extends them with a `CONVENTIONS.md` and a `REVIEW.md` of its own, section by section. A fix to a command is a change here and reaches every repository that tracks it.
 - **It is built to run with nobody watching.** The build stages, the pull-request review and the issue gate run headless, check their own post-conditions rather than trusting the model's report, and stop rather than guess when a convention they need is missing.
 
+## Used by
+
+- **[NetPace](https://github.com/FrankRay78/NetPace)** — a cross-platform .NET network speed-test CLI and NuGet library. gaffer grew out of NetPace's development workflow and was extracted into this plugin in November 2026; NetPace now runs it from here, unattended chain included. Its [`CONVENTIONS.md`](https://github.com/FrankRay78/NetPace/blob/main/CONVENTIONS.md) and [`REVIEW.md`](https://github.com/FrankRay78/NetPace/blob/main/REVIEW.md) show how a repository extends the defaults.
+
 ## What it ships
 
 Commands are typed as `/gaffer:<name>`. Each command's prompt under [`commands/`](commands/) is its full reference.
