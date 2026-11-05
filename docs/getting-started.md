@@ -113,13 +113,13 @@ It branches as `feature/<number>-<slug>`, writes the failing tests for each acce
 /gaffer:verify
 ```
 
-It formats with the command you named, runs the whole suite as the gate, reviews the branch once in clean context, fixes what the review confirmed, re-runs the suite and commits, ending on a `verified` verdict. Finally:
+It formats with the command you named, runs the whole suite as the gate, reviews the branch once with the same review agents `/gaffer:review-pr` uses, fixes what the review confirmed, re-runs the suite and commits, then drafts the pull request body, ending on a `verified` verdict. Finally:
 
 ```
 /gaffer:raise-pr <number>
 ```
 
-It pushes the branch and opens the pull request, with a body sized to the change and `Closes #<number>`. That is the one outward-facing act in the sequence, which is why it is a command of its own.
+It pushes the branch and opens the pull request, with the body verify drafted (or, if you committed since, one composed afresh) and `Closes #<number>`. That is the one outward-facing act in the sequence, which is why it is a command of its own.
 
 ## 6. Review the pull request
 

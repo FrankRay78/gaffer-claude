@@ -19,7 +19,7 @@ You review one change for **contracts**, as one of several reviewers that each c
 A contract is anything a user, a script or a consumer touches directly: a command-line option, an exit code, a field in machine-readable output, a public member of a published library, a route clients call, a file format users write — and whatever the repository's *Contracts* section adds. For each one the change touches:
 
 - Did its behaviour change — a value, a shape, an error newly raised or no longer raised, a default? Compare against `main`, not against the author's description.
-- Is the change stated in the PR body (or the draft body) with who it breaks? An unstated breaking change is Major.
+- Is the change stated in the PR body (or the draft body) with who it breaks? An unstated breaking change is Major. Where your brief says no body exists yet, skip this check: it is made once the body is drafted.
 - Are the user-facing documents the repository's *Contracts* section names, and any document that describes the contract, updated to match? A document that now states something false about a contract is a finding.
 
 ## How to investigate

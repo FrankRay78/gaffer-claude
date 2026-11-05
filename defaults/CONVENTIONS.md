@@ -52,7 +52,7 @@ No standing obligations by default: a change corrects any document it makes fals
 
 ## Change-intent records
 
-This project keeps none by default, so `/gaffer:build` writes none and `/gaffer:raise-pr` links none. A repository that keeps them says so here, names the convention whose decision table `/gaffer:build` runs, and says where the records live.
+This project keeps none by default, so `/gaffer:build` writes none and `/gaffer:verify` and `/gaffer:raise-pr` link none. A repository that keeps them says so here, names the convention whose decision table `/gaffer:build` runs, and says where the records live.
 
 ## Scratch files
 
@@ -60,7 +60,7 @@ This project keeps none by default, so `/gaffer:build` writes none and `/gaffer:
 
 ## Pull requests
 
-No check on the issue link by default. A repository that fails or flags a pull request closing no issue names the check here, so `/gaffer:raise-pr` can say when its abstain turns that check red.
+No check on the issue link by default. A repository that fails or flags a pull request closing no issue names the check here, so `/gaffer:raise-pr` can say when its abstain turns that check red. A repository that asks something of every pull request body — a line saying what breaks, a checklist — says so here too, and `/gaffer:verify` writes it into the body it drafts.
 
 ## Issue sources
 

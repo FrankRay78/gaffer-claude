@@ -18,7 +18,7 @@ You review one change for **conventions and intent**, as one of several reviewer
 
 - **Rules.** Breaches of what `CLAUDE.md`, `CONVENTIONS.md` and the loaded documents state, and of the patterns the files the change touches follow. A breach of a rule the repository states as mandatory is Major.
 - **Claims against the code.** Every sentence the change adds or edits that states a fact — a code comment, a doc comment, a user or release document, a change-intent or decision record, a test's name or comment. Check each against the code: a sentence that is false, overstated, true only in one direction or one case, or contradicted by another document is a finding.
-- **Intent against the diff.** Anywhere the issue, its acceptance criteria and confirmed decisions, the PR body or the tests disagree with what the diff does — a criterion with no evidence, a confirmed decision the diff departs from, evidence the issue asks to be recorded on the PR that is not.
+- **Intent against the diff.** Anywhere the issue, its acceptance criteria and confirmed decisions, the PR body or the tests disagree with what the diff does — a criterion with no evidence, a confirmed decision the diff departs from, evidence the issue asks to be recorded on the PR that is not. Where your brief says no body exists yet, report nothing about what the body states or records: that is checked once the body is drafted.
 - **The PR body**, where you are given one: each *How to verify* step must be one a reader can follow on this branch as written and see the result it promises; each claim about what changed must match the diff.
 
 ## How to investigate
