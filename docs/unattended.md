@@ -8,8 +8,8 @@ For whoever wires a gaffer command into a chain script, a scheduled runner or a 
 |---|---|
 | `init` | Creates a `gaffer/init-<timestamp>` branch, commits, pushes and opens one pull request — only from a clean default branch — and creates any missing `needs answers`, `ready` and `parked` labels. Raises nothing when nothing is missing. |
 | `build` | Creates `feature/<N>-<slug>` from `origin/main` and commits to it — only from a clean `main` with no unpushed commits, for an open issue with no linked PR. Recreates a leftover branch of that name only if it holds nothing uninspected. |
-| `verify` | Commits formatting, then the review's fixes after a green re-run. A fix it cannot land is left uncommitted and named in the report. |
-| `raise-pr` | Pushes the branch and opens the PR, adding `Closes #<N>` only when `gh` confirms that open issue in this repository. |
+| `verify` | Commits formatting, then the review's fixes after a green re-run, and writes the PR body draft to the git-ignored scratch directory. A fix it cannot land is left uncommitted and named in the report. Evidence the issue asks for is produced only by re-running a command spelled out exactly, within half the stage's time limit; the rest is listed as owed. |
+| `raise-pr` | Pushes the branch and opens the PR — with verify's draft body when it names the current commit — adding `Closes #<N>` only when `gh` confirms that open issue in this repository. |
 | `review-pr` | Posts one PR review — verified inline findings and a summary marked `<!-- review-pr -->` — unless `--dry-run`. |
 | `review-followup` | Replies in, resolves and re-opens review threads, and posts the next round; at most three rounds. |
 | `reviewissue` | Posts the review comment marked `<!-- speckit:review -->` and adds `needs answers`; a re-run edits that comment in place. |

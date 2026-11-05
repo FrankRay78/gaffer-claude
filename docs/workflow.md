@@ -23,7 +23,7 @@ The confirmed issue **is** the specification. There is no separate spec, plan or
 **The build chain**, unattended:
 
 4. `/gaffer:build <N>` — branch, failing tests first, implementation, docs, all committed. Ends on a green, committed branch.
-5. `/gaffer:verify` — format, whole suite (the gate), one clean-context review, fix, re-run, commit. Ends on a green, reviewed branch; does not push.
+5. `/gaffer:verify` — format, whole suite (the gate), one review by the same agents `review-pr` uses, fix, one narrow check of the fixes, re-run, commit, then draft and check the PR body. Ends on a green, reviewed branch with its body drafted; does not push.
 6. `/gaffer:raise-pr` — push and open the PR. A separate stage because it is the one outward-facing act; everything before it is safe to re-run.
 
 **The review**, asynchronous:
@@ -40,7 +40,7 @@ The confirmed issue **is** the specification. There is no separate spec, plan or
 - **Gates attach to actions, not prose.** No hook can see an agent *say* "all tests pass", so enforcement hangs off a test run, a commit, a PR creation. When a gate can only see a proxy for the property you care about, move the gate to where the property is observable — which is why the completion gate is a real suite run at verify, not a turn-end hook.
 - **Format at verify cadence, with the command CI checks.** Once before the suite, once more if the review changed anything. Formatting on every commit taxes every commit to fix what no reviewer would catch.
 - **Review once, in clean context, and keep the fix small.** Reviewers see the diff, not the conversation. A finding is checked before it is acted on; a severity may be raised, never lowered. The review's fix is not re-reviewed by the same stage — looping found as much in each fix as in the branch — so it is held to the smallest change that removes the defect, and the PR review reads it.
-- **Two reviews.** Review A is inside `/gaffer:verify`, synchronous. Review B is `/gaffer:review-pr` on the opened PR, for the person who merges. Nothing waits on B.
+- **Two reviews, one standard.** Review A is inside `/gaffer:verify`, synchronous. Review B is `/gaffer:review-pr` on the opened PR, for the person who merges. Both start the same review agents against the same `REVIEW.md`, so B should find little that A did not; what A deliberately left is stated in the PR body. Nothing waits on B.
 - **One mission per branch.** When a second mission surfaces mid-flight, ship the first with a known issue and open another branch.
 - **Check results, don't trust reports.** An agent run reports success whenever the model finishes its turn. Every unattended use checks the post-condition that matters — a verdict, a posted review, a label — and fails when it does not hold.
 

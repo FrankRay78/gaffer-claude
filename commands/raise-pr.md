@@ -1,5 +1,5 @@
 ---
-description: Raise a PR for the current feature branch — composes a PR body sized to the change and pushes. The review-pr workflow reviews the PR once it opens.
+description: Raise a PR for the current feature branch — opens it with the body /gaffer:verify drafted for the current commit, or composes one sized to the change, and pushes. The review-pr workflow reviews the PR once it opens.
 argument-hint: "[issue number or URL]"
 ---
 
@@ -19,7 +19,7 @@ The steps in this file are generic. The conventions they run on live in two file
 
 | Heading | Supplies |
 |---|---|
-| `Scratch files` | the git-ignored file step 6 writes the body to |
+| `Scratch files` | the git-ignored file step 4 reads `/gaffer:verify`'s draft from and step 6 writes the body to |
 | `Pull requests` | any check the repository runs on the issue link, which step 4's abstain turns red |
 | `Change-intent records` | where the records step 4 links from the body live |
 
@@ -35,7 +35,14 @@ Every STOP below is a **failure**, so each ends its report with step 7's failure
 
 3. **Infer PR title**: Take the branch name from step 1, strip any leading path segment (`feat/`, `fix/`, `chore/`, `docs/`, etc.), strip any leading `NNN-` numeric prefix on the remaining segment, replace hyphens with spaces, and apply title case. Examples: `feature/316-remove-planning-pipeline` → `Remove Planning Pipeline`; `chore/docs-tidy` → `Docs Tidy`.
 
-4. **Compose PR body**: Read `git log main..HEAD` and `git diff main...HEAD` first, so the body describes what actually changed, not what the branch name suggests. Write a description sized to the change. **Do not follow a fixed template.** Decide which sections earn their place based on what's actually in this PR.
+4. **Compose PR body**:
+
+   **First, look for the body `/gaffer:verify` drafted.** It is `raise-pr-body.md` in the scratch directory (`CONVENTIONS.md` → *Scratch files*), and verify's draft starts with the line `<!-- gaffer:verify <sha> -->`. Read that file's first line and compare `<sha>` with `git rev-parse HEAD`:
+   - **The file is there and the commit matches** → **use that body.** Remove the marker line and change nothing else in it: verify wrote it against exactly this commit and checked it, and its *Evidence* and *Deliberately not done* sections are what the reader and the PR review rely on. Then settle the closing keyword below and add its line to the body's **Related** section, creating that section at the end if the body has none. Skip the rest of this step's composing.
+   - **The file is there with the marker, but the commit differs** → **the draft is stale**: the branch has commits verify never reviewed. Compose the body as below, carrying nothing over from the draft — not even *Deliberately not done*, whose findings were judged against different code. Step 7 reports it, naming the commits `git log --oneline <sha>..HEAD` lists (or, where that fails because `<sha>` is not an ancestor of HEAD, that the branch was rewritten since verify).
+   - **No file, or no marker on its first line** → verify did not prepare this branch, or a body from an earlier run was left behind. Compose the body as below.
+
+   To compose: read `git log main..HEAD` and `git diff main...HEAD` first, so the body describes what actually changed, not what the branch name suggests. Write a description sized to the change. **Do not follow a fixed template.** Decide which sections earn their place based on what's actually in this PR.
 
    **First, settle the closing keyword.** A merged PR must close the issue it implemented without the invoker having to remember to ask for it, so decide this every time — not only when someone thinks to mention an issue:
 
@@ -75,7 +82,7 @@ Every STOP below is a **failure**, so each ends its report with step 7's failure
 
 6. **Create PR**: Write the body from step 4 to a git-ignored scratch file (`CONVENTIONS.md` → *Scratch files* names it) with the native `Write` tool, never a shell heredoc, then run `gh pr create --title "<inferred title>" --body-file <scratch file>` with the title from step 3. Passing the body as a file keeps the backticks and `$` in it out of the shell, where a double-quoted `--body` or an unquoted heredoc would expand them. Capture the PR URL from the output.
 
-7. **Output result**: First print step 4's outcome in whichever of its three forms applies — `Closes #<N> — <issue title>`; `No closing keyword: <reason>` (the branch carries no issue number; `#<N>` is a pull request; `#<N>` is closed); or `Closing keyword unverified: <gh stderr>` — so the invoker can see from the output alone what merging this PR will close, if anything.
+7. **Output result**: First say which body the PR opened with — verify's draft, for the commit it named; a newly composed one because verify's draft was stale, with the commits added since it was written (they were never reviewed by verify); or a newly composed one because there was no draft. Then print step 4's closing-keyword outcome in whichever of its three forms applies — `Closes #<N> — <issue title>`; `No closing keyword: <reason>` (the branch carries no issue number; `#<N>` is a pull request; `#<N>` is closed); or `Closing keyword unverified: <gh stderr>` — so the invoker can see from the output alone what merging this PR will close, if anything.
 
     **Then close the report with the verdict as its last line** — one JSON object on one line, at column 1, nothing else on that line and nothing after it. Exactly one of:
 

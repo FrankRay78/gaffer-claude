@@ -11,7 +11,7 @@ claude plugin install gaffer@gaffer-claude
 
 The repository is public, so this needs no credentials. Check it took: `claude plugin list` names `gaffer@gaffer-claude`, and a new session in any repository offers `/gaffer:build` and its siblings in the slash-command list.
 
-`/gaffer:verify` spawns reviewers from the `pr-review-toolkit` plugin, so install that too if you have not:
+`/gaffer:verify` runs the simplifier from the `pr-review-toolkit` plugin, so install that too if you have not:
 
 ```bash
 claude plugin install pr-review-toolkit@claude-plugins-official
