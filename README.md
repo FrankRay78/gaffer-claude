@@ -31,7 +31,7 @@ Commands are typed as `/gaffer:<name>`. Each command's prompt under [`commands/`
 | `confirmissue` | Folds the answered review into *Confirmed decisions* on the issue, labels it `ready`, deletes the review comment. | Yes, given an issue number |
 | `build` | Builds one issue to a green, committed `feature/<N>-<slug>` branch — RED-GREEN-REFACTOR, docs, nothing pushed. | Yes |
 | `verify` | Formats, runs the whole suite as the gate, reviews the branch once with the agents `review-pr` uses, fixes and commits, and drafts the PR body. | Yes |
-| `raise-pr` | Pushes the branch and opens the pull request with a verified `Closes #N`. | Yes |
+| `raise-pr` | Pushes the branch and opens the pull request with the body `verify` drafted (or a fresh one if that draft is stale) and a verified `Closes #N`. | Yes |
 | `review-pr` | Multi-pass verified review of an open PR: triage map, specialist passes, inline comments, risk tier, no-human-merge verdict. | Yes |
 | `review-followup` | A later round on a reviewed PR: evaluates replies, verifies fixes, re-reviews only the new diff. Caps at three rounds. | Yes |
 | `review-slop` | Reviews a branch diff for AI-generated slop and emits a cleaned diff. | No prompts, no side effects |

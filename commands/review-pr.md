@@ -32,10 +32,10 @@ The method in this file is generic. The criteria it applies — which rules coun
 | `What not to flag` | *Review contract* — the checks CI already gates, and what this repository has settled |
 | `Risk tier` | *Risk tier and human review* — the areas that make a change High, and what is never Low |
 | `Always a person` | *Risk tier and human review* — the paths this repository adds to the list |
-| `Contracts` | the *Contracts* dimension — what a user, script or consumer touches, and the docs a change to one must update |
+| `Contracts` | the brief to `gaffer:review-contracts` — what a user, script or consumer touches, and the docs a change to one must update |
 | `Context to load` | step 3 — the documents to read, and for which layers |
 | `Change map` | step 4 — the areas to group changed files by |
-| `Tests` | the *Tests* dimension — the test conventions a finding is judged against |
+| `Tests` | the brief to `gaffer:review-tests` — the test conventions a finding is judged against |
 
 A section under any other heading is read too, and applied where its text says. Where the repository has no `REVIEW.md`, the review runs on the method and the defaults alone; where neither file has a heading, that part of the method runs on its generic rule alone. Either way the review completes.
 
@@ -73,7 +73,7 @@ Only Low is eligible for merge with no human review. Medium and High both mean m
 - the Claude harness — anything under `.claude/` — and `CLAUDE.md`
 - `REVIEW.md`, the criteria this review applies, and `CONVENTIONS.md`, the conventions the other harness commands read
 - every path `REVIEW.md` → *Always a person* adds
-- any change to a contract a user or a consumer relies on, as the *Contracts* dimension defines one
+- any change to a contract a user or a consumer relies on, as `REVIEW.md` → *Contracts* defines one
 
 **The second look.** Even where the areas touched suggest Low, ask whether this particular change still deserves a person. Lift Low to Medium where it does, and say why.
 
@@ -121,7 +121,7 @@ Every subagent this command starts — triage, specialists, verifiers — follow
 
 ### Phase 2 — Parallel specialist passes
 
-5. **Hunt in parallel.** Start gaffer's review agents concurrently, one per dimension, by their `gaffer:` names. Each agent's definition holds what its dimension looks for, how it investigates, the severity scale and what it returns, so the brief carries only this review's inputs: the checkout path; the diff range (`origin/<baseRefName>...HEAD`); the PR's stated intent (title, body and the linked issue's text); the `REVIEW.md` sections the agent applies, **pasted into the brief as text** — *Severity* and *What not to flag* for every agent, plus *Contracts* for the contracts agent and *Tests* for the tests agent; and, for the conventions agent, the documents step 3 loaded. Each returns candidate findings with `file:line`, a severity, a one-line claim and the evidence. Dimensions (skip any the triage map shows genuinely don't apply):
+5. **Hunt in parallel.** Start gaffer's review agents concurrently, one per dimension, by their `gaffer:` names. Each agent's definition holds what its dimension looks for, how it investigates, the severity scale and what it returns, so the brief carries only this review's inputs: the checkout path; the diff range (`origin/<baseRefName>...HEAD`; `/gaffer:review-followup` passes its delta instead); the PR's stated intent (title, body and the linked issue's text); the `REVIEW.md` sections the agent applies, **pasted into the brief as text** — *Severity* and *What not to flag* for every agent, plus *Contracts* for the contracts agent and *Tests* for the tests agent; and, for the conventions agent, the documents step 3 loaded. Each returns candidate findings with `file:line`, a severity, a one-line claim and the evidence. Dimensions (skip any the triage map shows genuinely don't apply):
 
    - **Correctness** — `gaffer:review-correctness`.
    - **Security** — `gaffer:review-security`.
@@ -136,7 +136,7 @@ Every subagent this command starts — triage, specialists, verifiers — follow
 
 6. **Verify every candidate.** For each candidate finding, start a fresh `gaffer:review-verifier` to confirm it independently against the checkout, briefed with the checkout path, the diff range, the candidate as reported, and the *Severity* and *What not to flag* sections pasted as in step 5. It reproduces the reasoning from the cited `file:line`, checks the claim survives the surrounding code, and returns CONFIRMED or REJECTED with a reason. Only CONFIRMED findings proceed. This is the quality gate — a false positive posted to the author costs trust; never skip verification to save time.
 
-7. **Classify survivors.** Tag each finding with the contract's severity, and tag **Pre-existing** where the problem was not introduced by this PR — a pre-existing bug must not read as the author's fault. Deduplicate: one finding per root cause, noting other instances, so the author fixes the class rather than one line. Drop anything the contract's "what not to flag" excludes.
+7. **Classify survivors.** Keep the severity and Pre-existing tag the verifier returned, and do not re-rate them; a pre-existing bug must not read as the author's fault. Deduplicate: one finding per root cause, noting other instances, so the author fixes the class rather than one line. Drop anything the contract's "what not to flag" excludes.
 
 ### Phase 4 — Compose and post
 
