@@ -11,7 +11,7 @@ claude plugin install gaffer@gaffer-claude
 
 The repository is public, so this needs no credentials. Check it took: `claude plugin list` names `gaffer@gaffer-claude`, and a new session in any repository offers `/gaffer:build` and its siblings in the slash-command list.
 
-`/gaffer:verify` spawns reviewers from the `pr-review-toolkit` plugin, so install that too if you have not:
+`/gaffer:verify` runs the simplifier from the `pr-review-toolkit` plugin, so install that too if you have not:
 
 ```bash
 claude plugin install pr-review-toolkit@claude-plugins-official
@@ -113,13 +113,13 @@ It branches as `feature/<number>-<slug>`, writes the failing tests for each acce
 /gaffer:verify
 ```
 
-It formats with the command you named, runs the whole suite as the gate, reviews the branch once in clean context, fixes what the review confirmed, re-runs the suite and commits, ending on a `verified` verdict. Finally:
+It formats with the command you named, runs the whole suite as the gate, reviews the branch once with the same review agents `/gaffer:review-pr` uses, fixes what the review confirmed, re-runs the suite and commits, then drafts the pull request body, ending on a `verified` verdict. Finally:
 
 ```
 /gaffer:raise-pr <number>
 ```
 
-It pushes the branch and opens the pull request, with a body sized to the change and `Closes #<number>`. That is the one outward-facing act in the sequence, which is why it is a command of its own.
+It pushes the branch and opens the pull request, with the body verify drafted (or, if you committed since, one composed afresh) and `Closes #<number>`. That is the one outward-facing act in the sequence, which is why it is a command of its own.
 
 ## 6. Review the pull request
 

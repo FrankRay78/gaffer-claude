@@ -30,8 +30,8 @@ Commands are typed as `/gaffer:<name>`. Each command's prompt under [`commands/`
 | `reviewissue` | Reviews an issue before building: posts the gaps and a recommendation for each as an inline-answerable comment, labels it `needs answers`. | Yes, given an issue number |
 | `confirmissue` | Folds the answered review into *Confirmed decisions* on the issue, labels it `ready`, deletes the review comment. | Yes, given an issue number |
 | `build` | Builds one issue to a green, committed `feature/<N>-<slug>` branch — RED-GREEN-REFACTOR, docs, nothing pushed. | Yes |
-| `verify` | Formats, runs the whole suite as the gate, reviews the branch once in clean context, fixes and commits. | Yes |
-| `raise-pr` | Pushes the branch and opens the pull request with a verified `Closes #N`. | Yes |
+| `verify` | Formats, runs the whole suite as the gate, reviews the branch once with the agents `review-pr` uses, fixes and commits, and drafts the PR body. | Yes |
+| `raise-pr` | Pushes the branch and opens the pull request with the body `verify` drafted (or a fresh one if that draft is stale) and a verified `Closes #N`. | Yes |
 | `review-pr` | Multi-pass verified review of an open PR: triage map, specialist passes, inline comments, risk tier, no-human-merge verdict. | Yes |
 | `review-followup` | A later round on a reviewed PR: evaluates replies, verifies fixes, re-reviews only the new diff. Caps at three rounds. | Yes |
 | `review-slop` | Reviews a branch diff for AI-generated slop and emits a cleaned diff. | No prompts, no side effects |
@@ -69,7 +69,7 @@ To enable it for every clone of a repository, commit this to its `.claude/settin
 ## What a repository needs
 
 - **`git`, `gh` (authenticated) and `jq`** on the path. The hook also needs `awk`.
-- **The `pr-review-toolkit` plugin**: `/gaffer:verify` spawns its reviewers by their `pr-review-toolkit:` names.
+- **The `pr-review-toolkit` plugin**: `/gaffer:verify` starts its simplifier by its `pr-review-toolkit:` name.
 - **`Bash(chmod:*)` on `permissions.ask`** in `.claude/settings.json`, as the backstop for the forms the hook declines to decide; a plugin cannot set permission rules.
 - **`.claude/scratch/` git-ignored**, for every command's working files.
 - **`main` as the default branch**, `CLAUDE.md` for project context, and `.claude/memory/` for durable learnings, loaded by an `@.claude/memory/MEMORY.md` line in `CLAUDE.md`. Without that line no session sees an entry.

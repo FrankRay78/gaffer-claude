@@ -1,6 +1,6 @@
 # Review criteria — plugin defaults
 
-The generic criteria `/gaffer:review-pr` and `/gaffer:review-followup` apply when a repository says nothing. The command holds the method — severities, tiers, dimensions, verification, the verdict — and its *Repository criteria* table names the part of the method each heading extends. For each heading the review reads this section first, then the section under the same heading in the repository's own `REVIEW.md`, at the root of the repository the command runs in, and applies the two together: the repository's section is an addition to this one, and wins where the two conflict. A repository section whose first line is exactly `Replaces the default.` is read instead of this file's section, not with it. A repository with no `REVIEW.md`, or no section under a heading, runs on this file's section alone; a section under a heading this file does not have is read too, and applied where its text says. Either way the review completes.
+The generic criteria `/gaffer:review-pr`, `/gaffer:review-followup` and `/gaffer:verify`'s review apply when a repository says nothing. The command holds the method — severities, the verdict and, in `/gaffer:review-pr`, the tiers — and starts gaffer's review agents under `agents/` for the dimensions and the verification; its table of `REVIEW.md` headings (*Repository criteria*, or in `/gaffer:verify` the second table under *Repository conventions*) names the part of the method each heading extends. For each heading the review reads this section first, then the section under the same heading in the repository's own `REVIEW.md`, at the root of the repository the command runs in, and applies the two together: the repository's section is an addition to this one, and wins where the two conflict. A repository section whose first line is exactly `Replaces the default.` is read instead of this file's section, not with it. A repository with no `REVIEW.md`, or no section under a heading, runs on this file's section alone; a section under a heading this file does not have is read too, and applied where its text says. Either way the review completes.
 
 This file is read from the plugin, never from the repository. A repository's own file is read from the root of the repository the command runs in — in CI, the checkout, where a workflow puts the default branch's copy before the agent starts — never from a worktree made for the review, so a pull request cannot weaken the rules it is reviewed against. A change to a repository's `REVIEW.md` is itself never eligible for merge with no human review.
 
@@ -36,7 +36,7 @@ A repository names here the areas whose logic makes a change High, and any kind 
 
 - the Claude harness — anything under `.claude/` — and `CLAUDE.md`
 - `REVIEW.md`, the criteria this review applies, and `CONVENTIONS.md`, the conventions the other commands read
-- any change to a contract a user or a consumer relies on, as the *Contracts* dimension defines one
+- any change to a contract a user or a consumer relies on, as this file's *Contracts* section defines one
 
 A repository adds here the paths that need the maintainer whatever the tier: its CI and scripts, its release pipeline, its dependency manifests.
 

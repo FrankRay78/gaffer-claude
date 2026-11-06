@@ -32,10 +32,10 @@ The method in this file is generic. The criteria it applies — which rules coun
 | `What not to flag` | *Review contract* — the checks CI already gates, and what this repository has settled |
 | `Risk tier` | *Risk tier and human review* — the areas that make a change High, and what is never Low |
 | `Always a person` | *Risk tier and human review* — the paths this repository adds to the list |
-| `Contracts` | the *Contracts* dimension — what a user, script or consumer touches, and the docs a change to one must update |
+| `Contracts` | the brief to `gaffer:review-contracts` — what a user, script or consumer touches, and the docs a change to one must update |
 | `Context to load` | step 3 — the documents to read, and for which layers |
 | `Change map` | step 4 — the areas to group changed files by |
-| `Tests` | the *Tests* dimension — the test conventions a finding is judged against |
+| `Tests` | the brief to `gaffer:review-tests` — the test conventions a finding is judged against |
 
 A section under any other heading is read too, and applied where its text says. Where the repository has no `REVIEW.md`, the review runs on the method and the defaults alone; where neither file has a heading, that part of the method runs on its generic rule alone. Either way the review completes.
 
@@ -73,7 +73,7 @@ Only Low is eligible for merge with no human review. Medium and High both mean m
 - the Claude harness — anything under `.claude/` — and `CLAUDE.md`
 - `REVIEW.md`, the criteria this review applies, and `CONVENTIONS.md`, the conventions the other harness commands read
 - every path `REVIEW.md` → *Always a person* adds
-- any change to a contract a user or a consumer relies on, as the *Contracts* dimension defines one
+- any change to a contract a user or a consumer relies on, as `REVIEW.md` → *Contracts* defines one
 
 **The second look.** Even where the areas touched suggest Low, ask whether this particular change still deserves a person. Lift Low to Medium where it does, and say why.
 
@@ -87,7 +87,7 @@ The reasons follow it: what set the tier, the always-a-person path where one app
 
 ## Subagents
 
-Every subagent this command starts — triage, specialists, verifiers — follows these rules, and each one's brief repeats the second, third and fourth.
+Every subagent this command starts — triage, specialists, verifiers — follows these rules. The specialists and verifiers are gaffer's own review agents (Phases 2 and 3), whose definitions state the second, third and fourth rules themselves; the triage subagent's brief repeats them.
 
 - **Run them in the foreground and wait for them.** Start a phase's subagents together in one message so they run in parallel, never in the background, and have every result before starting the next phase. Never end your turn while one is still running: in CI the session ends with your turn, and unfinished work is lost with nothing posted.
 - **Investigate by reading.** Use Read, Grep and Glob. Use Bash only for single `git` and `gh` commands run from the checkout root — no pipes, no chaining, no `cd`. A run may refuse anything else.
@@ -121,22 +121,22 @@ Every subagent this command starts — triage, specialists, verifiers — follow
 
 ### Phase 2 — Parallel specialist passes
 
-5. **Hunt in parallel.** Launch fresh-context subagents concurrently, one per dimension, each given the checkout path, the diff, the PR's stated intent and the review contract. Each returns candidate findings with `file:line`, a one-line claim, and the evidence. Dimensions (skip any the triage map shows genuinely don't apply):
+5. **Hunt in parallel.** Start gaffer's review agents concurrently, one per dimension, by their `gaffer:` names. Each agent's definition holds what its dimension looks for, how it investigates, the severity scale and what it returns, so the brief carries only this review's inputs: the checkout path; the diff range (`origin/<baseRefName>...HEAD`; `/gaffer:review-followup` passes its delta instead); the PR's stated intent (title, body and the linked issue's text); the `REVIEW.md` sections the agent applies, **pasted into the brief as text** — *Severity* and *What not to flag* for every agent, plus *Contracts* for the contracts agent and *Tests* for the tests agent; and, for the conventions agent, the documents step 3 loaded. Each returns candidate findings with `file:line`, a severity, a one-line claim and the evidence. Dimensions (skip any the triage map shows genuinely don't apply):
 
-   - **Correctness** — logic errors, off-by-ones, null/empty handling, concurrency, cancellation, error paths, silent failures (swallowed exceptions, missing timeouts/retries, catch blocks that hide errors). For CI workflows and scripts: steps that report green when the thing they guard did not happen.
-   - **Security** — injection (including untrusted PR or issue text reaching a shell or a prompt in a workflow), workflow permissions and secrets, sensitive data in logs or output.
-   - **Contracts** — anything a user, a script or a library consumer touches directly; `REVIEW.md` → *Contracts* names what that is here, and the user-facing docs a change to one must update. A change to a contract must be stated in the PR body with who it breaks.
-   - **Tests** — do tests exercise the new behaviour and its edge cases, or only the happy path? Tests that mock away the system under test, assert mechanism rather than outcome, or break the test conventions `REVIEW.md` → *Tests* states.
-   - **Conventions and intent** — adherence to `CLAUDE.md`, the documents step 3 loaded and the patterns in touched files, and anywhere the PR body, linked issue or tests disagree with what the diff actually does.
-   - **Call chain** — launched on Phase 1's call-chain flag, not on the triage map (see the launch rule below). Give it the unit(s) the `CALL-CHAIN:` line names — or, where the line names none or no line exists, as in `/gaffer:review-followup`, have it identify the changed units from the diff itself — and have it: (a) state what behaviour a caller could observe changing — values returned or their shape, errors raised, swallowed or newly possible, side effects such as writes, emitted messages and outbound calls, state kept between calls, how often, when or in what order something runs, latency — deciding from the code which of those apply; (b) find the dependents, including implementors and anywhere the unit is wired in by registration, configuration or convention rather than a direct call, judging from the codebase which mechanisms it uses; (c) follow each dependent upward to the first point where control enters from outside the code under review — a request or route handler, a message or queue consumer, a scheduled or background job, a CLI command, or, for a library, a public member consumers call — and stop there, identifying from the code itself what counts as one here; (d) for each entry point reached, say whether the change is observable in its output, its error behaviour, its call volume to downstream systems or its latency. A chain that never reaches an entry point is not a candidate; if the references turn out to be comments or same-named unrelated symbols, it returns none. Like every other dimension it does not verify its own findings — Phase 3 does.
+   - **Correctness** — `gaffer:review-correctness`.
+   - **Security** — `gaffer:review-security`.
+   - **Contracts** — `gaffer:review-contracts`.
+   - **Tests** — `gaffer:review-tests`.
+   - **Conventions and intent** — `gaffer:review-conventions`.
+   - **Call chain** — `gaffer:review-call-chain`, launched on Phase 1's call-chain flag, not on the triage map (see the launch rule below). Give it the unit(s) the `CALL-CHAIN:` line names; where the line names none or no line exists, as in `/gaffer:review-followup`, say so, and it identifies the changed units from the diff itself. Like every other dimension it does not verify its own findings — Phase 3 does.
 
    **The launch rule.** Read the `CALL-CHAIN:` line before starting this phase. Launch the call-chain pass when it says `YES` or `UNCLEAR`, and launch it too when the line is missing or malformed: a spurious launch costs one subagent run and Phase 3 filters weak candidates, where a wrong skip is a silent gap nobody sees. Skip it only on a well-formed `NO`.
 
 ### Phase 3 — Verification
 
-6. **Verify every candidate.** For each candidate finding, a fresh-context verifier subagent must independently confirm it against the checkout: reproduce the reasoning from the cited `file:line`, check the claim survives the surrounding code, and return CONFIRMED or REJECTED with a reason. Only CONFIRMED findings proceed. This is the quality gate — a false positive posted to the author costs trust; never skip verification to save time.
+6. **Verify every candidate.** For each candidate finding, start a fresh `gaffer:review-verifier` to confirm it independently against the checkout, briefed with the checkout path, the diff range, the candidate as reported, and the *Severity* and *What not to flag* sections pasted as in step 5. It reproduces the reasoning from the cited `file:line`, checks the claim survives the surrounding code, and returns CONFIRMED or REJECTED with a reason. Only CONFIRMED findings proceed. This is the quality gate — a false positive posted to the author costs trust; never skip verification to save time.
 
-7. **Classify survivors.** Tag each finding with the contract's severity, and tag **Pre-existing** where the problem was not introduced by this PR — a pre-existing bug must not read as the author's fault. Deduplicate: one finding per root cause, noting other instances, so the author fixes the class rather than one line. Drop anything the contract's "what not to flag" excludes.
+7. **Classify survivors.** Keep the severity and Pre-existing tag the verifier returned, and do not re-rate them; a pre-existing bug must not read as the author's fault. Deduplicate: one finding per root cause, noting other instances, so the author fixes the class rather than one line. Drop anything the contract's "what not to flag" excludes.
 
 ### Phase 4 — Compose and post
 

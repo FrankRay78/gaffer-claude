@@ -52,15 +52,15 @@ No standing obligations by default: a change corrects any document it makes fals
 
 ## Change-intent records
 
-This project keeps none by default, so `/gaffer:build` writes none and `/gaffer:raise-pr` links none. A repository that keeps them says so here, names the convention whose decision table `/gaffer:build` runs, and says where the records live.
+This project keeps none by default, so `/gaffer:build` writes none and `/gaffer:verify` and `/gaffer:raise-pr` link none. A repository that keeps them says so here, names the convention whose decision table `/gaffer:build` runs, and says where the records live.
 
 ## Scratch files
 
-`.claude/scratch/` at the repository root, git-ignored; the `Write` tool creates it when it is missing. The files the commands write there: `/gaffer:raise-pr` the pull request body to `raise-pr-body.md`; `/gaffer:draftissue` the issue body to `gh-issue-body-<slug>.md`, where the slug is a short kebab-case form of the title; `/gaffer:reviewissue` the review comment to `reviewissue-body.md`; `/gaffer:confirmissue` the issue body to `confirmissue-body.md` and the patch to `confirmissue-patch.json`; `/gaffer:review-pr` its review to `review-pr-<N>.json` and a worktree to `review-pr-<N>/`; `/gaffer:audit-codebase` its working files under `audit/`. A repository that keeps scratch files elsewhere, or ignores them differently, says so here.
+`.claude/scratch/` at the repository root, git-ignored; the `Write` tool creates it when it is missing. The files the commands write there: `/gaffer:verify` its draft of the pull request body to `raise-pr-body.md`, first line `<!-- gaffer:verify <sha> -->`, and the simplifier's edits to `verify-simplifier.patch`; `/gaffer:raise-pr` the pull request body to `raise-pr-final.md`, reading verify's draft from `raise-pr-body.md` first; `/gaffer:draftissue` the issue body to `gh-issue-body-<slug>.md`, where the slug is a short kebab-case form of the title; `/gaffer:reviewissue` the review comment to `reviewissue-body.md`; `/gaffer:confirmissue` the issue body to `confirmissue-body.md` and the patch to `confirmissue-patch.json`; `/gaffer:review-pr` its review to `review-pr-<N>.json` and a worktree to `review-pr-<N>/`; `/gaffer:audit-codebase` its working files under `audit/`. A repository that keeps scratch files elsewhere, or ignores them differently, says so here.
 
 ## Pull requests
 
-No check on the issue link by default. A repository that fails or flags a pull request closing no issue names the check here, so `/gaffer:raise-pr` can say when its abstain turns that check red.
+No check on the issue link by default. A repository that fails or flags a pull request closing no issue names the check here, so `/gaffer:raise-pr` can say when its abstain turns that check red. A repository that asks something of every pull request body — a line saying what breaks, a checklist — says so here too, and `/gaffer:verify` writes it into the body it drafts.
 
 ## Issue sources
 
@@ -80,4 +80,4 @@ By default `/gaffer:audit-codebase` reads every tracked file, takes no evidence 
 
 ## Hooks, scripts and plugins
 
-The plugin ships one hook, `no-chmod`, registered on every Bash call: it refuses a `chmod` that would set the executable bit and names `bash script.sh` as the alternative. A plugin cannot set permission rules, so a repository keeps `Bash(chmod:*)` on `permissions.ask` in its own `.claude/settings.json` as the fail-open backstop for the forms the hook declines to decide. The reviewers `/gaffer:verify` spawns come from the `pr-review-toolkit` plugin, which the repository installs. No hook re-runs the suite when a pull request is created, and no hook blocks a commit, unless the repository adds one and names it here with whatever else of its own it wires in.
+The plugin ships one hook, `no-chmod`, registered on every Bash call: it refuses a `chmod` that would set the executable bit and names `bash script.sh` as the alternative. A plugin cannot set permission rules, so a repository keeps `Bash(chmod:*)` on `permissions.ask` in its own `.claude/settings.json` as the fail-open backstop for the forms the hook declines to decide. The review agents `/gaffer:verify` and `/gaffer:review-pr` start ship with gaffer; the simplifier `/gaffer:verify` also runs comes from the `pr-review-toolkit` plugin, which the repository installs. No hook re-runs the suite when a pull request is created, and no hook blocks a commit, unless the repository adds one and names it here with whatever else of its own it wires in.

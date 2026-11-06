@@ -14,7 +14,7 @@ It checks its starting point first: a clean tree, `main` checked out, no unpushe
 
 ## A reviewer subagent could not be found
 
-`/gaffer:verify` spawns its reviewers by their `pr-review-toolkit:` names: `claude plugin install pr-review-toolkit@claude-plugins-official`, and enable it beside `gaffer`.
+`/gaffer:verify` starts the simplifier by its `pr-review-toolkit:` name: `claude plugin install pr-review-toolkit@claude-plugins-official`, and enable it beside `gaffer`.
 
 ## `git`, `gh` or `jq` not found; `gh` not signed in
 

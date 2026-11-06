@@ -8,13 +8,13 @@ Everything that crosses between gaffer and a repository goes through one of thes
 
 ## 2. `CONVENTIONS.md` and `REVIEW.md`
 
-The commands read conventions and review criteria section by section, from the plugin's [`defaults/`](../defaults/) and from the repository root. `REVIEW.md` is read by `review-pr` and `review-followup` (and `verify`, for *Where it runs*); `CONVENTIONS.md` by the rest.
+The commands read conventions and review criteria section by section, from the plugin's [`defaults/`](../defaults/) and from the repository root. `REVIEW.md` is read by `review-pr`, `review-followup` and `verify`, so a branch is reviewed to one standard before and after its PR opens; `CONVENTIONS.md` by every command, `verify` included, and directly by the conventions and tests agents.
 
 - **They combine.** For each heading, the default section is read, then the repository's section of the same name; the repository's is an addition and wins where they conflict.
 - **A repository can replace a default.** A section whose first line is exactly `Replaces the default.` is read instead of the default.
 - **Nothing is mandatory.** A missing file or section means the default; a heading of the repository's own is read too. Where neither has anything, the command runs on its generic rule — except the build-and-test command, where it stops with `conventions missing: <heading>`.
 - **The headings** are the ones the defaults files use. Each command's *Repository conventions* or *Repository criteria* table names those it reads, and is authoritative.
-- **They are trusted like the commands**: read from the root of the repository the command runs in, never from a review worktree, and in CI from the default branch's copy. A change to either needs a person at review.
+- **They are trusted like the commands**: read from the root of the repository the command runs in, never from a review worktree, and in CI from the default branch's copy. The one exception: the conventions and tests agents read the repository's `CONVENTIONS.md` in the checkout they review, without the plugin default, so on a pull request they see the branch's copy. A change to either file needs a person at review.
 
 ## 3. The hook
 
@@ -33,7 +33,7 @@ Not configurable; a repository that differs changes the command, by an issue her
 - `.claude/scratch/`, git-ignored, holds every working file.
 - `main` is the default branch; `build` branches from `origin/main` and names branches `feature/<N>-<slug>`, which `raise-pr` reads the issue number from.
 - Labels `needs answers` and `ready` carry the issue stage's state. `audit-codebase` never applies `ready`, `review`, `confirm` or `parked`, because automation may react to them.
-- Comment markers `<!-- speckit:review -->`, `<!-- confirmed-decisions -->` and `<!-- review-pr -->` let the commands find each other's output.
+- Comment markers `<!-- speckit:review -->`, `<!-- confirmed-decisions -->` and `<!-- review-pr -->` let the commands find each other's output, and `<!-- gaffer:verify <sha> -->` on the first line of `raise-pr-body.md` tells `raise-pr` which commit `verify`'s draft body describes.
 
 ## What does not cross
 
