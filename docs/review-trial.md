@@ -139,10 +139,6 @@ The maintainer marks each listed finding **real** or **not real**. Then, per #23
 
 Post one comment on #23 per trial stage, with the arm commits, the table, the judged finding list, the pass/fail call for each arm, and anything that deviated from this procedure.
 
-### 10. Mechanical-fix trial (item 2, later)
-
-This one changes verify, so it needs a build. Copy the NetPace issue into the scratch repository as an issue, run `/gaffer:build` once from the base, then run old and new verify on copies of that branch and review both with the same review-pr arm. This section will be filled in when item 2 is built.
-
-### 11. Cleanup
+### 10. Cleanup
 
 Keep the scratch repository until #23 closes, so runs can be repeated. Delete it then, with the maintainer's approval.
