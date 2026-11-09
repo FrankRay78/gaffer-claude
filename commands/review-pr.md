@@ -7,7 +7,7 @@ argument-hint: "[PR number or URL] [--dry-run]"
 
 Review an open pull request in depth and post the results back to the PR: a summary comment with a triage map, a risk tier, a verdict on whether the PR could merge with no human review, a merge recommendation and a list of unverified Minor notes, plus one inline review comment per verified finding. Designed for large PRs spanning several layers in code the reviewer may not know.
 
-Where a CI workflow runs this command (`REVIEW.md` → *Where it runs* names it), a run there posts as the workflow's bot. Run by hand, it posts under the invoker's own `gh` account. Either way it runs unattended from start to post: it never stops for confirmation, and it posts whoever authored the PR. Run it on your strongest available model — a missed bug costs more than the review tokens.
+Where a CI workflow runs this command (`REVIEW.md` → *Where it runs* names it), a run there posts as the workflow's bot. Run by hand, it posts under the invoker's own `gh` account. Either way it runs unattended from start to post: it never stops for confirmation, and it posts whoever authored the PR. Run it on your strongest available model: the command itself and its verifiers run on that model, because a false positive or a missed bug that verification lets through costs more than the review tokens. Triage and the specialist passes name their own cheaper models.
 
 ## User Input
 
@@ -123,7 +123,7 @@ Every subagent this command starts — triage, specialists, verifiers — follow
 
 ### Phase 2 — Parallel specialist passes
 
-5. **Hunt in parallel.** Launch fresh-context subagents concurrently, one per dimension, each given the checkout path, the diff, the PR's stated intent and the review contract. Each returns candidates with `file:line`, a one-line claim, the evidence, and its own severity rating from the review contract — Critical, Major or Minor. **A specialist unsure whether a candidate is Minor rates it Major**, so a real defect is never kept from verification by a guess. Dimensions (skip any the triage map shows genuinely don't apply):
+5. **Hunt in parallel.** Launch fresh-context subagents (model: sonnet — every candidate they raise at Critical or Major is checked in Phase 3 by a verifier on the stronger model) concurrently, one per dimension, each given the checkout path, the diff, the PR's stated intent and the review contract. Each returns candidates with `file:line`, a one-line claim, the evidence, and its own severity rating from the review contract — Critical, Major or Minor. **A specialist unsure whether a candidate is Minor rates it Major**, so a real defect is never kept from verification by a guess. Dimensions (skip any the triage map shows genuinely don't apply):
 
    - **Correctness** — logic errors, off-by-ones, null/empty handling, concurrency, cancellation, error paths, silent failures (swallowed exceptions, missing timeouts/retries, catch blocks that hide errors). For CI workflows and scripts: steps that report green when the thing they guard did not happen.
    - **Security** — injection (including untrusted PR or issue text reaching a shell or a prompt in a workflow), workflow permissions and secrets, sensitive data in logs or output.
