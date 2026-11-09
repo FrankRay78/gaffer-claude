@@ -1,6 +1,6 @@
 # Review trial procedure
 
-How to measure a change to review-pr against `main` on a merged NetPace PR, before the change merges. The trial is tracked on an issue in this repository — the *tracking issue* below — which holds the arms, the pass rule and the results. It was first run for #23, whose results comment on NetPace PR 520 is the worked example.
+How to measure a change to review-pr against `main` on a merged NetPace PR, before the change merges. The trial is tracked on an issue in this repository — the *tracking issue* below — which holds the arms, the pass rule and the results. It was first run for #23, whose results comment on #23, for NetPace PR 520, is the worked example.
 
 ### 0. Fixed for every run
 
