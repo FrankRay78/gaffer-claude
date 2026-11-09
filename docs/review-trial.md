@@ -1,6 +1,6 @@
 # Review trial procedure
 
-How to measure a change to review-pr against `main` on a merged NetPace PR, before the change merges. It applies the decisions confirmed on #23.
+How to measure a change to review-pr against `main` on a merged NetPace PR, before the change merges. The trial is tracked on an issue in this repository — the *tracking issue* below — which holds the arms, the pass rule and the results. It was first run for #23, whose results comment on NetPace PR 520 is the worked example.
 
 ### 0. Fixed for every run
 
@@ -18,15 +18,15 @@ Each arm is a gaffer-claude worktree, detached at a fixed commit, passed as `--p
 ```bash
 cd ~/Repos/gaffer-claude    # your gaffer-claude clone
 git worktree add --detach ../gaffer-arm-A main
-git worktree add --detach ../gaffer-arm-B <commit on feature/23-minor-notes>
-git worktree add --detach ../gaffer-arm-C <commit on feature/23-sonnet-specialists>
+git worktree add --detach ../gaffer-arm-B <commit of the change under trial>
+git worktree add --detach ../gaffer-arm-C <commit of a further variant, if any>
 ```
 
 Record each arm's commit (`git -C ../gaffer-arm-X rev-parse --short HEAD`) in the results. Don't move an arm mid-trial; if it must change, re-run that arm's runs.
 
 ### 2. Find the PR's first-round state
 
-For each NetPace PR under trial (start with PR 520, for #494):
+For each NetPace PR under trial (the examples use PR 520, for #494):
 
 ```bash
 # First-round head: the commit the first review-pr review was posted against
@@ -111,12 +111,9 @@ Then remove any leftover worktree: `git worktree remove --force .claude/scratch/
 
 ### 6. Runs per arm
 
-At least 2 runs per arm, on at least 2 PRs (from #494 / PR 520, #518, #447). Interleave arms (A1, B1, A2, B2, …) rather than running one arm back to back, so a provider slowdown doesn't land on one arm.
+At least 2 runs per arm. Interleave arms (A1, B1, A2, B2, …) rather than running one arm back to back, so a provider slowdown doesn't land on one arm.
 
-Order, per #23:
-
-1. A against B on PR 520 only. If B fails, stop and report.
-2. Then A, B and C on the other PRs.
+Start with A against B on one PR. If B fails, stop and report. Add further arms and PRs only where the result is still in doubt and the saving at stake is worth the runs: the #23 trial stopped after one PR, because its saving was smaller than the spread between runs.
 
 ### 7. Results table
 
@@ -129,7 +126,7 @@ Under the table, list every Critical and Major finding from every run, deduplica
 
 ### 8. Judging and pass rule
 
-The maintainer marks each listed finding **real** or **not real**. Then, per #23's confirmed decisions:
+The maintainer marks each listed finding **real** or **not real**. Then apply the tracking issue's pass rule. The one #23 used:
 
 - The bar is every real Critical or Major found in any A run.
 - An arm passes if every finding on the bar appears in at least one of its runs, and its mean cost per run is below the arm it's compared with (B against A; C against B).
@@ -137,8 +134,8 @@ The maintainer marks each listed finding **real** or **not real**. Then, per #23
 
 ### 9. Post the results
 
-Post one comment on #23 per trial stage, with the arm commits, the table, the judged finding list, the pass/fail call for each arm, and anything that deviated from this procedure.
+Post one comment on the tracking issue per trial stage, with the arm commits, the table, the judged finding list, the pass/fail call for each arm, and anything that deviated from this procedure.
 
 ### 10. Cleanup
 
-Keep the scratch repository until #23 closes, so runs can be repeated. Delete it then, with the maintainer's approval.
+Keep the scratch repository until the tracking issue closes, so runs can be repeated. Delete it then, with the maintainer's approval.
