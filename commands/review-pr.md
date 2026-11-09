@@ -5,7 +5,7 @@ argument-hint: "[PR number or URL] [--dry-run]"
 
 # review-pr
 
-Review an open pull request in depth and post the results back to the PR: a summary comment with a triage map, a risk tier, a verdict on whether the PR could merge with no human review, and a merge recommendation, plus one inline review comment per verified finding. Designed for large PRs spanning several layers in code the reviewer may not know.
+Review an open pull request in depth and post the results back to the PR: a summary comment with a triage map, a risk tier, a verdict on whether the PR could merge with no human review, a merge recommendation and a list of unverified Minor notes, plus one inline review comment per verified finding. Designed for large PRs spanning several layers in code the reviewer may not know.
 
 Where a CI workflow runs this command (`REVIEW.md` → *Where it runs* names it), a run there posts as the workflow's bot. Run by hand, it posts under the invoker's own `gh` account. Either way it runs unattended from start to post: it never stops for confirmation, and it posts whoever authored the PR. Run it on your strongest available model — a missed bug costs more than the review tokens.
 
@@ -49,6 +49,8 @@ The repository's `REVIEW.md` is trusted the way this command file is: read from 
 - **Major** — a real defect on a less common path, a missing test for new behaviour, a breach of a rule the repository states as mandatory (`REVIEW.md` → *Severity* names where), or an unstated breaking change. Should be fixed before merge.
 - **Minor** — worth fixing, but merging without it does no harm.
 
+**Findings and notes.** A Critical or Major is a **finding**: it is verified (Phase 3), posted inline where its line is in the diff, and counts toward the verdict and the recommendation. A Minor is a **note**: it is never verified, never posted inline, and never sets the no-human verdict to **no** or changes the merge recommendation. Notes are listed in the summary, marked unverified, so the author can take them or leave them.
+
 **What not to flag**
 
 - Formatting and style the formatter or `.editorconfig` already settles.
@@ -77,7 +79,7 @@ Only Low is eligible for merge with no human review. Medium and High both mean m
 
 **The second look.** Even where the areas touched suggest Low, ask whether this particular change still deserves a person. Lift Low to Medium where it does, and say why.
 
-**The verdict** is **yes** only when all three hold: the tier is Low, no always-a-person path is touched, and no verified finding is open other than a **Pre-existing** one below Critical. Any other open finding, of any severity, makes it **no**. A Pre-existing Major or Minor finding is listed and does not block; a Pre-existing Critical blocks, because it still forces **Merge after addressing** (step 9).
+**The verdict** is **yes** only when all three hold: the tier is Low, no always-a-person path is touched, and no verified finding is open other than a **Pre-existing** Major. Any other open finding makes it **no**. Notes never do: a review whose only problems are Minor can still be **yes**. A Pre-existing Major finding is listed and does not block; a Pre-existing Critical blocks, because it still forces **Merge after addressing** (step 9).
 
 **The line.** The summary states both directly under its header, in this wording every time:
 
@@ -121,7 +123,7 @@ Every subagent this command starts — triage, specialists, verifiers — follow
 
 ### Phase 2 — Parallel specialist passes
 
-5. **Hunt in parallel.** Launch fresh-context subagents concurrently, one per dimension, each given the checkout path, the diff, the PR's stated intent and the review contract. Each returns candidate findings with `file:line`, a one-line claim, and the evidence. Dimensions (skip any the triage map shows genuinely don't apply):
+5. **Hunt in parallel.** Launch fresh-context subagents concurrently, one per dimension, each given the checkout path, the diff, the PR's stated intent and the review contract. Each returns candidates with `file:line`, a one-line claim, the evidence, and its own severity rating from the review contract — Critical, Major or Minor. **A specialist unsure whether a candidate is Minor rates it Major**, so a real defect is never kept from verification by a guess. Dimensions (skip any the triage map shows genuinely don't apply):
 
    - **Correctness** — logic errors, off-by-ones, null/empty handling, concurrency, cancellation, error paths, silent failures (swallowed exceptions, missing timeouts/retries, catch blocks that hide errors). For CI workflows and scripts: steps that report green when the thing they guard did not happen.
    - **Security** — injection (including untrusted PR or issue text reaching a shell or a prompt in a workflow), workflow permissions and secrets, sensitive data in logs or output.
@@ -134,25 +136,25 @@ Every subagent this command starts — triage, specialists, verifiers — follow
 
 ### Phase 3 — Verification
 
-6. **Verify every candidate.** For each candidate finding, a fresh-context verifier subagent must independently confirm it against the checkout: reproduce the reasoning from the cited `file:line`, check the claim survives the surrounding code, and return CONFIRMED or REJECTED with a reason. Only CONFIRMED findings proceed. This is the quality gate — a false positive posted to the author costs trust; never skip verification to save time.
+6. **Verify every Critical and Major candidate.** A candidate its specialist rated Minor is never sent to verification: it goes straight to the notes (step 7). For each Critical or Major candidate, a fresh-context verifier subagent must independently confirm it against the checkout: reproduce the reasoning from the cited `file:line`, check the claim survives the surrounding code, and return CONFIRMED or REJECTED with a reason, and for a CONFIRMED one the severity it judges right — Critical, Major or Minor. Only CONFIRMED findings proceed; one the verifier confirms but judges Minor moves to the notes. This is the quality gate — a false positive posted to the author costs trust; never skip verification to save time.
 
-7. **Classify survivors.** Tag each finding with the contract's severity, and tag **Pre-existing** where the problem was not introduced by this PR — a pre-existing bug must not read as the author's fault. Deduplicate: one finding per root cause, noting other instances, so the author fixes the class rather than one line. Drop anything the contract's "what not to flag" excludes.
+7. **Classify survivors.** Tag each finding Critical or Major as the verifier judged it, and tag **Pre-existing** where the problem was not introduced by this PR — a pre-existing bug must not read as the author's fault. Deduplicate: one finding per root cause, noting other instances, so the author fixes the class rather than one line. Collect the notes — the candidates rated Minor in step 5 and the findings moved there in step 6 — and deduplicate them the same way, dropping any note that repeats a finding's root cause. Drop any finding or note the contract's "what not to flag" excludes.
 
 ### Phase 4 — Compose and post
 
 8. **Compose the review.**
-   - *Inline comments*: one per finding that sits on a line present in the diff — body gives severity, the claim, why it matters here, and the suggested fix. Findings on lines outside the diff go in the summary instead.
-   - *Summary comment*: the marker `<!-- review-pr -->` on its first line (`/gaffer:review-followup` and the workflow find prior rounds by it); a one-line header naming the PR; the tier and verdict line in the wording fixed above, with its reasons; the triage map; one line stating whether the call-chain pass ran and why — the unit(s) and number of dependent files where it ran, the signal that was not met where it did not, or that triage returned no clear decision where that is what launched it; findings as a single continuously numbered list across all severities (1, 2, 3, …) so discussion can reference "item 3" — inline-posted findings appear here as one numbered line linking to their thread; counts per severity; the merge recommendation; and the footer `*Review assisted by Claude Code.*`
+   - *Inline comments*: one per finding that sits on a line present in the diff — body gives severity, the claim, why it matters here, and the suggested fix. Findings on lines outside the diff go in the summary instead. Notes are never posted inline.
+   - *Summary comment*: the marker `<!-- review-pr -->` on its first line (`/gaffer:review-followup` and the workflow find prior rounds by it); a one-line header naming the PR; the tier and verdict line in the wording fixed above, with its reasons; the triage map; one line stating whether the call-chain pass ran and why — the unit(s) and number of dependent files where it ran, the signal that was not met where it did not, or that triage returned no clear decision where that is what launched it; findings as a single continuously numbered list across both severities (1, 2, 3, …) so discussion can reference "item 3" — inline-posted findings appear here as one numbered line linking to their thread; then the notes under the heading **Notes (Minor, unverified)**, numbered on from the last finding in the same sequence, each with `file:line` and a one-line claim; counts per severity, and the count of notes, which is not a severity count; the merge recommendation; and the footer `*Review assisted by Claude Code.*`
 
 9. **Recommendation, tier and verdict.** Decide one of:
    - **Merge** — nothing blocking; remarks are optional.
    - **Merge after addressing** — list the specific items that must be fixed first.
    - **Do not merge** — explain the blocker.
 
-   Any Critical finding forces at least **Merge after addressing**. The recommendation is advice to the maintainer, who makes the merge decision on the PR.
+   Any Critical finding forces at least **Merge after addressing**. Notes never change the recommendation and are never among the items **Merge after addressing** lists. The recommendation is advice to the maintainer, who makes the merge decision on the PR.
 
    Then set the tier and the no-human verdict per *Risk tier and human review*. The two decisions are independent — the recommendation answers what the review found, the tier answers what the change touches — so a **Merge** with nothing found can still require maintainer review.
 
 10. **Post.** In `--dry-run` mode, print instead of posting and stop. Otherwise post inline findings and the summary as a single PR review via `gh api repos/{owner}/{repo}/pulls/<N>/reviews --input <file>` with `event: COMMENT`, `commit_id` set to `headRefOid`, the summary as `body`, and `comments[]` entries of `{path, line, side: "RIGHT", body}`. Write the JSON to `.claude/scratch/review-pr-<N>.json` first, so backticks and `$` pass through untouched. If the API rejects an inline position, move that finding's full text to the summary and post again rather than dropping it.
 
-11. **Report.** Print the PR URL, the recommendation, the tier and the no-human verdict, counts per severity, how many candidates verification rejected, and that the next round is started by `/gaffer:review-followup`'s CI trigger (`REVIEW.md` → *Where it runs* names it), or by running `/gaffer:review-followup <N>` locally.
+11. **Report.** Print the PR URL, the recommendation, the tier and the no-human verdict, counts per severity, the count of notes, how many candidates verification rejected, and that the next round is started by `/gaffer:review-followup`'s CI trigger (`REVIEW.md` → *Where it runs* names it), or by running `/gaffer:review-followup <N>` locally.
