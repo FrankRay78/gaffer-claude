@@ -58,14 +58,21 @@ git remote add trial https://github.com/FrankRay78/gaffer-trial-netpace.git
 git push trial $BASE:refs/heads/main <first-round-head>:refs/heads/trial/pr520
 ```
 
-Then open the PR in the scratch repository. Use the original PR's title and body, with each `Closes #N` / `Refs #N` rewritten to the full NetPace issue URL, so review-pr reads the real issue for intent:
+Then open the PR in the scratch repository. Use the original PR's title, and its body **as it stood at the first review**, not as GitHub holds it now: authors edit the body as the PR changes, and a later body describes code the first round never saw. GitHub keeps every version; take the latest one edited at or before the first review's `submitted_at`:
+
+```bash
+gh api graphql -f query='{repository(owner:"FrankRay78",name:"NetPace"){pullRequest(number:520){userContentEdits(first:50){nodes{editedAt diff}}}}}' \
+  --jq '.data.repository.pullRequest.userContentEdits.nodes[] | "\(.editedAt)\n\(.diff)\n----"'
+```
+
+Drop any cost footer (from `<!-- pr-cost-footer -->` on), and put each `Closes #N` / `Refs #N` line in backticks with the full NetPace issue URL — `` `Closes https://github.com/FrankRay78/NetPace/issues/494` ``. The backticks stop GitHub linking the scratch PR to the real issue, so nothing lands on its timeline and merging a scratch PR by accident cannot close it; review-pr still reads the URL as text and loads the issue for intent. Check on the first run that it does. Never merge a scratch PR.
 
 ```bash
 gh pr create --repo FrankRay78/gaffer-trial-netpace --base main --head trial/pr520 \
   --title "<original title>" --body-file <rewritten body file>
 ```
 
-Record the scratch PR number. The PR body is the one GitHub holds now, which may have been edited after the first round; note that in the results.
+Record the scratch PR number. For a second PR in the same scratch repository, don't move its `main`: push that PR's base to its own branch (`base/pr<N>`) and open the PR against it, then check the trial clone out at that branch before each of its runs, so review-pr reads the rules as they stood at that base.
 
 ### 4. The trial clone
 
