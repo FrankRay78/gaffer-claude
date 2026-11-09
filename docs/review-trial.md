@@ -9,20 +9,20 @@ Hold these constant across all arms, or the comparison is void:
 - **Orchestrator model:** `--model opus` on every run. Arms differ only in what the plugin itself sets, such as arm C's specialist model.
 - **Settings:** don't change `/effort`, `settings.json` or installed plugins between runs.
 - **One run at a time.** review-pr makes a worktree named after the PR number, so two concurrent runs on the same PR collide.
-- **Only the arm's plugin is loaded.** If the installed `gaffer` plugin is also enabled in the trial clone, disable it there for the trial, then check on the first run that the commands came from the arm's directory and not the installed copy. The init message in the run's `--output-format stream-json` output, or `/plugin` interactively, shows which is loaded.
+- **Only the arm's plugin is loaded.** If the installed `gaffer` plugin is also enabled in the trial clone, disable it there for the trial — `{"enabledPlugins": {"gaffer@gaffer-claude": false}}` in the clone's `.claude/settings.local.json`, which NetPace ignores in git — then check on the first run that the commands came from the arm's directory and not the installed copy. The init message in the run's `--output-format stream-json` output, or `/plugin` interactively, shows which is loaded.
 
 ### 1. Arms
 
-Each arm is a gaffer-claude worktree passed as `--plugin-dir`:
+Each arm is a gaffer-claude worktree, detached at a fixed commit, passed as `--plugin-dir`. Detaching keeps the arm still while its branch moves on, and lets the branch stay checked out in your own clone:
 
 ```bash
 cd ~/Repos/gaffer-claude    # your gaffer-claude clone
-git worktree add ../gaffer-arm-A main
-git worktree add ../gaffer-arm-B feature/23-minor-notes    # once it exists
-git worktree add ../gaffer-arm-C feature/23-sonnet-specialists   # once it exists
+git worktree add --detach ../gaffer-arm-A main
+git worktree add --detach ../gaffer-arm-B <commit on feature/23-minor-notes>
+git worktree add --detach ../gaffer-arm-C <commit on feature/23-sonnet-specialists>
 ```
 
-Record each arm's commit (`git -C ../gaffer-arm-X rev-parse --short HEAD`) in the results. Don't move an arm's branch mid-trial; if it must change, re-run that arm's runs.
+Record each arm's commit (`git -C ../gaffer-arm-X rev-parse --short HEAD`) in the results. Don't move an arm mid-trial; if it must change, re-run that arm's runs.
 
 ### 2. Find the PR's first-round state
 
@@ -84,13 +84,21 @@ cd ~/Repos/gaffer-trial-netpace
 claude -p "/gaffer:review-pr <scratch-PR> --dry-run" \
   --plugin-dir ~/Repos/gaffer-arm-X \
   --model opus \
-  --output-format json \
-  > ~/trial-results/pr520-X-<run>.json
+  --output-format stream-json --verbose \
+  --allowedTools "Bash(gh:*)" "Bash(git:*)" "Bash(rtk gh:*)" "Bash(rtk git:*)" Read Grep Glob Agent \
+  > ~/trial-results/pr520-X-<run>.jsonl
 ```
 
-Headless runs need permission for `gh`, `git`, Read, Grep and Glob. Grant them with `--allowedTools` (preferred) or a permissive `--permission-mode`. Use the same choice for every arm. review-pr never runs the PR's code.
+`stream-json` rather than `json`: its last line is the same `result` event `json` prints, and the lines before it show which plugin loaded, the tool calls, and how many verifiers ran.
 
-From the JSON, record the reported total cost and duration. Check the field names on the first run; they are expected to be `total_cost_usd` and `duration_ms`. The `result` field holds the printed review: save it alongside the JSON.
+Headless runs need permission for `gh`, `git`, Read, Grep, Glob and Agent, granted with `--allowedTools`, the same for every arm. review-pr never runs the PR's code. Two things in the environment change what that list must hold:
+
+- **A hook that rewrites commands.** If a `PreToolUse` hook rewrites `git …` to another command (such as `rtk git …`), the permission check sees the rewritten command, so allow that form too, as above. Without it the PR worktree is refused and review-pr reads the PR through `git show` instead of a checkout, which voids the run.
+- **An untrusted workspace.** Until the trial clone has been trusted interactively, Claude ignores the `permissions.allow` entries in its committed `.claude/settings.json` and says so on stderr. Leave it untrusted: the runs then depend only on `--allowedTools`.
+
+After the first run, check stderr, and that the `result` event's `permission_denials` is empty. A run with a denial on the fetch or the worktree is void; re-run it.
+
+From the `result` event, record `total_cost_usd` and `duration_ms` (confirmed on the first run of the PR 520 trial). Its `result` field holds the printed review: save it alongside. Count the verifier subagents from the `Agent` tool calls.
 
 Then remove any leftover worktree: `git worktree remove --force .claude/scratch/review-pr-<N>` if it exists.
 
