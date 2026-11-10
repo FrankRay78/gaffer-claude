@@ -10,7 +10,7 @@ For whoever wires a gaffer command into a chain script, a scheduled runner or a 
 | `build` | Creates `feature/<N>-<slug>` from `origin/main` and commits to it — only from a clean `main` with no unpushed commits, for an open issue with no linked PR. Recreates a leftover branch of that name only if it holds nothing uninspected. |
 | `verify` | Commits formatting, then the review's fixes after a green re-run. A fix it cannot land is left uncommitted and named in the report. |
 | `raise-pr` | Pushes the branch and opens the PR, adding `Closes #<N>` only when `gh` confirms that open issue in this repository. |
-| `review-pr` | Posts one PR review — verified inline findings and a summary marked `<!-- review-pr -->` — unless `--dry-run`. |
+| `review-pr` | Posts one PR review — verified Critical and Major findings inline, and a summary marked `<!-- review-pr -->` that also lists Minor observations as unverified notes — unless `--dry-run`. |
 | `review-followup` | Replies in, resolves and re-opens review threads, and posts the next round; at most three rounds. |
 | `reviewissue` | Posts the review comment marked `<!-- speckit:review -->` and adds `needs answers`; a re-run edits that comment in place. |
 | `confirmissue` | Rewrites the issue body with `## Confirmed decisions`, swaps `needs answers` for `ready`, then deletes the review comment — only after reading both changes back. |

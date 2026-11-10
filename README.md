@@ -87,6 +87,7 @@ To enable it for every clone of a repository, commit this to its `.claude/settin
 - [`docs/unattended.md`](docs/unattended.md) — running commands with nobody watching: what each touches, permissions, and the CI pattern.
 - [`docs/troubleshooting.md`](docs/troubleshooting.md) — the common failures.
 - [`docs/contributing.md`](docs/contributing.md) — how the plugin itself is changed.
+- [`docs/review-trial.md`](docs/review-trial.md) — measuring a change to review-pr against `main` on a consuming repository's merged pull request.
 
 ## Layout
 
