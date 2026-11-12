@@ -8,7 +8,7 @@ This repository's additions to the gaffer plugin's default review criteria. Each
 
 ## Severity
 
-<Which of this repository's rules count as mandatory, so a breach is Major.>
+<Which of this repository's rules count as mandatory, so a breach is Major, and any further examples of a mechanical note here.>
 
 ## What not to flag
 
