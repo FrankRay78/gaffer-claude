@@ -14,7 +14,7 @@ By default the review is run by hand — `/gaffer:review-pr <N>` and `/gaffer:re
 - **Major** — a real defect on a less common path, a missing test for new behaviour, a breach of a rule the repository states as mandatory, or an unstated breaking change. Should be fixed before merge.
 - **Minor** — worth fixing, but merging without it does no harm.
 
-A repository says here which of its own rules count as mandatory, so a breach is Major: the codebase rules under its `CONVENTIONS.md` headings, the principles its `CLAUDE.md` states.
+A repository says here which of its own rules count as mandatory, so a breach is Major: the codebase rules under its `CONVENTIONS.md` headings, the principles its `CLAUDE.md` states. It may also add examples of a mechanical note particular to this repository, beyond those `/gaffer:review-pr`'s *Review contract* defines.
 
 ## What not to flag
 
