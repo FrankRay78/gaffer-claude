@@ -32,7 +32,7 @@ No command merges a PR, closes an issue by commit message, edits a source docume
 The model's report is not the result. Check:
 
 - **build, verify, raise-pr** — the verdict, by position ([`verdict-schema.md`](verdict-schema.md)). A success verdict that also carries a `reason` is not a success.
-- **review-pr, review-followup** — a new review marked `<!-- review-pr -->` on the head commit, carrying the `Risk tier: … · Merge with no human review: …` line.
+- **review-pr, review-followup** — a new review marked `<!-- review-pr -->` on the head commit, carrying the `Risk tier: … · Human read: …` line.
 - **reviewissue** — the marked comment on the issue and the `needs answers` label.
 - **confirmissue** — `## Confirmed decisions` in the body, `ready` present, `needs answers` gone, the marked comment deleted.
 - **init** — a new pull request titled `Set up gaffer` from a `gaffer/init-*` branch, or none and a report that nothing was missing; either way the caller back on the default branch with a clean tree, and the `needs answers`, `ready` and `parked` labels present.
