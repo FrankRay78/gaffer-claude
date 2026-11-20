@@ -126,6 +126,15 @@ git checkout -q -b "feature/$n-work"
 git commit -q --allow-empty -m "Refs #$n: stub work"
 mkdir -p obj && echo build-output > obj/out.txt && echo half-written > "wip-$n.txt"
 echo "chain: [1/3] build — ok"
+if [ -f "$STUB_DIR/draft-then-fail-$n" ]; then
+  # Opted in: raise-pr opened a draft, and the pre-review stopped on it.
+  git push -q -u origin "feature/$n-work"
+  prs="$STUB_DIR/prs.json"; [ -f "$prs" ] || echo '[]' > "$prs"
+  jq --argjson n "$n" '. += [{number: (100 + $n), url: "https://github.com/o/r/pull/\(100 + $n)", isDraft: true, headRefName: "feature/\($n)-work", closingIssuesReferences: [{number: $n}]}]' \
+    "$prs" > "$prs.tmp" && mv "$prs.tmp" "$prs"
+  echo "chain: FAILED at [4/4] pre-review — suite red after the fix"
+  exit "$(cat "$STUB_DIR/draft-then-fail-$n" 2>/dev/null | grep . || echo 1)"
+fi
 if [ -f "$STUB_DIR/push-then-fail-$n" ]; then
   git push -q -u origin "feature/$n-work"
   echo "chain: FAILED at [3/3] raise-pr — gh pr create failed"; exit 1
@@ -372,6 +381,30 @@ git -C "$CLONE" checkout -q -b feature/8-work
 git -C "$CLONE" commit -q --allow-empty -m "killed mid-run"
 fire
 ok "an earlier run's leftover branch does not stop the next run" '[ "$RC" = 0 ] && grep -qF "pull/108" <<<"$OUTPUT" && [ -n "$(git -C "$CLONE" for-each-ref "refs/heads/attempt/8-*")" ]'
+
+echo "A failed pre-review leaves its draft open, and the comment says how to go on:"
+new_case
+issues '[{"number":8,"state":"OPEN","labels":["ready"]}]'
+touch "$STUB_DIR/draft-then-fail-8"
+fire
+ok "the issue is parked at the pre-review, with its reason" '[ "$RC" != 0 ] && [ "$(labels_of 8)" = "ready,parked" ] && grep -qF "stopped at **[4/4] pre-review** — suite red after the fix" "$STUB_DIR/comment-8.txt"'
+ok "the comment names the open draft" 'grep -qF "https://github.com/o/r/pull/108 is open from \`feature/8-work\`, left as a draft" "$STUB_DIR/comment-8.txt"'
+ok "and does not call its branch one with no open pull request" '! grep -qF "has no open pull request" "$STUB_DIR/comment-8.txt"'
+ok "and says un-parking alone will not rebuild it: finish the draft by hand, or close it and remove the label" 'grep -qF "removing the \`parked\` label alone will not rebuild it" "$STUB_DIR/comment-8.txt" && grep -qF "/gaffer:pre-review" "$STUB_DIR/comment-8.txt" && grep -qF "or close it, delete its branch, and remove the label" "$STUB_DIR/comment-8.txt" && ! grep -qF "Remove the \`parked\` label to have the runner build this issue again" "$STUB_DIR/comment-8.txt"'
+ok "the draft and its branch are left on GitHub" '[ "$(jq length "$STUB_DIR/prs.json")" = 1 ] && git -C "$ORIGIN" rev-parse -q --verify refs/heads/feature/8-work >/dev/null'
+unpark 8
+fire
+ok "un-parked with the draft still open, it is not built again" '[ "$RC" = 0 ] && [ "$(chain_calls)" = 8 ]'
+new_case
+issues '[{"number":8,"state":"OPEN","labels":["ready"]}]'
+echo 75 > "$STUB_DIR/draft-then-fail-8"
+fire
+ok "a usage-limit stop at the pre-review says so, and still names the draft's way on" 'grep -qF "usage limit was reached" "$STUB_DIR/comment-8.txt" && grep -qF "alone will not rebuild it" "$STUB_DIR/comment-8.txt" && ! grep -qF "Nothing on this issue needs looking at" "$STUB_DIR/comment-8.txt"'
+new_case
+issues '[{"number":8,"state":"OPEN","labels":["ready"]}]'
+settings "{\"clone\": \"$CLONE\", \"writers\": [\"User:maintainer\"], \"state_dir\": \"$STATE\", \"pre_review\": true}"
+fire
+ok "the runner accepts the chain's pre_review key and passes the settings on" '[ "$RC" = 0 ] && [ "$(chain_calls)" = 8 ] && grep -qF -- "--settings|$SETTINGS|" "$STUB_DIR/start-1"'
 
 echo "A chain that stops on its own configuration does not park the issue:"
 new_case

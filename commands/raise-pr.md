@@ -1,6 +1,6 @@
 ---
 description: Raise a PR for the current feature branch — composes a PR body sized to the change and pushes. The review-pr workflow reviews the PR once it opens.
-argument-hint: "[issue number or URL]"
+argument-hint: "[--draft] [issue number or URL]"
 ---
 
 Read `CLAUDE.md` for project context, and the conventions as *Repository conventions* below says, before proceeding.
@@ -12,6 +12,10 @@ $ARGUMENTS
 ```
 
 Optionally a GitHub issue number — bare (`248`), hashed (`#248`), or a full issue URL — naming the issue this PR closes. Empty is the normal case and is **not** a prompt: step 4 infers a candidate from the branch instead. `/gaffer:raise-pr` never asks the invoker for anything, so it stays composable by an automated chain with no interactive gate.
+
+One flag, anywhere in the arguments:
+
+- `--draft` — open the pull request as a draft. The chain passes it when a repository opts in to the pre-review, so the repository's own review does not start until `/gaffer:pre-review` marks the pull request ready ([`docs/chain.md`](../docs/chain.md)). Without it — the normal case, and always the case by hand unless you type it — the pull request is opened ready for review.
 
 ## Repository conventions
 
@@ -73,9 +77,9 @@ Every STOP below is a **failure**, so each ends its report with step 7's failure
 
 5. **Push branch**: Run `git push -u origin <branch>`.
 
-6. **Create PR**: Write the body from step 4 to a git-ignored scratch file (`CONVENTIONS.md` → *Scratch files* names it) with the native `Write` tool, never a shell heredoc, then run `gh pr create --title "<inferred title>" --body-file <scratch file>` with the title from step 3. Passing the body as a file keeps the backticks and `$` in it out of the shell, where a double-quoted `--body` or an unquoted heredoc would expand them. Capture the PR URL from the output.
+6. **Create PR**: Write the body from step 4 to a git-ignored scratch file (`CONVENTIONS.md` → *Scratch files* names it) with the native `Write` tool, never a shell heredoc, then run `gh pr create --title "<inferred title>" --body-file <scratch file>` with the title from step 3, adding `--draft` when the invocation carried it. Passing the body as a file keeps the backticks and `$` in it out of the shell, where a double-quoted `--body` or an unquoted heredoc would expand them. Capture the PR URL from the output.
 
-7. **Output result**: First print step 4's outcome in whichever of its three forms applies — `Closes #<N> — <issue title>`; `No closing keyword: <reason>` (the branch carries no issue number; `#<N>` is a pull request; `#<N>` is closed); or `Closing keyword unverified: <gh stderr>` — so the invoker can see from the output alone what merging this PR will close, if anything.
+7. **Output result**: First say whether the pull request was opened as a draft, then print step 4's outcome in whichever of its three forms applies — `Closes #<N> — <issue title>`; `No closing keyword: <reason>` (the branch carries no issue number; `#<N>` is a pull request; `#<N>` is closed); or `Closing keyword unverified: <gh stderr>` — so the invoker can see from the output alone what merging this PR will close, if anything.
 
     **Then close the report with the verdict as its last line** — one JSON object on one line, at column 1, nothing else on that line and nothing after it. Exactly one of:
 

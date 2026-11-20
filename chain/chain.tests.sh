@@ -915,6 +915,74 @@ reply 1 "$(ready)"; reply 2 "$(verified)"; reply 3 "$(raised)"
 CHAIN_STAGE_TIMEOUT= chain 270
 ok "an empty override is no override" '[ "$RC" = 0 ] && [ "$(calls)" = 3 ]'
 
+echo "A repository that opts in to the pre-review gets a fourth stage:"
+pre_reviewed() { echo '{"schema": 1, "outcome": "pre-reviewed", "pr": "https://github.com/o/r/pull/9"}'; }
+new_case
+settings '{"pre_review": true}'
+reply 1 "$(ready)"; reply 2 "$(verified)"; reply 3 "$(raised)"
+reply 4 $'Fixed 1 Major; left 2 Minor notes.\n'"$(pre_reviewed)"
+chain 270
+ok "exits 0 after four stages" '[ "$RC" = 0 ] && [ "$(calls)" = 4 ]'
+ok "raise-pr opens a draft, then the pre-review runs on it" 'prompt_is 3 "/gaffer:raise-pr --draft 270" && prompt_is 4 "/gaffer:pre-review"'
+ok "every stage counts itself out of four" '[ "$(grep -c "chain: \\[[0-9]*/4\\]" <<<"$OUTPUT")" = 8 ] && ! grep -q "chain: \\[[0-9]*/3\\]" <<<"$OUTPUT"'
+ok "the pre-review runs on verify's default model and effort, from the chain's own checkout" 'default_flags 4 "$DEFAULT_VERIFY" && call 4 | grep -qF -- "--plugin-dir|$PLUGIN_ROOT|"'
+ok "the pre-review's report reaches the output" 'grep -qF "left 2 Minor notes" <<<"$OUTPUT"'
+ok "the closing line names the pull request" 'last_line | grep -qF "chain: done — https://github.com/o/r/pull/9"'
+new_case
+settings '{"pre_review": false}'
+reply 1 "$(ready)"; reply 2 "$(verified)"; reply 3 "$(raised)"
+chain 270
+ok "pre_review false runs the chain as before: three stages, a pull request ready at once" '[ "$RC" = 0 ] && [ "$(calls)" = 3 ] && prompt_is 3 "/gaffer:raise-pr 270" && ! grep -qF -- "--draft" "$STUB_DIR/log"'
+new_case
+settings '{"pre_review": true, "stages": {"pre-review": {"model": "m-pre", "effort": "max"}}}'
+reply 1 "$(ready)"; reply 2 "$(verified)"; reply 3 "$(raised)"; reply 4 "$(pre_reviewed)"
+chain 270
+ok "the pre-review stage takes its own row in stages" '[ "$RC" = 0 ] && flags_are 4 m-pre max'
+new_case
+settings '{"stages": {"pre-review": {"model": "m-pre"}}}'
+reply 1 "$(ready)"; reply 2 "$(verified)"; reply 3 "$(raised)"
+chain 270
+ok "a pre-review row without the opt-in adds no stage" '[ "$RC" = 0 ] && [ "$(calls)" = 3 ]'
+for bad in '{"pre_review": "yes"}' '{"pre_review": 1}' '{"pre_review": true, "stages": {"pre-review": {"effort": "hgih"}}}'; do
+  new_case
+  settings "$bad"
+  chain 270
+  ok "a pre-review setting the chain cannot read stops the run before any stage, as a configuration fault: $bad" '[ "$RC" = 78 ] && [ "$(calls)" = 0 ]'
+done
+new_case
+settings '{"pre_review": true}'
+reply 1 "$(ready)"; reply 2 "$(verified)"; reply 3 "$(raised)"
+reply 4 $'The suite failed after the fix; nothing was pushed and the pull request is still a draft.\n'"$(failed 'suite red after fixing finding 2 (src/a.sh:10)')"
+chain 270
+ok "a failed pre-review stops the run at its stage, with its reason" '[ "$RC" = 1 ] && closing | head -n 1 | grep -qxF "chain: FAILED at [4/4] pre-review — suite red after fixing finding 2 (src/a.sh:10)"'
+ok "and names the session to reopen" 'last_line | grep -qF "claude --resume sess-4"'
+new_case
+settings '{"pre_review": true}'
+reply 1 "$(ready)"; reply 2 "$(verified)"; reply 3 "$(raised)"; reply 4 "$(raised)"
+chain 270
+ok "another stage's success is not the pre-review's" '[ "$RC" = 1 ] && grep -qF "FAILED at [4/4] pre-review — no readable verdict" <<<"$OUTPUT"'
+new_case
+settings '{"pre_review": true}'
+reply 1 "$(ready)"; reply 2 "$(verified)"; reply 3 "$(raised)"; reply 4 '{"schema": 1, "outcome": "pre-reviewed"}'
+chain 270
+ok "a pre-reviewed verdict naming no pull request is no verdict" '[ "$RC" = 1 ] && grep -qF "the pre-reviewed verdict names no pull request URL" <<<"$OUTPUT"'
+new_case
+settings '{"pre_review": true}'
+reply 1 "$(ready)"; reply 2 "$(verified)"; reply 3 "$(raised)"
+reply 4 '{"schema": 1, "outcome": "pre-reviewed", "pr": "https://github.com/o/r/pull/10"}'
+chain 270
+ok "a pre-review of some other pull request is a failure" '[ "$RC" = 1 ] && grep -qF "FAILED at [4/4] pre-review" <<<"$OUTPUT" && grep -qF "pull/10" <<<"$OUTPUT"'
+new_case
+settings '{"pre_review": true}'
+reply 1 "$(ready)"; reply 2 "$(failed 'suite red')"
+chain 270
+ok "opted in, an earlier failure counts out of four and starts nothing later" '[ "$RC" = 1 ] && [ "$(calls)" = 2 ] && grep -qF "FAILED at [2/4] verify — suite red" <<<"$OUTPUT"'
+new_case
+settings '{"pre_review": true}'
+before="$(repo_state)"
+chain --dry-run 270
+ok "report mode lists the draft and the pre-review" '[ "$RC" = 0 ] && [ "$(calls)" = 0 ] && grep -qF "3. raise-pr: /gaffer:raise-pr --draft 270" <<<"$OUTPUT" && grep -qF "4. pre-review: /gaffer:pre-review" <<<"$OUTPUT" && [ "$(repo_state)" = "$before" ]'
+
 echo ""
 echo "RESULT: $pass passed, $fail failed"
 [ "$fail" = 0 ]
