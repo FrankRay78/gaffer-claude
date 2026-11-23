@@ -6,9 +6,11 @@ This file is read from the plugin, never from the repository, so a repository ca
 
 ## Build, test and format
 
-*No default for the build-and-test command.* A repository states, under this heading, the one command that builds and runs its whole test suite, run from the repository root; `/gaffer:build` and `/gaffer:verify` gate on its exit code. Without it both stop with the reason `conventions missing: Build, test and format`, because inventing a build command unattended is how a run reports green over nothing.
+*No default for the build-and-test command.* A repository states, under this heading, the one command that builds and runs its whole test suite, run from the repository root; `/gaffer:build`, `/gaffer:verify` and `/gaffer:pre-review` gate on its exit code. Without it each stops with the reason `conventions missing: Build, test and format`, because inventing a build command unattended is how a run reports green over nothing.
 
-The default formatter is none. A repository that has one names it here, as the same command its CI checks, so what passes locally is what passes on the pull request. Where none is named, `/gaffer:verify` skips its format passes and says so in its report.
+*No default for the single-test command*, and it is optional. A repository that has one states, under this heading, the command that runs only the tests it names, and where the names go. It must exit green when every test it names passes, so it turns off any gate only the whole suite can meet, such as a coverage threshold. When a suite run fails, `/gaffer:verify` re-runs the failing tests ten times with it, which is far cheaper than re-running the whole suite. Without it, `/gaffer:verify` re-runs the whole suite three times instead and reports the failure as not determined, never as reproduced.
+
+The default formatter is none. A repository that has one names it here, as the same command its CI checks, so what passes locally is what passes on the pull request. Where none is named, `/gaffer:verify` skips its format passes and says so in its report, and `/gaffer:pre-review` skips its format pass.
 
 ## Test-driven development
 
@@ -66,7 +68,7 @@ This project keeps none by default, so `/gaffer:build` writes none and `/gaffer:
 
 ## Scratch files
 
-`.claude/scratch/` at the repository root, git-ignored; the `Write` tool creates it when it is missing. The files the commands write there: `/gaffer:raise-pr` the pull request body to `raise-pr-body.md`; `/gaffer:draftissue` the issue body to `gh-issue-body-<slug>.md`, where the slug is a short kebab-case form of the title; `/gaffer:reviewissue` the review comment to `reviewissue-body.md`; `/gaffer:confirmissue` the issue body to `confirmissue-body.md` and the patch to `confirmissue-patch.json`; `/gaffer:review-pr` its review to `review-pr-<N>.json` and a worktree to `review-pr-<N>/`; `/gaffer:audit-codebase` its working files under `audit/`. A repository that keeps scratch files elsewhere, or ignores them differently, says so here.
+`.claude/scratch/` at the repository root, git-ignored; the `Write` tool creates it when it is missing. The files the commands write there: `/gaffer:raise-pr` the pull request body to `raise-pr-body.md`; `/gaffer:pre-review` a corrected pull request body to `pre-review-body.md`; `/gaffer:draftissue` the issue body to `gh-issue-body-<slug>.md`, where the slug is a short kebab-case form of the title; `/gaffer:reviewissue` the review comment to `reviewissue-body.md`; `/gaffer:confirmissue` the issue body to `confirmissue-body.md` and the patch to `confirmissue-patch.json`; `/gaffer:review-pr` its review to `review-pr-<N>.json` and a worktree to `review-pr-<N>/`; `/gaffer:audit-codebase` its working files under `audit/`. A repository that keeps scratch files elsewhere, or ignores them differently, says so here.
 
 ## Pull requests
 

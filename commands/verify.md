@@ -1,20 +1,20 @@
 ---
-description: Orchestrator that turns "implementation looks done" into a reviewed, test-green branch — runs the full suite first and hard-gates on it, then reviews the branch once, fixes the confirmed findings its rules table calls for, and commits them on a green re-run. Stops short of the pull request. Runs unattended, so it can drive a loop.
+description: Orchestrator that turns "implementation looks done" into a reviewed, test-green branch — runs the full suite first and hard-gates on it, then reviews the branch once, fixes the confirmed findings its rules table calls for, and commits them on a green re-run, save one carry-on past a failure that does not reproduce. Stops short of the pull request. Runs unattended, so it can drive a loop.
 ---
 
 Read `CLAUDE.md` for project context, and the conventions as *Repository conventions* below says, before proceeding.
 
 `/gaffer:verify` is the stage between `/gaffer:build` and `/gaffer:raise-pr`: it turns a feature branch into a **formatted, test-green, reviewed, fully-committed** branch with a clean working tree. It does not push, open a PR, or merge — `/gaffer:raise-pr` owns all of that, and you run it yourself afterwards.
 
-`/gaffer:verify` composes the project's existing commands behind one hard gate: **the full test suite gates everything downstream, and no review happens unless it is green.** The gate is structural — the review step is downstream of the step-1 exit code, so it cannot begin against un-verified or red code. Do not add a hook to police this ordering; the exit code *is* the gate. The one step that precedes the suite is formatting (step 1a), which is cosmetic and is itself covered by the gate that follows it.
+`/gaffer:verify` composes the project's existing commands behind one hard gate: **the full test suite gates everything downstream, and no review happens unless it is green** (save the one carry-on *When a suite run is not green* allows). The gate is structural — the review step is downstream of the step-1 exit code, so it cannot begin against un-verified or red code. Do not add a hook to police this ordering; the exit code *is* the gate. The one step that precedes the suite is formatting (step 1a), which is cosmetic and is itself covered by the gate that follows it.
 
-**The review is one round, and its fix is read on the pull request.** A fix written in response to a review is new code, and someone who did not write it should read it. That reader is Review B — the `/gaffer:review-pr` review that runs when the PR opens, which reads the whole PR diff, fix commit included — not a further round here. Re-reviewing the fix inside `/gaffer:verify` was tried and fed itself (step 2 says how), so step 2 runs once and step 3 commits what it led to.
+**The review is one round, and its fix is read on the pull request.** A fix written in response to a review is new code, and someone who did not write it should read it. That reader is Review B — the `/gaffer:review-pr` review that runs when the PR is opened ready or marked ready, which reads the whole PR diff, fix commit included — not a further round here. Re-reviewing the fix inside `/gaffer:verify` was tried and fed itself (step 2 says how), so step 2 runs once and step 3 commits what it led to.
 
 `/gaffer:verify` is designed to run to completion **without prompting**, so it can be driven by an automated loop (e.g. verifying many features back-to-back) as well as invoked directly. Reflection (`/gaffer:capture-learnings`) is deliberately **not** a step: it needs human curation and batches better across many features, so it belongs at a supervised checkpoint after a batch — not inside each verify, where it would either block the loop or be auto-skipped to nothing.
 
-Raising the pull request is deliberately **not** a step either. It is the one irreversible, outward-facing act in the chain: everything `/gaffer:verify` does is safe to re-run, and pushing a branch and opening a PR is not. Keeping it a separate deliberate `/gaffer:raise-pr` invocation is what makes the rest of the chain freely repeatable.
+Raising the pull request is deliberately **not** a step either. It is the first irreversible, outward-facing act in the chain, and only the pre-review, where a repository opts in, acts on GitHub after it: everything `/gaffer:verify` does is safe to re-run, and pushing a branch and opening a PR is not. Keeping it a separate deliberate `/gaffer:raise-pr` invocation is what makes the rest of the chain freely repeatable.
 
-**Stop-on-failure is global:** if any step fails — the tree is dirty, a suite run is not green, the format tool errors, a review subagent errors, a confirmed finding that must be fixed cannot be — STOP at that step, report it to the invoker, and do not run any later step. Every such report says what state the working tree is in: clean, or holding uncommitted edits, and whose they are.
+**Stop-on-failure is global:** if any step fails — the tree is dirty, a suite run is not green (save the one carry-on *When a suite run is not green* allows), the format tool errors, a review subagent errors, a confirmed finding that must be fixed cannot be — STOP at that step, report it to the invoker, and do not run any later step. Every such report says what state the working tree is in: clean, or holding uncommitted edits, and whose they are.
 
 ## Repository conventions
 
@@ -22,7 +22,7 @@ The steps in this file are generic. The conventions they run on — the formatte
 
 | Heading | Supplies |
 |---|---|
-| `Build, test and format` | the formatter steps 1a and 3 run, and the build-and-test command steps 1b and 3 run |
+| `Build, test and format` | the formatter steps 1a and 3 run, the build-and-test command steps 1b and 3 run, and the optional single-test command *When a suite run is not green* re-runs a failing test with |
 | `Code quality` | the comment rule step 2 briefs `comment-analyzer` with, counts a breach of as a defect, and holds a fix to |
 | `Commit messages` | the commit-message form steps 1a and 3 use |
 | `Hooks, scripts and plugins` | the pull-request hook step 1b weighs, the hooks that can block a commit, and the plugin the reviewers come from |
@@ -52,7 +52,7 @@ How Review B runs is a review criterion, not a convention, so `REVIEW.md` → *W
 
    **1b — Full test run (always).** Run the project's build-and-test command (`CONVENTIONS.md` → *Build, test and format*) — always, including docs-only branches. Do not add a skip path for docs-only branches: the suite is fast, and this is the first whole-suite gate after `/gaffer:build`, whose run precedes formatting and review fixes. A hook `CONVENTIONS.md` → *Hooks, scripts and plugins* names re-runs the suite when the PR is created, but that hook fires inside a separately invoked `/gaffer:raise-pr` that may not happen for a long while, or at all — so skipping here would leave a branch reported verified that no suite ever ran against.
    - Gate on the run's **exit code**, not on any stored marker.
-   - **Not green ⇒ STOP:** report the failures to the invoker and do nothing else — no review subagents.
+   - **Not green ⇒ follow *When a suite run is not green* below**, which decides whether the run stops or carries on. Where it stops, report the failures to the invoker and do nothing else — no review subagents.
    - **Green ⇒ continue.**
 
 2. **Review (synchronous — this is Review A).** One round, over the whole branch diff, `git diff main...HEAD`. Note `git rev-parse HEAD` before spawning anyone; step 3 opens by checking it.
@@ -98,23 +98,45 @@ How Review B runs is a review criterion, not a convention, so `REVIEW.md` → *W
    - **If the tree is clean and HEAD is where step 2 noted it:** the review changed nothing and the branch is verified. Skip the format pass, the re-run and the commit — go to step 4. (No spurious second suite run.) The last suite run was against exactly the committed code.
    - **Otherwise** — the tree has edits, or HEAD has moved because a reviewer committed something itself:
      - **Format, before the suite re-run** — the project's formatter, the same command as step 1a. A review fix is written fast and is routinely off-format, and this is the only pass that ever sees it: step 1a ran before the fix existed. A non-zero exit is a real failure ⇒ **STOP and report**, with the reason `formatting failed`; the tool merely rewriting files is not.
-     - Re-run the project's build-and-test command. Not green ⇒ STOP and report — and say that the tree is dirty, that the edits in it are the review's failed fix (and its formatting), and that discarding them is the recovery. Do **not** commit them to satisfy step 0's clean-tree precondition on a later run: that would put a red fix on the branch, which is the one thing this step exists to stop. If HEAD had moved, name the commits from the noted value to HEAD as well: they are a reviewer's own, and they are in the red run too.
-     - Once green, **commit whatever the tree holds** with `git add -A` and a message in the project's `Refs #<N>: <imperative>` form — e.g. `Refs #328: apply /gaffer:verify review findings`, with the issue number read off the branch name, not left as a placeholder. If the branch name carries no issue number, drop the `Refs #<N>: ` prefix and keep the rest; the project requires it only where an issue applies. Commit immediately, with no further edit in between, so the suite run above was against exactly the code the commit contains. This is what makes the fixes reach the eventual PR — `/gaffer:raise-pr` pushes *commits*, so uncommitted or untracked working-tree edits would silently never leave this machine. `git add -A` is correct and complete here precisely because the tree started clean: it stages every review edit and its formatting (including new untracked files and deletions) with no risk of sweeping in unrelated local changes. If the format pass put every edit back and the tree is clean, there is nothing to commit.
+     - Re-run the project's build-and-test command. Not green ⇒ follow *When a suite run is not green* below; where it carries on, go to the commit. Where it stops, report — and say that the tree is dirty, that the edits in it are the review's failed fix (and its formatting), and that discarding them is the recovery. Do **not** commit them to satisfy step 0's clean-tree precondition on a later run: that would put a red fix on the branch, which is the one thing this step exists to stop. If HEAD had moved, name the commits from the noted value to HEAD as well: they are a reviewer's own, and they are in the red run too.
+     - Once green, or carried on, **commit whatever the tree holds** with `git add -A` and a message in the project's `Refs #<N>: <imperative>` form — e.g. `Refs #328: apply /gaffer:verify review findings`, with the issue number read off the branch name, not left as a placeholder. If the branch name carries no issue number, drop the `Refs #<N>: ` prefix and keep the rest; the project requires it only where an issue applies. Commit immediately, with no further edit in between, so the suite run above was against exactly the code the commit contains. This is what makes the fixes reach the eventual PR — `/gaffer:raise-pr` pushes *commits*, so uncommitted or untracked working-tree edits would silently never leave this machine. `git add -A` is correct and complete here precisely because the tree started clean: it stages every review edit and its formatting (including new untracked files and deletions) with no risk of sweeping in unrelated local changes. If the format pass put every edit back and the tree is clean, there is nothing to commit.
      - The branch is verified. Go to step 4 — **do not review the commit you just made.**
 
 4. **Stop here.** Do **not** push, open a PR, merge, or run `/gaffer:raise-pr`. Leave the working tree clean — everything committed to the branch — because that is exactly `/gaffer:raise-pr`'s entry condition, so the two compose by hand with nothing in between.
 
+## When a suite run is not green
+
+Step 1b and step 3's re-run both come here when the build-and-test command is not green. One re-run that fails again says little about a failure that happens a third or a tenth of the time, and one that passes says little more, so do not judge a failure from one re-run either way: gather the counts below, then stop or carry on as they say.
+
+1. **Name the failing tests** from the run's output. If any part of the build did not complete, the runner did not start, or the output names no failing test, there is nothing to re-run: STOP, with the reason `suite failed: the build did not complete, not re-run` or `suite failed: no failing test named, not re-run`.
+2. **Re-run the failing tests ten times** with the single-test command `CONVENTIONS.md` → *Build, test and format* gives, naming only the failing tests; one invocation may name them all. Record, for each test, how many of the ten re-runs it failed:
+   - all ten — **reproduced 10/10**;
+   - some — **intermittent, failed k of 10**;
+   - none — **did not reproduce, failed 0 of 10**.
+
+   Where the conventions give no single-test command, re-run the whole build-and-test command three times instead, and record each test as **not determined, failed k of 3** — never as reproduced or intermittent, because three runs cannot tell the two apart (0 of 3: **did not reproduce, failed 0 of 3**). A test that fails in any re-run counts as a failing test.
+
+   The counts are of the re-runs only; the run that sent you here is not among them.
+3. **Say whether the branch touched each failing test.** Touched means the branch added or changed the failing test's file: the file appears in `git diff --name-only main...HEAD` or, in step 3, among the tree's uncommitted edits. In every other case — the file is untouched, or the output does not show which file the test is in — the report says the link was **not determined**. Never call such a failure unrelated, noise or a known flake: an untouched test file does not show the branch left alone the code the test exercises.
+4. **Stop or carry on.**
+   - Any failing test failed at least once in its re-runs ⇒ **STOP**.
+   - The run that sent you here, or any re-run, was not green for a reason its failing tests do not account for — part of the build did not complete, the runner did not start or crashed, or a step such as a coverage or lint gate failed ⇒ **STOP**, with the reason `suite failed: not accounted for by a failing test`.
+   - Every failing test did not reproduce, the branch touched none of their files, and every red run is accounted for by its failing tests ⇒ **carry on**: step 1b to step 2, step 3 to its commit. The final report names each such test with its counts and says its link was not determined.
+   - Every failing test did not reproduce, but the branch touched any of their files ⇒ **STOP**. A failure that comes and goes in a test the branch wrote or changed is the intermittent bug in new code this check exists to catch.
+
+**What the report says.** Every report on a suite failure, stop or carry-on, names each failing test, its count in the form above, and whether the branch touched it or the link was not determined. Never call a failure "stable", "deterministic" or "not a flake", whatever the counts: write the count. A stop's verdict reason says whether the failure reproduced, naming the failing test that failed the most re-runs (on a tie, one in a test file the branch changed), its count, and how many more failed, e.g. `suite failed: <test> reproduced 10/10`, `suite failed: <test> and 2 more, intermittent, failed 3 of 10`, `suite failed: <test> did not reproduce, failed 0 of 10, in a test file the branch changed`, or `suite failed: <test> not determined, failed 1 of 3`.
+
 ## The two reviews (Review A vs Review B)
 
 - **Review A** — steps 2 and 3, synchronous, in-`/gaffer:verify`: the clean-context `pr-review-toolkit` subagents plus `/gaffer:review-slop`, run once over the branch diff. Its findings drive the step-2 fixes, which step 3 commits — that is how the review shapes the branch before a PR is ever raised.
-- **Review B** — asynchronous, on the PR: `/gaffer:review-pr`, which the project runs when the PR opens — `REVIEW.md` → *Where it runs* says how, and names any gate on it. It reads the whole PR diff, so it is what reads the commit step 3 made; it is handed none of Review A's findings, so it judges the branch on what it sees. It is therefore outside `/gaffer:verify` entirely, and nothing here waits on it. Review B is for a human to read at merge; when you later run `/gaffer:capture-learnings` at a supervised checkpoint, that command's own best-effort PR-review fetch picks it up then.
+- **Review B** — asynchronous, on the PR: `/gaffer:review-pr`, which the project runs when the PR is opened ready or marked ready — `REVIEW.md` → *Where it runs* says how, and names any gate on it. It reads the whole PR diff, so it is what reads the commit step 3 made; it is handed none of Review A's findings, so it judges the branch on what it sees. It is therefore outside `/gaffer:verify` entirely, and nothing here waits on it. Review B is for a human to read at merge; when you later run `/gaffer:capture-learnings` at a supervised checkpoint, that command's own best-effort PR-review fetch picks it up then.
 
 ## Final report
 
 Report, in this order:
 
 - Whether formatting changed anything, and the commit if it did — step 1a's, and step 3's if its commit carried formatting alongside the fix.
-- The suite result(s).
+- The suite result(s). For any run that was not green, what *When a suite run is not green* says the report must: each failing test, its count, and whether the branch touched it — including a failure the run carried on past.
 - Which reviewers ran, and the commit step 3 made, if the review led to one. If HEAD had moved by step 3 because a reviewer committed itself, name each such commit by hash and say which reviewer made it: it is on the branch, but nothing in `/gaffer:verify` judged it against step 2's rules.
 - Which review findings were fixed-and-committed, and which confirmed ones were not — each *Not fixed* finding and each Suggestion left unapplied, by name and severity. Mark as **unrated** any finding whose severity you set because its reviewer gave none on the scale, with one line on why it was or was not counted a defect. **This report is the only place an unfixed finding is recorded, and it ends there.** Do not raise an issue for one, write it to a file, or ask for it to go in the PR body: nothing carries Review A's findings to the pull request, so that Review B reads the branch untainted by them.
 - On the way to a `verified` verdict, add this **above the verdict** — it is boilerplate this command mandates, and appending it below the verdict is the commonest way to lose the verdict: "Run `/gaffer:raise-pr` to push the branch and open the PR — it derives `Closes #<N>` from this branch name and verifies it before use, then reports what it settled; check that line to confirm the link was made. Review B posts async on the raised PR, and `/gaffer:capture-learnings` folds it in when you next review the batch."
@@ -124,7 +146,7 @@ Report, in this order:
 - `{"schema": 1, "outcome": "verified", "branch": "<branch>"}` — on success.
 - `{"schema": 1, "outcome": "failed", "reason": "<short reason>"}` — on any failure.
 
-The schema — its fields, what each outcome carries, and how it is read — is [`docs/verdict-schema.md`](../docs/verdict-schema.md) in the plugin (`${CLAUDE_PLUGIN_ROOT}/docs/verdict-schema.md`). The fixed reasons this command emits are `formatting failed` (step 1a or step 3), step 0's three precondition reasons and `conventions missing: <heading>` (*Repository conventions*). Anything else is a short reason of your own.
+The schema — its fields, what each outcome carries, and how it is read — is [`docs/verdict-schema.md`](../docs/verdict-schema.md) in the plugin (`${CLAUDE_PLUGIN_ROOT}/docs/verdict-schema.md`). The fixed reasons this command emits are `formatting failed` (step 1a or step 3), step 0's three precondition reasons, `conventions missing: <heading>` (*Repository conventions*), and the `suite failed: …` forms *When a suite run is not green* gives. Anything else is a short reason of your own.
 
 What ends the report is the whole of what the chain reads, which is what makes it safe and what makes it strict:
 
@@ -132,4 +154,4 @@ What ends the report is the whole of what the chain reads, which is what makes i
 - **Nothing above it can be mistaken for it.** Quote either verdict as often as the report needs to — a failure verdict a reviewer raised, a table of both — and it changes nothing.
 - **The verdict carries nothing but its fields.** `Verdict: {…}` is not a verdict, because the line must be the object and nothing else; neither is a success verdict with a hedge after it — `{…} (2 Important deferred)` is read as no verdict at all, not as a pass — nor one that carries a `reason`, which contradicts itself. A deferred finding belongs in the report above, not in the verdict.
 
-Never report verified over a red suite, a confirmed finding whose row in step 2's table is **Fix it** and that is still unresolved, or an uncommitted change.
+Never report verified over a red suite — save a failure *When a suite run is not green* carried on past, which the report names — a confirmed finding whose row in step 2's table is **Fix it** and that is still unresolved, or an uncommitted change.
