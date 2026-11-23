@@ -2,7 +2,7 @@
 
 # gaffer
 
-A personal SDLC toolbox for Claude Code, packaged as a plugin so any repository can install it: a setup command that starts a repository's conventions from what it already contains, the issue stage (`draftissue` → `reviewissue` → `confirmissue`), the build chain (`build` → `verify` → `raise-pr`, each ending on a machine-readable verdict), the scripts that run that chain unattended from a timer, a verified pull-request review with follow-up rounds, the periodic audits, and one hook that keeps an unattended run from stalling on `chmod`.
+A personal SDLC toolbox for Claude Code, packaged as a plugin so any repository can install it: a setup command that starts a repository's conventions from what it already contains, the issue stage (`draftissue` → `reviewissue` → `confirmissue`), the build chain (`build` → `verify` → `raise-pr`, with an opt-in `pre-review` after it, each ending on a machine-readable verdict), the scripts that run that chain unattended from a timer, a verified pull-request review with follow-up rounds, the periodic audits, and one hook that keeps an unattended run from stalling on `chmod`.
 
 > **Personal toolbox — breaking changes at any time.** Any command, heading, default, verdict field or hook may change or disappear in any commit, with no notice beyond the pull request that makes the change, which says what breaks and for whom. A consumer that cannot absorb that pins a commit, as *Installing* describes.
 
@@ -11,7 +11,7 @@ A personal SDLC toolbox for Claude Code, packaged as a plugin so any repository 
 ## Why it is different
 
 - **The confirmed issue is the specification.** No spec folder, plan file or task list: the issue stage settles outcome-level acceptance criteria on the issue itself, checked against the codebase before a branch exists, and the build and verify stages implement and check exactly those.
-- **Every unattended stage ends on a verdict a script can read.** `build`, `verify` and `raise-pr` close their report with one JSON object, read by position so nothing the report quotes can be mistaken for the stage's decision. The chain that reads it ships here too, under [`chain/`](chain/), and is run from a checkout of this repository so the reader and the writers are always one commit.
+- **Every unattended stage ends on a verdict a script can read.** `build`, `verify`, `raise-pr` and `pre-review` close their report with one JSON object, read by position so nothing the report quotes can be mistaken for the stage's decision. The chain that reads it ships here too, under [`chain/`](chain/), and is run from a checkout of this repository so the reader and the writers are always one commit.
 - **Repository specifics are data, not prompt text.** The commands run on defaults shipped here; a repository extends them with a `CONVENTIONS.md` and a `REVIEW.md` of its own, section by section. A fix to a command is a change here and reaches every repository that tracks it.
 - **It is built to run with nobody watching.** The build stages, the pull-request review and the issue gate run headless, check their own post-conditions rather than trusting the model's report, and stop rather than guess when a convention they need is missing.
 
@@ -31,7 +31,8 @@ Commands are typed as `/gaffer:<name>`. Each command's prompt under [`commands/`
 | `confirmissue` | Folds the answered review into *Confirmed decisions* on the issue, labels it `ready`, deletes the review comment. | Yes, given an issue number |
 | `build` | Builds one issue to a green, committed `feature/<N>-<slug>` branch — RED-GREEN-REFACTOR, docs, nothing pushed. | Yes |
 | `verify` | Formats, runs the whole suite as the gate, reviews the branch once in clean context, fixes and commits. | Yes |
-| `raise-pr` | Pushes the branch and opens the pull request with a verified `Closes #N`. | Yes |
+| `raise-pr` | Pushes the branch and opens the pull request with a verified `Closes #N`, as a draft when passed `--draft`. | Yes |
+| `pre-review` | Runs `review-pr --dry-run` on the branch's open pull request, fixes once what it confirms, pushes the fix over a green suite and marks a draft ready. Posts no review. | Yes |
 | `review-pr` | Multi-pass verified review of an open PR: triage map, specialist passes, inline comments, risk tier, how much human review it needs. | Yes |
 | `review-followup` | A later round on a reviewed PR: evaluates replies, verifies fixes, re-reviews only the new diff. Caps at three rounds. | Yes |
 | `review-slop` | Reviews a branch diff for AI-generated slop and emits a cleaned diff. | No prompts, no side effects |
@@ -40,7 +41,7 @@ Commands are typed as `/gaffer:<name>`. Each command's prompt under [`commands/`
 | `capture-learnings` | Mines a session and a branch for durable learnings and applies the approved ones. | No — you pick candidates |
 | `context-gardening` | Prunes `CLAUDE.md`, its linked docs and `.claude/memory/`. | No — you pick candidates |
 
-Plus the **`no-chmod` hook**, which refuses a `chmod` that would set the executable bit and names `bash script.sh` instead, so an unattended run is redirected rather than stalled on a permission prompt, and **the chain** under [`chain/`](chain/): `chain.sh` runs the three build stages for one issue, `chain-next.sh` picks the next ready issue from a timer and parks the ones that fail. Both are run from a clone of this repository, not from the installed plugin ([`docs/chain.md`](docs/chain.md)).
+Plus the **`no-chmod` hook**, which refuses a `chmod` that would set the executable bit and names `bash script.sh` instead, so an unattended run is redirected rather than stalled on a permission prompt, and **the chain** under [`chain/`](chain/): `chain.sh` runs the build stages for one issue — with the pre-review after them where a repository opts in — `chain-next.sh` picks the next ready issue from a timer and parks the ones that fail. Both are run from a clone of this repository, not from the installed plugin ([`docs/chain.md`](docs/chain.md)).
 
 ## Installing
 
