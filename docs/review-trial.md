@@ -119,7 +119,7 @@ Start with A against B on one PR. If B fails, stop and report. Add further arms 
 
 One row per run:
 
-| PR | Arm | Arm commit | Run | Cost ($) | Duration (min) | Critical | Major | Minor findings | Notes (unverified) | Verifier runs |
+| PR | Arm | Arm commit | Run | Cost ($) | Duration (min) | Critical | Major | Minor findings | Notes | Verifier runs |
 |---|---|---|---|---|---|---|---|---|---|---|
 
 Under the table, list every Critical and Major finding from every run, deduplicated by root cause across arms. Give each one an ID, the runs that found it, `file:line` and a one-line claim.
