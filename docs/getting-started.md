@@ -94,6 +94,7 @@ This is the one convention with no default. If the *Set up gaffer* pull request 
 ## Build, test and format
 
 - **Build-and-test command** — `<the one command that builds the repository and runs its whole test suite>`, run from the repository root.
+- **Single-test command** — `<the command that runs only the named tests>`, or delete this line; without it `/gaffer:verify` re-runs the whole suite to check a failing test.
 - **Formatter** — `<the command CI checks formatting with>`, or delete this line if there is none.
 ```
 
@@ -119,7 +120,9 @@ It formats with the command you named, runs the whole suite as the gate, reviews
 /gaffer:raise-pr <number>
 ```
 
-It pushes the branch and opens the pull request, with a body sized to the change and `Closes #<number>`. That is the one outward-facing act in the sequence, which is why it is a command of its own.
+It pushes the branch and opens the pull request, with a body sized to the change and `Closes #<number>`. Opening the pull request is the first outward-facing act in the sequence, which is why it is a command of its own; only the pre-review, where a repository opts in, also acts on GitHub.
+
+To have the repository's own review run once, and its findings fixed, before anyone reads the pull request, raise it with `/gaffer:raise-pr --draft <number>` and then run `/gaffer:pre-review`, which marks it ready. The chain does this for you with `"pre_review": true` ([`chain.md`](chain.md), *The pre-review*).
 
 ## 6. Review the pull request
 
@@ -127,7 +130,7 @@ It pushes the branch and opens the pull request, with a body sized to the change
 /gaffer:review-pr <pr-number>
 ```
 
-A triage map, specialist passes in parallel, every candidate verified before it is listed, Critical and Major findings posted inline, Minor observations listed in the summary as notes, split into those needing a judgement call and mechanical ones, a risk tier and a merge recommendation. Run it locally like this, or from CI when the pull request opens ([`unattended.md`](unattended.md), *In CI*). A later round, after the author has replied, is `/gaffer:review-followup <pr-number>`.
+A triage map, specialist passes in parallel, every candidate verified before it is listed, Critical and Major findings posted inline, Minor observations listed in the summary as notes, split into those needing a judgement call and mechanical ones, a risk tier and a merge recommendation. Run it locally like this, or from CI when the pull request is opened ready or marked ready ([`unattended.md`](unattended.md), *In CI*). A later round, after the author has replied, is `/gaffer:review-followup <pr-number>`.
 
 ## 7. Fill in what init could not
 
