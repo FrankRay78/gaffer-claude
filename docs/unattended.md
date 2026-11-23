@@ -9,14 +9,15 @@ For whoever wires a gaffer command into a chain script, a scheduled runner or a 
 | `init` | Creates a `gaffer/init-<timestamp>` branch, commits, pushes and opens one pull request — only from a clean default branch — and creates any missing `needs answers`, `ready` and `parked` labels. Raises nothing when nothing is missing. |
 | `build` | Creates `feature/<N>-<slug>` from `origin/main` and commits to it — only from a clean `main` with no unpushed commits, for an open issue with no linked PR. Recreates a leftover branch of that name only if it holds nothing uninspected. |
 | `verify` | Commits formatting, then the review's fixes after a green re-run, or after a failure that did not reproduce in a test file the branch left untouched, or whose file the output did not show, which the report names. A fix it cannot land is left uncommitted and named in the report. |
-| `raise-pr` | Pushes the branch and opens the PR, adding `Closes #<N>` only when `gh` confirms that open issue in this repository. |
+| `raise-pr` | Pushes the branch and opens the PR — as a draft when passed `--draft` — adding `Closes #<N>` only when `gh` confirms that open issue in this repository. |
+| `pre-review` | Runs `review-pr --dry-run` on the current branch's open PR, posting nothing; commits and pushes its fix only after a green suite, edits the PR body where a finding is about the body, and marks the PR ready if it was a draft. A failure pushes nothing failing and leaves a draft a draft. |
 | `review-pr` | Posts one PR review — verified Critical and Major findings inline, and a summary marked `<!-- review-pr -->` that also lists Minor observations as unverified notes, split into Minor and mechanical — unless `--dry-run`. |
 | `review-followup` | Replies in, resolves and re-opens review threads, and posts the next round; at most three rounds. |
 | `reviewissue` | Posts the review comment marked `<!-- speckit:review -->` and adds `needs answers`; a re-run edits that comment in place. |
 | `confirmissue` | Rewrites the issue body with `## Confirmed decisions`, swaps `needs answers` for `ready`, then deletes the review comment — only after reading both changes back. |
 | `audit-codebase` | Opens one issue, with only the label `CONVENTIONS.md` → *Audit* names. |
-| `chain/chain.sh` | Nothing of its own: the three stages above, in order, stopping at the first that fails. |
-| `chain/chain-next.sh` | Resets its own dedicated clone, runs the chain there, and on failure labels the issue `parked` with a comment. Never pushes, merges or deletes on GitHub. |
+| `chain/chain.sh` | Nothing of its own: build, verify and raise-pr — and pre-review, where the settings opt in — in order, stopping at the first that fails. |
+| `chain/chain-next.sh` | Resets its own dedicated clone, runs the chain there, and on failure labels the issue `parked` with a comment, naming any draft PR a failed pre-review left open. Never pushes, merges or deletes on GitHub. |
 
 No command merges a PR, closes an issue by commit message, edits a source document it drew from, or edits the plugin's own files. Every chain stage stops with `conventions missing: <heading>` rather than invent a convention it needs, the build-and-test command above all.
 
@@ -31,7 +32,7 @@ No command merges a PR, closes an issue by commit message, edits a source docume
 
 The model's report is not the result. Check:
 
-- **build, verify, raise-pr** — the verdict, by position ([`verdict-schema.md`](verdict-schema.md)). A success verdict that also carries a `reason` is not a success.
+- **build, verify, raise-pr, pre-review** — the verdict, by position ([`verdict-schema.md`](verdict-schema.md)). A success verdict that also carries a `reason` is not a success.
 - **review-pr, review-followup** — a new review marked `<!-- review-pr -->` on the head commit, carrying the `Risk tier: … · Merge with no human review: …` line.
 - **reviewissue** — the marked comment on the issue and the `needs answers` label.
 - **confirmissue** — `## Confirmed decisions` in the body, `ready` present, `needs answers` gone, the marked comment deleted.

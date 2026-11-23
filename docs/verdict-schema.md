@@ -1,6 +1,6 @@
 # The verdict schema
 
-Every stage command in the build chain — `/gaffer:build`, `/gaffer:verify` and `/gaffer:raise-pr` — ends its report with a verdict: one JSON object, the last thing in the report, saying whether the stage succeeded and what it produced. The human-readable report sits above it. The verdict is the contract between the commands and whatever drives them — a chain script in the consuming repository that starts the next stage only on a success verdict and stops on anything else. This file is the one place the schema is stated: the commands show the verdict they write and a repository's chain says how it reads it, and both point here for the fields.
+Every stage command in the build chain — `/gaffer:build`, `/gaffer:verify`, `/gaffer:raise-pr` and `/gaffer:pre-review` — ends its report with a verdict: one JSON object, the last thing in the report, saying whether the stage succeeded and what it produced. The human-readable report sits above it. The verdict is the contract between the commands and whatever drives them — a chain script in the consuming repository that starts the next stage only on a success verdict and stops on anything else. This file is the one place the schema is stated: the commands show the verdict they write and a repository's chain says how it reads it, and both point here for the fields.
 
 ## Version 1
 
@@ -11,20 +11,21 @@ Every stage command in the build chain — `/gaffer:build`, `/gaffer:verify` and
 | Field | Type | Present | Meaning |
 |---|---|---|---|
 | `schema` | number | always | The version of this schema the verdict follows. `1`. |
-| `outcome` | string | always | What the stage concluded: `ready`, `verified`, `raised` or `failed`. Matched exactly, lowercase. |
+| `outcome` | string | always | What the stage concluded: `ready`, `verified`, `raised`, `pre-reviewed` or `failed`. Matched exactly, lowercase. |
 | `branch` | string | with `ready` and `verified` | The branch the stage left its work on. Non-empty, no whitespace. |
-| `pr` | string | with `raised` | The pull request this run opened, as a bare URL: `https://github.com/<owner>/<repo>/pull/<n>`. Not an autolink, not a markdown link, nothing after it. |
+| `pr` | string | with `raised` and `pre-reviewed` | The pull request this run opened, or for `pre-reviewed` the one it reviewed, fixed and left ready for review, as a bare URL: `https://github.com/<owner>/<repo>/pull/<n>`. Not an autolink, not a markdown link, nothing after it. |
 | `reason` | string | with `failed` | Why the stage stopped, as one short line of prose. A reader passes it on with outer whitespace stripped and any line break or run of whitespace inside it flattened to one space, so it lands on one line; nothing else is changed. |
 
-Each command has one success outcome, and all three share the failure outcome:
+Each command has one success outcome, and all four share the failure outcome:
 
 | Command | Success | Failure |
 |---|---|---|
 | `/gaffer:build` | `{"schema": 1, "outcome": "ready", "branch": "<branch>"}` | `{"schema": 1, "outcome": "failed", "reason": "<short reason>"}` |
 | `/gaffer:verify` | `{"schema": 1, "outcome": "verified", "branch": "<branch>"}` | `{"schema": 1, "outcome": "failed", "reason": "<short reason>"}` |
 | `/gaffer:raise-pr` | `{"schema": 1, "outcome": "raised", "pr": "<url>"}` | `{"schema": 1, "outcome": "failed", "reason": "<short reason>"}` |
+| `/gaffer:pre-review` | `{"schema": 1, "outcome": "pre-reviewed", "pr": "<url>"}` | `{"schema": 1, "outcome": "failed", "reason": "<short reason>"}` |
 
-A success verdict is written only for work the run did: `raised` names a pull request this run opened, `ready` and `verified` describe a suite this run saw pass — save that `verified` may carry on past a failure that did not reproduce in a test file the branch left untouched, or whose file the output did not show, which its report names. A success verdict that also carries a `reason` contradicts itself and is not read as a success.
+A success verdict is written only for work the run did: `raised` names a pull request this run opened, `ready` and `verified` describe a suite this run saw pass, and `pre-reviewed` names a pull request this run reviewed, whose fixes it pushed over a passing suite and which it left ready for review — save that `verified` may carry on past a failure that did not reproduce in a test file the branch left untouched, or whose file the output did not show, which its report names. A success verdict that also carries a `reason` contradicts itself and is not read as a success.
 
 **Fields a reader does not recognise are ignored.** A verdict of version 1 may carry more than the fields above, and a reader of version 1 behaves exactly as it would without them. That is what lets a command add to its verdict — assumptions, deferred findings — without a version bump and without touching anything that reads it.
 
@@ -51,4 +52,4 @@ The two failure directions are not equal in cost, and the rules above fail safe 
 ## Changing the schema
 
 - **Adding a field** needs no version bump. Document it in the table above; readers ignore it until they are taught it.
-- **A change a version-1 reader would misread** — renaming or removing a field, changing an outcome word, changing what the payload means — is version 2. Bump the number here and in every reader first, because a reader stops loudly on a version it does not know; then change the writers. The readers are the chain scripts of the repositories that consume this plugin, which track its `main`, so every reader is taught the new version and that change lands before the one that changes the writers; the three command prompts are the writers.
+- **A change a version-1 reader would misread** — renaming or removing a field, changing an outcome word, changing what the payload means — is version 2. Bump the number here and in every reader first, because a reader stops loudly on a version it does not know; then change the writers. The readers are the chain scripts of the repositories that consume this plugin, which track its `main`, so every reader is taught the new version and that change lands before the one that changes the writers; the four command prompts are the writers.
