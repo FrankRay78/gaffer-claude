@@ -43,7 +43,7 @@ A section under any other heading is read too, and applied where its text says. 
 
 1. **Review, posting nothing.** Run `/gaffer:review-pr <number> --dry-run` in this session (the Skill tool, `gaffer:review-pr`), with the pull request's number, and follow it to its end. With HEAD at the pull request's head it reviews this checkout in place. `--dry-run` is not optional: the run must post no review, comment, reply or label, and if you see that it posted anything, STOP. Reason: `the dry-run review posted to the pull request`.
 
-   From what it prints, take every **finding** (Critical or Major, verified) and every **note** (Minor or mechanical, unverified), each with its `file:line`, claim and any **Pre-existing** tag. If the review stops before it composes a review, STOP with its reason.
+   From what it prints, take every **finding** (Critical or Major, verified) and every **note** (Minor or mechanical, verified), each with its `file:line`, claim and any **Pre-existing** tag. If the review stops before it composes a review, STOP with its reason.
 
    `/gaffer:review-pr` reads `REVIEW.md` from this checkout, so on a branch that edits `REVIEW.md` this review judges by the branch's copy where the posted review in CI uses the default branch's. The report says so when the branch touches it.
 
@@ -52,11 +52,11 @@ A section under any other heading is read too, and applied where its text says. 
    | Item | Outcome |
    |---|---|
    | Critical or Major finding | **Fix it** |
-   | Mechanical note | **Fix it**, once its claim is checked |
+   | Mechanical note | **Fix it** |
    | Minor note | **Left** |
    | Anything tagged **Pre-existing** | **Left** |
 
-   - **Fix it** — fix it in the working tree with the smallest change that removes the defect: correct the one fact, change the lines that misbehave, add the missing test where the finding is that a test is missing. Do not restructure around it; anything larger belongs in an issue of its own. A finding was verified by the review, so do not re-judge it, and do not re-rate it down. A mechanical note was not verified: check its claim against the code first, and where it does not hold, change nothing and report it as not acted on. If one that must be fixed genuinely cannot be, STOP, naming it, and say that the edits already in the tree are uncommitted and unverified and that discarding them is the recovery.
+   - **Fix it** — fix it in the working tree with the smallest change that removes the defect: correct the one fact, change the lines that misbehave, add the missing test where the finding is that a test is missing. Do not restructure around it; anything larger belongs in an issue of its own. Findings and notes were both verified by the review, so do not re-judge either, and do not re-rate a finding down or a mechanical note up to Minor. If one that must be fixed genuinely cannot be, STOP, naming it, and say that the edits already in the tree are uncommitted and unverified and that discarding them is the recovery.
    - **A finding about the pull request body** — missing evidence, an unstated breaking change, a body that disagrees with the diff — is fixed in the body, not the code: write the corrected body in full and hold it for step 4. Correct what the finding names and nothing else, and leave no trace of this review in it.
    - **Left** — not fixed and not carried anywhere: a Minor note needs the author's judgement, and a Pre-existing item is work the branch did not cause, so fixing it would fold an unrelated mission into the branch. Name each in the report.
 

@@ -11,7 +11,7 @@ For whoever wires a gaffer command into a chain script, a scheduled runner or a 
 | `verify` | Commits formatting, then the review's fixes after a green re-run, or after a failure that did not reproduce in a test file the branch left untouched, or whose file the output did not show, which the report names. A fix it cannot land is left uncommitted and named in the report. |
 | `raise-pr` | Pushes the branch and opens the PR — as a draft when passed `--draft` — adding `Closes #<N>` only when `gh` confirms that open issue in this repository. |
 | `pre-review` | Runs `review-pr --dry-run` on the current branch's open PR, posting nothing; commits and pushes its fix only after a green suite, edits the PR body where a finding is about the body, and marks the PR ready if it was a draft. A failure pushes nothing failing and leaves a draft a draft. |
-| `review-pr` | Posts one PR review — verified Critical and Major findings inline, and a summary marked `<!-- review-pr -->` that also lists Minor observations as unverified notes, split into Minor and mechanical — unless `--dry-run`. |
+| `review-pr` | Posts one PR review — verified Critical and Major findings inline, and a summary marked `<!-- review-pr -->` that also lists verified Minor observations as notes, split into Minor and mechanical — unless `--dry-run`. |
 | `review-followup` | Replies in, resolves and re-opens review threads, and posts the next round; at most three rounds. |
 | `reviewissue` | Posts the review comment marked `<!-- speckit:review -->` and adds `needs answers`; a re-run edits that comment in place. |
 | `confirmissue` | Rewrites the issue body with `## Confirmed decisions`, swaps `needs answers` for `ready`, then deletes the review comment — only after reading both changes back. |
