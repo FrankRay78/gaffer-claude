@@ -8,7 +8,7 @@ Everything that crosses between gaffer and a repository goes through one of thes
 
 ## 2. `CONVENTIONS.md` and `REVIEW.md`
 
-The commands read conventions and review criteria section by section, from the plugin's [`defaults/`](../defaults/) and from the repository root. `REVIEW.md` is read by `review-pr` and `review-followup` (and `verify`, for *Where it runs*); `CONVENTIONS.md` by the rest.
+The commands read conventions and review criteria section by section, from the plugin's [`defaults/`](../defaults/) and from the repository root. `REVIEW.md` is read by `review-pr` and `review-followup` (and `verify`, for *Where it runs*); `CONVENTIONS.md` by the rest, and by `review-pr` and `review-followup` for the comment rule under *Code quality*, which `build` writes to and `verify`, `review-slop` and the pull request review hold a branch to.
 
 - **They combine.** For each heading, the default section is read, then the repository's section of the same name; the repository's is an addition and wins where they conflict.
 - **A repository can replace a default.** A section whose first line is exactly `Replaces the default.` is read instead of the default.
