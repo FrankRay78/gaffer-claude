@@ -23,7 +23,7 @@ The steps in this file are generic. The conventions they run on — the formatte
 | Heading | Supplies |
 |---|---|
 | `Build, test and format` | the formatter steps 1a and 3 run, and the build-and-test command steps 1b and 3 run |
-| `Code quality` | the comment rule step 2 briefs the reviewers with, counts a breach of as a defect, and holds a fix to |
+| `Code quality` | the comment rule step 2 briefs `comment-analyzer` with, counts a breach of as a defect, and holds a fix to |
 | `Commit messages` | the commit-message form steps 1a and 3 use |
 | `Hooks, scripts and plugins` | the pull-request hook step 1b weighs, the hooks that can block a commit, and the plugin the reviewers come from |
 

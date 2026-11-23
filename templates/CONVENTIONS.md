@@ -21,7 +21,7 @@ This repository's additions to the gaffer plugin's default conventions. Each sec
 
 ## Code quality
 
-<Standards, cross-platform or runtime constraints, build-time guarantees, and any addition to the default comment rule — or `Replaces the default.` and this repository's own.>
+<Standards, cross-platform or runtime constraints, build-time guarantees, and any addition to or override of the default comment rule. `Replaces the default.` drops every default rule in this section, not only the comment rule.>
 
 ## Dependencies
 

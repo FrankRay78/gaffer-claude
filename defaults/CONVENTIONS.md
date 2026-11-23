@@ -37,7 +37,7 @@ No default rules beyond what the codebase shows, and the comment rule below: `/g
 **Comments.** The rule governs every comment a branch adds or changes; comments it does not touch are left as they are.
 
 - **Purpose** — a comment states a non-obvious why: a constraint, a workaround, a surprising consequence. It never narrates what the code or a test does.
-- **Length** — one or two lines. Reasoning that needs more goes in a change-intent record where the repository keeps them (*Change-intent records*), and the comment links it. Where it keeps none, the reasoning goes in the commit message body and the comment is still cut to the rule; a repository that wants long explanations kept adopts change-intent records.
+- **Length** — one or two lines. Reasoning that needs more goes in a change-intent record where the repository keeps them and the change warrants one (*Change-intent records*), and the comment links it. Otherwise the reasoning goes in the commit message body and the comment is still cut to the rule; a repository that wants long explanations kept adopts change-intent records.
 - **Regression markers** — the comment naming a fixed bug under the regression exception (*Acceptance criteria*) is one line.
 - **Fixing a comment** — a fix to an inaccurate comment shortens it or deletes it, never lengthens it.
 - **Judged absolutely** — the rule wins over the surrounding file: a comment that breaks it is a breach however many comments around it share its shape, and the patterns in the files a branch touches do not extend to their comments.
