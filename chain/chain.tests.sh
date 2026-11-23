@@ -943,7 +943,7 @@ settings '{"stages": {"pre-review": {"model": "m-pre"}}}'
 reply 1 "$(ready)"; reply 2 "$(verified)"; reply 3 "$(raised)"
 chain 270
 ok "a pre-review row without the opt-in adds no stage" '[ "$RC" = 0 ] && [ "$(calls)" = 3 ]'
-for bad in '{"pre_review": "yes"}' '{"pre_review": 1}' '{"pre_review": true, "stages": {"pre-review": {"effort": "hgih"}}}'; do
+for bad in '{"pre_review": "yes"}' '{"pre_review": 1}' '{"pre_review": true, "stages": {"pre-review": {"effort": "hgih"}}}' '{"stages": {"pre-review": {"effort": "hgih"}}}'; do
   new_case
   settings "$bad"
   chain 270
@@ -971,7 +971,7 @@ settings '{"pre_review": true}'
 reply 1 "$(ready)"; reply 2 "$(verified)"; reply 3 "$(raised)"
 reply 4 '{"schema": 1, "outcome": "pre-reviewed", "pr": "https://github.com/o/r/pull/10"}'
 chain 270
-ok "a pre-review of some other pull request is a failure" '[ "$RC" = 1 ] && grep -qF "FAILED at [4/4] pre-review" <<<"$OUTPUT" && grep -qF "pull/10" <<<"$OUTPUT"'
+ok "a pre-review of some other pull request is a failure" '[ "$RC" = 1 ] && closing | head -n 1 | grep -qF "not the pull request raise-pr opened (https://github.com/o/r/pull/9)"'
 new_case
 settings '{"pre_review": true}'
 reply 1 "$(ready)"; reply 2 "$(failed 'suite red')"

@@ -132,6 +132,9 @@ if [ -f "$STUB_DIR/draft-then-fail-$n" ]; then
   prs="$STUB_DIR/prs.json"; [ -f "$prs" ] || echo '[]' > "$prs"
   jq --argjson n "$n" '. += [{number: (100 + $n), url: "https://github.com/o/r/pull/\(100 + $n)", isDraft: true, headRefName: "feature/\($n)-work", closingIssuesReferences: [{number: $n}]}]' \
     "$prs" > "$prs.tmp" && mv "$prs.tmp" "$prs"
+  # pr-lookup-fails-<n>: from here on every `gh pr` call fails, so only the runner's park-time
+  # lookup sees the outage, not its earlier selection.
+  [ -f "$STUB_DIR/pr-lookup-fails-$n" ] && touch "$STUB_DIR/gh-fail-pr"
   echo "chain: FAILED at [4/4] pre-review — suite red after the fix"
   exit "$(cat "$STUB_DIR/draft-then-fail-$n" 2>/dev/null | grep . || echo 1)"
 fi
@@ -388,13 +391,20 @@ issues '[{"number":8,"state":"OPEN","labels":["ready"]}]'
 touch "$STUB_DIR/draft-then-fail-8"
 fire
 ok "the issue is parked at the pre-review, with its reason" '[ "$RC" != 0 ] && [ "$(labels_of 8)" = "ready,parked" ] && grep -qF "stopped at **[4/4] pre-review** — suite red after the fix" "$STUB_DIR/comment-8.txt"'
-ok "the comment names the open draft" 'grep -qF "https://github.com/o/r/pull/108 is open from \`feature/8-work\`, left as a draft" "$STUB_DIR/comment-8.txt"'
+ok "the comment names the open draft" 'grep -qF "https://github.com/o/r/pull/108 is open from \`feature/8-work\`" "$STUB_DIR/comment-8.txt"'
 ok "and does not call its branch one with no open pull request" '! grep -qF "has no open pull request" "$STUB_DIR/comment-8.txt"'
 ok "and says un-parking alone will not rebuild it: finish the draft by hand, or close it and remove the label" 'grep -qF "removing the \`parked\` label alone will not rebuild it" "$STUB_DIR/comment-8.txt" && grep -qF "/gaffer:pre-review" "$STUB_DIR/comment-8.txt" && grep -qF "or close it, delete its branch, and remove the label" "$STUB_DIR/comment-8.txt" && ! grep -qF "Remove the \`parked\` label to have the runner build this issue again" "$STUB_DIR/comment-8.txt"'
 ok "the draft and its branch are left on GitHub" '[ "$(jq length "$STUB_DIR/prs.json")" = 1 ] && git -C "$ORIGIN" rev-parse -q --verify refs/heads/feature/8-work >/dev/null'
 unpark 8
 fire
 ok "un-parked with the draft still open, it is not built again" '[ "$RC" = 0 ] && [ "$(chain_calls)" = 8 ]'
+new_case
+issues '[{"number":8,"state":"OPEN","labels":["ready"]}]'
+touch "$STUB_DIR/draft-then-fail-8" "$STUB_DIR/pr-lookup-fails-8"
+fire
+ok "when the pull request lookup fails at park time, the issue is still parked" '[ "$(labels_of 8)" = "ready,parked" ]'
+ok "and the comment does not call the pushed branch one with no pull request" '! grep -qF "has no open pull request" "$STUB_DIR/comment-8.txt"'
+ok "but says the lookup could not be checked, and to check before un-parking" 'grep -qF "\`feature/8-work\` was pushed, but whether a pull request is open for it could not be checked. Check before un-parking" "$STUB_DIR/comment-8.txt"'
 new_case
 issues '[{"number":8,"state":"OPEN","labels":["ready"]}]'
 echo 75 > "$STUB_DIR/draft-then-fail-8"

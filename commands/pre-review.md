@@ -39,7 +39,7 @@ A section under any other heading is read too, and applied where its text says. 
    - `gh pr view --json number,url,state,isDraft,headRefName,headRefOid` names an open pull request for this branch. Reason: `no open pull request for this branch`.
    - `git rev-parse HEAD` equals the pull request's `headRefOid`, so the review reads exactly what is pushed, in this checkout, and the fix lands on top of it. Reason: `the branch and its pull request are at different commits`.
 
-   Note whether the pull request is a draft (`isDraft`); step 5 reads it.
+   Note whether the pull request is a draft (`isDraft`); step 5 reads it. Note `headRefOid` as the starting HEAD; step 3 reads it.
 
 1. **Review, posting nothing.** Run `/gaffer:review-pr <number> --dry-run` in this session (the Skill tool, `gaffer:review-pr`), with the pull request's number, and follow it to its end. With HEAD at the pull request's head it reviews this checkout in place. `--dry-run` is not optional: the run must post no review, comment, reply or label, and if you see that it posted anything, STOP. Reason: `the dry-run review posted to the pull request`.
 
@@ -62,7 +62,7 @@ A section under any other heading is read too, and applied where its text says. 
 
    If a subagent this step starts errors, STOP.
 
-3. **Verify, commit and push the fix.** If the tree is clean, there is no fix commit: go to step 4. Otherwise:
+3. **Verify, commit and push the fix.** If the tree is clean and `git rev-parse HEAD` still equals the starting HEAD from step 0, there is no fix commit: go to step 4. Otherwise — the tree is dirty, or something committed during steps 1–2 — every bullet below runs, and the commit bullet commits whatever is uncommitted:
    - **Format** with the project's formatter (`CONVENTIONS.md` → *Build, test and format*); skip where it names none. A non-zero exit ⇒ STOP. Reason: `formatting failed`.
    - **Run** the project's build-and-test command. Not green ⇒ STOP, with the failing suite as the reason, and say that the tree holds the fix uncommitted, that nothing was pushed, and that discarding the edits is the recovery. Do not commit a red fix.
    - **Commit** whatever the tree holds with `git add -A`, immediately, in the project's form (`CONVENTIONS.md` → *Commit messages*) — e.g. `Refs #<N>: apply pre-review findings`, with the issue number read off the branch name, and no prefix where it carries none. The message names no finding.
@@ -70,7 +70,7 @@ A section under any other heading is read too, and applied where its text says. 
 
    Do not review the commit you just made.
 
-4. **Correct the body**, where step 2 held a corrected body. Write it to the scratch file (`CONVENTIONS.md` → *Scratch files*) with the native `Write` tool, never a shell heredoc, and run `gh pr edit <number> --body-file <scratch file>`. A failure ⇒ STOP; say what was pushed.
+4. **Correct the body**, where step 2 held a corrected body. Write it to `pre-review-body.md` in the scratch directory (`CONVENTIONS.md` → *Scratch files*) with the native `Write` tool, never a shell heredoc, and run `gh pr edit <number> --body-file <scratch file>`. A failure ⇒ STOP; say what was pushed.
 
 5. **Mark it ready**, only if step 0 found a draft: `gh pr ready <number>`. A failure ⇒ STOP, saying the fix is pushed and the pull request is still a draft. A pull request that was already ready is left alone.
 

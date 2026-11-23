@@ -56,7 +56,7 @@ This project keeps none by default, so `/gaffer:build` writes none and `/gaffer:
 
 ## Scratch files
 
-`.claude/scratch/` at the repository root, git-ignored; the `Write` tool creates it when it is missing. The files the commands write there: `/gaffer:raise-pr` the pull request body to `raise-pr-body.md`; `/gaffer:draftissue` the issue body to `gh-issue-body-<slug>.md`, where the slug is a short kebab-case form of the title; `/gaffer:reviewissue` the review comment to `reviewissue-body.md`; `/gaffer:confirmissue` the issue body to `confirmissue-body.md` and the patch to `confirmissue-patch.json`; `/gaffer:review-pr` its review to `review-pr-<N>.json` and a worktree to `review-pr-<N>/`; `/gaffer:audit-codebase` its working files under `audit/`. A repository that keeps scratch files elsewhere, or ignores them differently, says so here.
+`.claude/scratch/` at the repository root, git-ignored; the `Write` tool creates it when it is missing. The files the commands write there: `/gaffer:raise-pr` the pull request body to `raise-pr-body.md`; `/gaffer:pre-review` a corrected pull request body to `pre-review-body.md`; `/gaffer:draftissue` the issue body to `gh-issue-body-<slug>.md`, where the slug is a short kebab-case form of the title; `/gaffer:reviewissue` the review comment to `reviewissue-body.md`; `/gaffer:confirmissue` the issue body to `confirmissue-body.md` and the patch to `confirmissue-patch.json`; `/gaffer:review-pr` its review to `review-pr-<N>.json` and a worktree to `review-pr-<N>/`; `/gaffer:audit-codebase` its working files under `audit/`. A repository that keeps scratch files elsewhere, or ignores them differently, says so here.
 
 ## Pull requests
 

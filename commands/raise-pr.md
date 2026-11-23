@@ -1,5 +1,5 @@
 ---
-description: Raise a PR for the current feature branch — composes a PR body sized to the change and pushes. The review-pr workflow reviews the PR once it opens.
+description: Raise a PR for the current feature branch — composes a PR body sized to the change and pushes. The review-pr workflow reviews the PR once it is opened ready, or marked ready.
 argument-hint: "[--draft] [issue number or URL]"
 ---
 

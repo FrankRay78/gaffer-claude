@@ -24,7 +24,7 @@ The confirmed issue **is** the specification. There is no separate spec, plan or
 
 4. `/gaffer:build <N>` — branch, failing tests first, implementation, docs, all committed. Ends on a green, committed branch.
 5. `/gaffer:verify` — format, whole suite (the gate), one clean-context review, fix, re-run, commit. Ends on a green, reviewed branch; does not push.
-6. `/gaffer:raise-pr` — push and open the PR. A separate stage because it is the one outward-facing act; everything before it is safe to re-run.
+6. `/gaffer:raise-pr` — push and open the PR. A separate stage because it opens the pull request: only it, and the pre-review where a repository opts in to one, act on GitHub; everything before it is safe to re-run.
 7. `/gaffer:pre-review` (where the repository opts in) — `raise-pr` opens a draft; this runs `/gaffer:review-pr --dry-run` on it, fixes once what that review confirms, pushes the fix over a green suite and marks the PR ready, so the posted review reads a PR whose verified findings are already fixed. Minor notes are left for the author, and nothing it found is handed to the posted review.
 
 **The review**, asynchronous:

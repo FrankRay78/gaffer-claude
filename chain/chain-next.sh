@@ -205,7 +205,7 @@ reset_clone() {
 # every other failure: the chain decides that from the reply's typed error field, where the prose
 # could be a report quoting a limit message it merely read about.
 park() {
-  local n=$1 log=$2 rc=$3 closing stage reason kept remote body open_prs drafts b url
+  local n=$1 log=$2 rc=$3 closing stage reason kept remote body open_prs opened b url
   closing=$(grep -E '^chain: FAILED at \[[0-9]+/[0-9]+\] ' "$log" | tail -n 1)
   if [ -n "$closing" ]; then
     stage=$(sed -E 's/^chain: FAILED at (\[[0-9]+\/[0-9]+\] [^ ]+) — .*/\1/' <<<"$closing")
@@ -217,14 +217,15 @@ park() {
   fi
   kept=$(keep_attempts "$n" | paste -sd' ')
   remote=$(git ls-remote --heads origin "refs/heads/feature/$n-*" | awk '{sub("refs/heads/", "", $2); print $2}' | paste -sd' ')
-  # A pull request the run left open — a draft whose pre-review failed — keeps the issue from being
-  # selected again, so un-parking alone would not rebuild it. Found by its feature/<N>- branch, the
-  # one raise-pr opened it from. A query that fails is said in the comment rather than guessed at.
-  if open_prs=$(gh pr list --state open --json url,headRefName,isDraft --limit 1000 2>/dev/null) \
-      && drafts=$(jq -r --arg p "feature/$n-" '[.[] | select(.headRefName | startswith($p))] | map("\(.url) \(.headRefName)") | .[]' <<<"$open_prs" 2>/dev/null); then
+  # A pull request the run left open — typically a draft whose pre-review failed — keeps the issue
+  # from being selected again, so un-parking alone would not rebuild it. Found by its feature/<N>-
+  # branch, the one raise-pr opened it from. A query that fails is said in the comment rather than
+  # guessed at, and then no pushed branch is called one without a pull request.
+  if open_prs=$(gh pr list --state open --json url,headRefName --limit 1000 2>/dev/null) \
+      && opened=$(jq -r --arg p "feature/$n-" '[.[] | select(.headRefName | startswith($p))] | map("\(.url) \(.headRefName)") | .[]' <<<"$open_prs" 2>/dev/null); then
     :
   else
-    drafts=; open_prs=unreadable
+    opened=; open_prs=unreadable
   fi
   body="Parked by the chain runner: the chain stopped at **$stage** — $reason"$'\n\n'
   body+="- Full log on the build machine: \`$log\`"$'\n'
@@ -232,23 +233,24 @@ park() {
     body+="- The attempt's commits are kept locally in the runner's clone on \`$kept\` (not pushed)."$'\n'
   fi
   for b in $remote; do
-    awk -v b="$b" '$2 == b { f = 1 } END { exit !f }' <<<"$drafts" && continue
+    [ "$open_prs" = unreadable ] && break
+    awk -v b="$b" '$2 == b { f = 1 } END { exit !f }' <<<"$opened" && continue
     body+="- \`$b\` was pushed but has no open pull request. The runner never deletes anything on GitHub, so remove or reuse it by hand before un-parking, or the next push will be rejected."$'\n'
   done
   while read -r url b; do
     [ -n "$url" ] || continue
-    body+="- $url is open from \`$b\`, left as a draft; the verified work on it is pushed and kept."$'\n'
-  done <<<"$drafts"
+    body+="- $url is open from \`$b\`; the work on it is pushed and kept."$'\n'
+  done <<<"$opened"
   if [ "$open_prs" = unreadable ] && [ -n "$remote" ]; then
-    body+="- Whether a pull request is open for \`$remote\` could not be checked."$'\n'
+    body+="- \`$remote\` was pushed, but whether a pull request is open for it could not be checked. Check before un-parking: if one is open, the runner will not build this issue again until it is closed; if none is, remove or reuse the branch by hand, or the next push will be rejected."$'\n'
   fi
-  if [ -n "$drafts" ]; then
+  if [ -n "$opened" ]; then
     # The runner skips an issue with an open pull request, so removing the label alone would leave
-    # it parked in all but name. Either way out is the maintainer's: finish the draft, or close it.
+    # it parked in all but name. Either way out is the maintainer's: finish the pull request, or close it.
     if [ "$rc" = "$CHAIN_USAGE_LIMIT_EXIT" ]; then
-      body+=$'\n'"The chain stopped because the Claude usage limit was reached, not because anything is wrong with the issue or the draft."
+      body+=$'\n'"The chain stopped because the Claude usage limit was reached, not because anything is wrong with the issue or the pull request."
     fi
-    body+=$'\n'"The runner never builds an issue that has an open pull request, so removing the \`$PARKED_LABEL\` label alone will not rebuild it. Either finish the draft by hand — check out its branch, fix what stopped the run, and run \`/gaffer:pre-review\`, which marks it ready — or close it, delete its branch, and remove the label to have the runner build this issue again from scratch."
+    body+=$'\n'"The runner never builds an issue that has an open pull request, so removing the \`$PARKED_LABEL\` label alone will not rebuild it. Either finish the pull request by hand — check out its branch, fix what stopped the run, and run \`/gaffer:pre-review\`, which marks a draft ready — or close it, delete its branch, and remove the label to have the runner build this issue again from scratch."
   elif [ "$rc" = "$CHAIN_USAGE_LIMIT_EXIT" ]; then
     # Nothing to diagnose, so the comment says so first: a usage-limit stop and a genuine failure
     # would otherwise park identically, and the maintainer would read the transcript to tell them

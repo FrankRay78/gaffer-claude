@@ -119,7 +119,7 @@ It formats with the command you named, runs the whole suite as the gate, reviews
 /gaffer:raise-pr <number>
 ```
 
-It pushes the branch and opens the pull request, with a body sized to the change and `Closes #<number>`. That is the one outward-facing act in the sequence, which is why it is a command of its own.
+It pushes the branch and opens the pull request, with a body sized to the change and `Closes #<number>`. Opening the pull request is the first outward-facing act in the sequence, which is why it is a command of its own; only the pre-review, where a repository opts in, also acts on GitHub.
 
 To have the repository's own review run once, and its findings fixed, before anyone reads the pull request, raise it with `/gaffer:raise-pr --draft <number>` and then run `/gaffer:pre-review`, which marks it ready. The chain does this for you with `"pre_review": true` ([`chain.md`](chain.md), *The pre-review*).
 

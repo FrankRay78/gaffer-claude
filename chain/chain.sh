@@ -175,8 +175,8 @@ fi
 
 # Every tool the run depends on, named before an hour of model time is spent. Without this a
 # missing jq reads as a stage with no verdict and a missing git as a clean tree on no branch —
-# each blaming the model for a tool that was never installed. jq comes first because the settings
-# are read with it next.
+# each blaming the model for a tool that was never installed. jq is already checked above when a
+# settings file is given; it is listed here for a run without one.
 for tool in jq git claude gh timeout; do
   if ! command -v "$tool" >/dev/null 2>&1; then
     echo "chain: refused — $tool is not on PATH; no stage was started."
@@ -184,10 +184,10 @@ for tool in jq git claude gh timeout; do
   fi
 done
 
-# THE SETTINGS, read once, before any stage starts, so a stage the file misdescribes stops the run
-# with nothing done and a stage that rewrites the file cannot change a later stage's model. Only
-# `stages` and `pre_review` are read here; the runner reads the rest of the same file and checks
-# the keys it owns.
+# THE SETTINGS' STAGE ROWS, read before any stage starts, so a stage the file misdescribes stops the run
+# with nothing done and a stage that rewrites the file cannot change a later stage's model. The
+# `pre_review` opt-in was read before report mode; `stages` is read here. The runner reads the rest
+# of the same file and checks the keys it owns.
 SETTINGS_STAGES='{}'
 if [ -n "$settings_file" ]; then
   SETTINGS=$(jq -e 'if type == "object" then . else error("not an object") end' "$settings_file" 2>/dev/null) \
