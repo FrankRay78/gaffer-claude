@@ -8,7 +8,7 @@ For whoever wires a gaffer command into a chain script, a scheduled runner or a 
 |---|---|
 | `init` | Creates a `gaffer/init-<timestamp>` branch, commits, pushes and opens one pull request — only from a clean default branch — and creates any missing `needs answers`, `ready` and `parked` labels. Raises nothing when nothing is missing. |
 | `build` | Creates `feature/<N>-<slug>` from `origin/main` and commits to it — only from a clean `main` with no unpushed commits, for an open issue with no linked PR. Recreates a leftover branch of that name only if it holds nothing uninspected. |
-| `verify` | Commits formatting, then the review's fixes after a green re-run, or after a failure that did not reproduce in a test file the branch left untouched, which the report names. A fix it cannot land is left uncommitted and named in the report. |
+| `verify` | Commits formatting, then the review's fixes after a green re-run, or after a failure that did not reproduce in a test file the branch left untouched, or whose file the output did not show, which the report names. A fix it cannot land is left uncommitted and named in the report. |
 | `raise-pr` | Pushes the branch and opens the PR, adding `Closes #<N>` only when `gh` confirms that open issue in this repository. |
 | `review-pr` | Posts one PR review — verified Critical and Major findings inline, and a summary marked `<!-- review-pr -->` that also lists Minor observations as unverified notes, split into Minor and mechanical — unless `--dry-run`. |
 | `review-followup` | Replies in, resolves and re-opens review threads, and posts the next round; at most three rounds. |
