@@ -91,6 +91,8 @@ read_settings() {
   [ "$READY_LABEL" != "$PARKED_LABEL" ] || die "refused — in $f, the ready and parked labels are the same label; nothing was run."
   SKIP_PERMISSIONS=$(jq -r 'if .skip_permissions == null then false elif (.skip_permissions | type) == "boolean" then .skip_permissions else error("x") end' <<<"$s" 2>/dev/null) \
     || die "refused — in $f, skip_permissions is not true or false; nothing was run."
+  jq -e '.pre_review == null or (.pre_review | type) == "boolean"' <<<"$s" >/dev/null \
+    || die "refused — in $f, pre_review is not true or false; nothing was run."
   STATE=$(jq -r --arg d "${XDG_STATE_HOME:-$HOME/.local/state}/gaffer-chain/$(basename "$CLONE")" \
       'if .state_dir == null then $d elif (.state_dir | type) == "string" and (.state_dir | length) > 0 then .state_dir else error("x") end' <<<"$s" 2>/dev/null) \
     || die "refused — in $f, state_dir is not a non-empty string; nothing was run."
@@ -233,7 +235,10 @@ park() {
     body+="- The attempt's commits are kept locally in the runner's clone on \`$kept\` (not pushed)."$'\n'
   fi
   for b in $remote; do
-    [ "$open_prs" = unreadable ] && break
+    if [ "$open_prs" = unreadable ]; then
+      body+="- \`$b\` was pushed, but whether a pull request is open for it could not be checked. Check before un-parking: if one is open, the runner will not build this issue again until it is closed; if none is, remove or reuse the branch by hand, or the next push will be rejected."$'\n'
+      continue
+    fi
     awk -v b="$b" '$2 == b { f = 1 } END { exit !f }' <<<"$opened" && continue
     body+="- \`$b\` was pushed but has no open pull request. The runner never deletes anything on GitHub, so remove or reuse it by hand before un-parking, or the next push will be rejected."$'\n'
   done
@@ -242,9 +247,12 @@ park() {
     body+="- $url is open from \`$b\`; the work on it is pushed and kept."$'\n'
   done <<<"$opened"
   if [ "$open_prs" = unreadable ] && [ -n "$remote" ]; then
-    body+="- \`$remote\` was pushed, but whether a pull request is open for it could not be checked. Check before un-parking: if one is open, the runner will not build this issue again until it is closed; if none is, remove or reuse the branch by hand, or the next push will be rejected."$'\n'
-  fi
-  if [ -n "$opened" ]; then
+    # Whether the runner would build the issue again is unknown, so neither closing below holds.
+    if [ "$rc" = "$CHAIN_USAGE_LIMIT_EXIT" ]; then
+      body+=$'\n'"The chain stopped because the Claude usage limit was reached, not because anything is wrong with the issue."
+    fi
+    body+=$'\n'"Remove the \`$PARKED_LABEL\` label once you have checked, as above."
+  elif [ -n "$opened" ]; then
     # The runner skips an issue with an open pull request, so removing the label alone would leave
     # it parked in all but name. Either way out is the maintainer's: finish the pull request, or close it.
     if [ "$rc" = "$CHAIN_USAGE_LIMIT_EXIT" ]; then

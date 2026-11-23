@@ -405,6 +405,12 @@ fire
 ok "when the pull request lookup fails at park time, the issue is still parked" '[ "$(labels_of 8)" = "ready,parked" ]'
 ok "and the comment does not call the pushed branch one with no pull request" '! grep -qF "has no open pull request" "$STUB_DIR/comment-8.txt"'
 ok "but says the lookup could not be checked, and to check before un-parking" 'grep -qF "\`feature/8-work\` was pushed, but whether a pull request is open for it could not be checked. Check before un-parking" "$STUB_DIR/comment-8.txt"'
+ok "and closes by saying to remove the label only once that is checked" 'grep -qF "Remove the \`parked\` label once you have checked" "$STUB_DIR/comment-8.txt" && ! grep -qF "Remove the \`parked\` label to have the runner build this issue again" "$STUB_DIR/comment-8.txt"'
+new_case
+issues '[{"number":8,"state":"OPEN","labels":["ready"]}]'
+echo 75 > "$STUB_DIR/draft-then-fail-8"; touch "$STUB_DIR/pr-lookup-fails-8"
+fire
+ok "a usage-limit stop with the lookup failing says so, and still says to check before un-parking" 'grep -qF "usage limit was reached" "$STUB_DIR/comment-8.txt" && grep -qF "Remove the \`parked\` label once you have checked" "$STUB_DIR/comment-8.txt" && ! grep -qF "Nothing on this issue needs looking at" "$STUB_DIR/comment-8.txt"'
 new_case
 issues '[{"number":8,"state":"OPEN","labels":["ready"]}]'
 echo 75 > "$STUB_DIR/draft-then-fail-8"
@@ -567,6 +573,7 @@ for bad in \
   '{"clone": "CLONE", "writers": ["User:maintainer"], "labels": {"queued": "x"}}' \
   '{"clone": "CLONE", "writers": ["User:maintainer"], "labels": {"ready": "same", "parked": "same"}}' \
   '{"clone": "CLONE", "writers": ["User:maintainer"], "skip_permissions": "yes"}' \
+  '{"clone": "CLONE", "writers": ["User:maintainer"], "pre_review": "yes"}' \
   '{"clone": "CLONE", "writers": ["User:maintainer"], "state_dir": ""}' \
   '["not", "an", "object"]' \
   '{"clone": '

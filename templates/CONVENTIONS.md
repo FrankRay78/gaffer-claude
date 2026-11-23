@@ -4,7 +4,7 @@ This repository's additions to the gaffer plugin's default conventions. Each sec
 
 ## Build, test and format
 
-- **Build-and-test command** — `<the one command that builds and runs the whole suite>`, run from the repository root. Required: `/gaffer:build` and `/gaffer:verify` stop without it.
+- **Build-and-test command** — `<the one command that builds and runs the whole suite>`, run from the repository root. Required: `/gaffer:build`, `/gaffer:verify` and `/gaffer:pre-review` stop without it.
 - **Formatter** — `<the command CI checks, or delete this line to run with none>`.
 
 ## Test-driven development
