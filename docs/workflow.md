@@ -29,7 +29,7 @@ The confirmed issue **is** the specification. There is no separate spec, plan or
 
 **The review**, asynchronous:
 
-8. `/gaffer:review-pr` — a verified multi-pass review of the open PR, with a risk tier and a verdict on whether it may merge with no human review. `/gaffer:review-followup` runs later rounds. A person merges.
+8. `/gaffer:review-pr` — a verified multi-pass review of the open PR, with a risk tier and how much human review it needs: Optional, Light or Detailed. `/gaffer:review-followup` runs later rounds. A person merges.
 
 **Periodic**, not per feature: `/gaffer:capture-learnings` at a supervised checkpoint after several features; `/gaffer:audit-codebase` and `/gaffer:audit-deadcode` after a batch of merges or before a release; `/gaffer:context-gardening` quarterly.
 

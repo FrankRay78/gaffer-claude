@@ -33,7 +33,7 @@ Commands are typed as `/gaffer:<name>`. Each command's prompt under [`commands/`
 | `verify` | Formats, runs the whole suite as the gate, reviews the branch once in clean context, fixes and commits. | Yes |
 | `raise-pr` | Pushes the branch and opens the pull request with a verified `Closes #N`, as a draft when passed `--draft`. | Yes |
 | `pre-review` | Runs `review-pr --dry-run` on the branch's open pull request, fixes once what it confirms, pushes the fix over a green suite and marks a draft ready. Posts no review. | Yes |
-| `review-pr` | Multi-pass verified review of an open PR: triage map, specialist passes, inline comments, risk tier, no-human-merge verdict. | Yes |
+| `review-pr` | Multi-pass verified review of an open PR: triage map, specialist passes, inline comments, risk tier, how much human review it needs. | Yes |
 | `review-followup` | A later round on a reviewed PR: evaluates replies, verifies fixes, re-reviews only the new diff. Caps at three rounds. | Yes |
 | `review-slop` | Reviews a branch diff for AI-generated slop and emits a cleaned diff. | No prompts, no side effects |
 | `audit-codebase` | Whole-tree audit across five lenses, every finding challenged before it is reported, raised as one issue. | Once given a `<since-ref>` |

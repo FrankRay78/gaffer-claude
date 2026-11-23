@@ -79,7 +79,7 @@ A section under any other heading is read too, and applied where its text says. 
 Report, in this order:
 
 - The pull request, and whether it was a draft and is now ready.
-- What the review found: the counts of findings by severity, of Minor notes and of mechanical notes, and the risk tier and no-human verdict it gave.
+- What the review found: the counts of findings by severity, of Minor notes and of mechanical notes, and the risk tier and human-review level it gave.
 - What was fixed: each finding and mechanical note fixed, by `file:line` and claim; the fix commit, and that the suite passed against it; and whether the body was corrected. Or that there was nothing to fix and no commit was added.
 - What was left: each Minor note, each Pre-existing item, and each mechanical note whose claim did not hold, by `file:line` and claim. This report is the only place they are recorded — do not raise an issue for one, write it to a file, or put it in the pull request.
 - Whether the branch edits `REVIEW.md` (step 1).

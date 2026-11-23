@@ -130,7 +130,7 @@ To have the repository's own review run once, and its findings fixed, before any
 /gaffer:review-pr <pr-number>
 ```
 
-A triage map, specialist passes in parallel, every candidate verified before it is listed, Critical and Major findings posted inline, Minor observations listed in the summary as notes, split into those needing a judgement call and mechanical ones, a risk tier and a merge recommendation. Run it locally like this, or from CI when the pull request is opened ready or marked ready ([`unattended.md`](unattended.md), *In CI*). A later round, after the author has replied, is `/gaffer:review-followup <pr-number>`.
+A triage map, specialist passes in parallel, every candidate verified before it is listed, Critical and Major findings posted inline, Minor observations listed in the summary as notes, split into those needing a judgement call and mechanical ones, a risk tier, how much human review the pull request needs, and a merge recommendation. Run it locally like this, or from CI when the pull request is opened ready or marked ready ([`unattended.md`](unattended.md), *In CI*). A later round, after the author has replied, is `/gaffer:review-followup <pr-number>`.
 
 ## 7. Fill in what init could not
 
