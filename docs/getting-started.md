@@ -94,6 +94,7 @@ This is the one convention with no default. If the *Set up gaffer* pull request 
 ## Build, test and format
 
 - **Build-and-test command** — `<the one command that builds the repository and runs its whole test suite>`, run from the repository root.
+- **Single-test command** — `<the command that runs only the named tests>`, or delete this line; without it `/gaffer:verify` re-runs the whole suite to check a failing test.
 - **Formatter** — `<the command CI checks formatting with>`, or delete this line if there is none.
 ```
 

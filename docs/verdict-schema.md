@@ -25,7 +25,7 @@ Each command has one success outcome, and all four share the failure outcome:
 | `/gaffer:raise-pr` | `{"schema": 1, "outcome": "raised", "pr": "<url>"}` | `{"schema": 1, "outcome": "failed", "reason": "<short reason>"}` |
 | `/gaffer:pre-review` | `{"schema": 1, "outcome": "pre-reviewed", "pr": "<url>"}` | `{"schema": 1, "outcome": "failed", "reason": "<short reason>"}` |
 
-A success verdict is written only for work the run did: `raised` names a pull request this run opened, `ready` and `verified` describe a suite this run saw pass, and `pre-reviewed` names a pull request this run reviewed, whose fixes it pushed over a passing suite and which it left ready for review. A success verdict that also carries a `reason` contradicts itself and is not read as a success.
+A success verdict is written only for work the run did: `raised` names a pull request this run opened, `ready` and `verified` describe a suite this run saw pass, and `pre-reviewed` names a pull request this run reviewed, whose fixes it pushed over a passing suite and which it left ready for review — save that `verified` may carry on past a failure that did not reproduce in a test file the branch left untouched, or whose file the output did not show, which its report names. A success verdict that also carries a `reason` contradicts itself and is not read as a success.
 
 **Fields a reader does not recognise are ignored.** A verdict of version 1 may carry more than the fields above, and a reader of version 1 behaves exactly as it would without them. That is what lets a command add to its verdict — assumptions, deferred findings — without a version bump and without touching anything that reads it.
 
