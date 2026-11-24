@@ -42,7 +42,7 @@ Commands are typed as `/gaffer:<name>`. Each command's prompt under [`commands/`
 | `capture-learnings` | Mines a session and a branch for durable learnings and applies the approved ones. | No — you pick candidates |
 | `context-gardening` | Prunes `CLAUDE.md`, its linked docs and `.claude/memory/`. | No — you pick candidates |
 
-Plus the **`no-chmod` hook**, which refuses a `chmod` that would set the executable bit and names `bash script.sh` instead, so an unattended run is redirected rather than stalled on a permission prompt, and **the chain** under [`chain/`](chain/): `chain.sh` runs the build stages for one issue — with the pre-review after them where a repository opts in — `chain-next.sh` picks the next ready issue from a timer and parks the ones that fail. Both are run from a clone of this repository, not from the installed plugin ([`docs/chain.md`](docs/chain.md)).
+Plus the **`no-chmod` hook**, which refuses a `chmod` that would set the executable bit and names `bash script.sh` instead, so an unattended run is redirected rather than stalled on a permission prompt, and **the chain** under [`chain/`](chain/): `chain.sh` runs the build stages for one issue — with the pre-review after them where a repository opts in — `chain-next.sh` picks the next ready issue from a timer and parks the ones that fail, and `chain-review.sh` runs the chain for one issue by hand and then `review-pr` on its pull request, for a repository with no CI review. Both are run from a clone of this repository, not from the installed plugin ([`docs/chain.md`](docs/chain.md)).
 
 ## Installing
 
@@ -97,7 +97,7 @@ To enable it for every clone of a repository, commit this to its `.claude/settin
 .claude-plugin/   plugin.json and marketplace.json
 commands/         the slash commands
 hooks/            hooks.json, no-chmod.sh and its test matrix
-chain/            chain.sh, chain-next.sh and their test matrices — run from a clone, not from the installed plugin
+chain/            chain.sh, chain-next.sh, chain-review.sh and their test matrices — run from a clone, not from the installed plugin
 init/             setup.sh, the mechanical part of /gaffer:init, and its test matrix
 defaults/         the CONVENTIONS.md and REVIEW.md the commands run on when a repository says nothing
 templates/        copyable starting points for a repository's own two files

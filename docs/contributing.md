@@ -16,7 +16,7 @@ How this plugin is changed. It has one author and a short list of repositories t
 ## Tests and checks
 
 - `bash hooks/no-chmod.tests.sh` after any edit to the hook. The matrix is the hook's specification: every refused and allowed form, the known limits, and the wiring in `hooks.json`.
-- `bash chain/chain.tests.sh` and `bash chain/chain-next.tests.sh` after any edit to the chain. The first is the specification of how a verdict is read; the second, of what the runner selects and what a failure leaves behind. Both use stubs, so nothing is spent and nothing reaches GitHub.
+- `bash chain/chain.tests.sh`, `bash chain/chain-next.tests.sh` and `bash chain/chain-review.tests.sh` after any edit to the chain. The first is the specification of how a verdict is read; the second, of what the runner selects and what a failure leaves behind; the third, of when the hand-run wrapper reviews and what counts as a posted review. Both use stubs, so nothing is spent and nothing reaches GitHub.
 - `bash init/setup.tests.sh` after any edit to `init/setup.sh`. The matrix is the specification of what `/gaffer:init` sets up and what it leaves alone; it uses a stub `gh`, so nothing reaches GitHub.
 - `claude plugin validate .` after any edit to the manifests or the layout.
 - CI ([`.github/workflows/shell-tests.yml`](../.github/workflows/shell-tests.yml)) runs every committed `*.tests.sh`, discovered by name, and validates the manifests. A script that gains a matrix is gated the moment the matrix is committed. The `shell-tests` job is the one stable check name.
@@ -38,7 +38,7 @@ To change it, edit the file, apply with `gh api -X PUT repos/FrankRay78/gaffer-c
 .claude-plugin/   plugin.json and marketplace.json
 commands/         the slash commands, one markdown file each
 hooks/            hooks.json, no-chmod.sh and its test matrix
-chain/            chain.sh, chain-next.sh and their test matrices
+chain/            chain.sh, chain-next.sh, chain-review.sh and their test matrices
 init/             setup.sh and its test matrix
 defaults/         the CONVENTIONS.md and REVIEW.md the commands run on when a repository says nothing
 templates/        copyable starting points for a repository's own two files
