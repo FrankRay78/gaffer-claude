@@ -38,13 +38,15 @@ No default rules beyond what the codebase shows, and the comment rule below: `/g
 
 **Comments.** The rule governs every comment a branch adds or changes; comments it does not touch are left as they are.
 
-- **Purpose** — a comment states a non-obvious why: a constraint, a workaround, a surprising consequence. It never narrates what the code or a test does.
-- **Length** — one or two lines. Reasoning that needs more goes in a change-intent record where the repository keeps them and the change warrants one (*Change-intent records*), and the comment links it. Otherwise the reasoning goes in the commit message body and the comment is still cut to the rule; a repository that wants long explanations kept adopts change-intent records.
-- **Regression markers** — the comment naming a fixed bug under the regression exception (*Acceptance criteria*) is one line.
-- **Fixing a comment** — a fix to an inaccurate comment shortens it or deletes it, never lengthens it.
-- **Judged absolutely** — the rule wins over the surrounding file: a comment that breaks it is a breach however many comments around it share its shape, and the patterns in the files a branch touches do not extend to their comments.
+A comment earns its place by telling the reader what the code cannot: why it is written this way, a constraint it works within, or a trap that an obvious edit would fall into. Before keeping one, ask whether a competent reader of this code would miss it if it were gone, and if they would not, delete it. Say it plainly and briefly, and never restate what the code or a test name already says.
 
-Public API documentation a repository requires — XML docs, docstrings — is held to the rule only in keeping design rationale out of it; the repository's own section decides its length.
+A comment points out a gotcha; it does not argue a decision. Where the reasoning is a choice between alternatives, or a constraint future work must respect, it belongs in a change-intent record where the repository keeps them (*Change-intent records*), and the comment links it. Otherwise it belongs in the commit message.
+
+A wrong comment is fixed by saying less, or by deleting it.
+
+Where a repository requires public API documentation (XML docs, docstrings), every public member gets it in full: whatever a caller needs in order to use it. Design rationale stays out of it, as above.
+
+A comment is judged on its own merits. The comments around it in the file are no reason to keep it, and no pattern for writing a new one.
 
 ## Dependencies
 
