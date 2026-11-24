@@ -17,7 +17,7 @@ For whoever wires a gaffer command into a chain script, a scheduled runner or a 
 | `confirmissue` | Rewrites the issue body with `## Confirmed decisions`, swaps `needs answers` for `ready`, then deletes the review comment — only after reading both changes back. |
 | `audit-codebase` | Opens one issue, with only the label `CONVENTIONS.md` → *Audit* names. |
 | `chain/chain.sh` | Nothing of its own: build, verify and raise-pr — and pre-review, where the settings opt in — in order, stopping at the first that fails. |
-| `chain/chain-local.sh` | Nothing of its own: the chain, then `review-pr` on the pull request it opened — only when that is the checked-out branch's pull request — which posts a review under the caller's `gh` account. Succeeds only on the review-pr post-condition below, by that account. |
+| `chain/chain-local.sh` | Nothing of its own: the chain, then `review-pr` on the pull request it opened — only when that is the checked-out branch's pull request — which posts a review under the caller's `gh` account. Succeeds only on the review-pr post-condition below, met by a submitted review from that account. |
 | `chain/chain-next.sh` | Resets its own dedicated clone, runs the chain there, and on failure labels the issue `parked` with a comment, naming any draft PR a failed pre-review left open. Never pushes, merges or deletes on GitHub. |
 
 No command merges a PR, closes an issue by commit message, edits a source document it drew from, or edits the plugin's own files. Every chain stage stops with `conventions missing: <heading>` rather than invent a convention it needs, the build-and-test command above all.

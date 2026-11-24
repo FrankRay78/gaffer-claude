@@ -39,26 +39,42 @@ if [ -f "$STUB_DIR/sleep-$n" ]; then exec sleep "$(cat "$STUB_DIR/sleep-$n")"; f
 cat "$STUB_DIR/reply-$n.json" 2>/dev/null
 if [ -f "$STUB_DIR/rc-$n" ]; then exit "$(cat "$STUB_DIR/rc-$n")"; fi
 STUB
-# The stub gh answers the three reads the wrapper makes, and fails where a case gave it nothing:
-#   api user --jq .login          → the text in `login`
-#   pr view --json url ...        → the text in `branch-pr` (the checked-out branch's pull request)
-#   pr view <url> --json reviews… → the wrapper's own --jq filter, run by the real jq over the
-#                                   k-th review read's fixture, reviews-<k>.json
+# The stub gh answers the reads the wrapper makes as real gh does: it builds the JSON object the
+# call asks for, keeps only the fields its --json names, and applies its --jq where it has one. It
+# fails where a case gave it nothing to answer with. The data:
+#   api user                        → `login`
+#   pr view --json …                → `branch-pr` as url (the checked-out branch's pull request)
+#   pr view <url> --json …          → `head` as headRefOid, and the k-th reviews read's fixture,
+#                                     reviews-<k>.json, as reviews
 cat > "$SB/bin/gh" <<'STUB'
 #!/usr/bin/env bash
 { for a in "$@"; do printf '%s|' "$a"; done; printf '\n'; } >> "$STUB_DIR/gh-log"
-filter=; prev=
-for a in "$@"; do [ "$prev" = --jq ] && filter=$a; prev=$a; done
+filter=.; fields=; prev=
+for a in "$@"; do
+  [ "$prev" = --jq ] && filter=$a
+  [ "$prev" = --json ] && fields=$a
+  prev=$a
+done
+answer() { jq -c --arg f "$fields" '. as $o | if $f == "" then . else reduce ($f | split(","))[] as $k ({}; .[$k] = $o[$k]) end' | jq -r "$filter"; }
 case "$1 $2" in
-  "api user") cat "$STUB_DIR/login" 2>/dev/null ;;
+  "api user")
+    [ -f "$STUB_DIR/login" ] || exit 1
+    jq -n --rawfile l "$STUB_DIR/login" '{login: ($l | rtrimstr("\n"))}' | answer ;;
   "pr view")
     case "${3-}" in
       https://*)
-        k=$(( $(cat "$STUB_DIR/review-reads" 2>/dev/null || echo 0) + 1 ))
-        echo "$k" > "$STUB_DIR/review-reads"
-        [ -f "$STUB_DIR/reviews-$k.json" ] || exit 1
-        jq -r "$filter" "$STUB_DIR/reviews-$k.json" ;;
-      *) cat "$STUB_DIR/branch-pr" 2>/dev/null ;;
+        reviews=null
+        case ",$fields," in *,reviews,*)
+          k=$(( $(cat "$STUB_DIR/review-reads" 2>/dev/null || echo 0) + 1 ))
+          echo "$k" > "$STUB_DIR/review-reads"
+          [ -f "$STUB_DIR/reviews-$k.json" ] || exit 1
+          reviews=$(cat "$STUB_DIR/reviews-$k.json") ;;
+        esac
+        [ -f "$STUB_DIR/head" ] || exit 1
+        jq -n --rawfile h "$STUB_DIR/head" --argjson r "$reviews" '{headRefOid: ($h | rtrimstr("\n")), reviews: $r}' | answer ;;
+      *)
+        [ -f "$STUB_DIR/branch-pr" ] || exit 1
+        jq -n --rawfile u "$STUB_DIR/branch-pr" '{url: ($u | rtrimstr("\n"))}' | answer ;;
     esac ;;
   *) exit 1 ;;
 esac
@@ -81,6 +97,7 @@ new_case() {
   # The defaults every case starts from: signed in as $ME, on the branch whose pull request is $PR.
   printf '%s\n' "$ME" > "$STUB_DIR/login"
   printf '%s\n' "$PR" > "$STUB_DIR/branch-pr"
+  printf '%s\n' "$HEAD_SHA" > "$STUB_DIR/head"
 }
 
 reply() {
@@ -102,7 +119,7 @@ good() { review "$ME" COMMENTED "$HEAD_SHA" "$GOOD_BODY"; }
 # reviews <k> <review JSON>… — the fixture for the k-th review read.
 reviews() {
   local k=$1; shift
-  printf '%s\n' "$@" | jq -s --arg h "$HEAD_SHA" '{headRefOid:$h, reviews:.}' > "$STUB_DIR/reviews-$k.json"
+  printf '%s\n' "$@" | jq -s . > "$STUB_DIR/reviews-$k.json"
 }
 # before_after <review JSON added by the review stage> — no reviews before, that one after.
 before_after() { reviews 1; reviews 2 "$1"; }
@@ -110,7 +127,7 @@ before_after() { reviews 1; reviews 2 "$1"; }
 run() { OUTPUT="$(cd "$REPO" && PATH="$SB/bin:$PATH" bash "$WRAPPER" "$@" <<<'never reaches a stage' 2>&1)"; RC=$?; }
 calls() { if [ -f "$STUB_DIR/log" ]; then grep -c '' "$STUB_DIR/log"; else echo 0; fi; }
 gh_calls() { if [ -f "$STUB_DIR/gh-log" ]; then grep -c '' "$STUB_DIR/gh-log"; else echo 0; fi; }
-review_reads() { if [ -f "$STUB_DIR/gh-log" ]; then grep -c "^pr|view|https://" "$STUB_DIR/gh-log"; else echo 0; fi; }
+review_reads() { if [ -f "$STUB_DIR/gh-log" ]; then grep -c "^pr|view|https://.*|--json|reviews|" "$STUB_DIR/gh-log"; else echo 0; fi; }
 call() { sed -n "$1p" "$STUB_DIR/log"; }
 last_line() { printf '%s\n' "$OUTPUT" | tail -n 1; }
 not_counted() { [ "$RC" = 1 ] && grep -qF "FAILED at review-pr — the review finished but no new review by $ME" <<<"$OUTPUT"; }
@@ -148,6 +165,16 @@ ok "a pending review does not count" 'not_counted'
 new_case; chain_ok; reply 4 "Reviewed."; before_after "$(review "$ME" COMMENTED other-sha "$GOOD_BODY")"
 run 270
 ok "a review on another commit does not count" 'not_counted'
+ok "the head commit is read once, before the review, so a push during it cannot disown it" '[ "$(grep -c -- "--json|headRefOid|" "$STUB_DIR/gh-log")" = 1 ]'
+new_case; chain_ok; reply 4 "Reviewed."; ME=octo_acme; printf '%s\n' "$ME" > "$STUB_DIR/login"
+before_after "$(review "$ME" COMMENTED "$HEAD_SHA" "$GOOD_BODY")"
+run 270
+ok "a login with an underscore, as an Enterprise Managed User has, is accepted" '[ "$RC" = 0 ]'
+new_case; chain_ok; reply 4 "Reviewed."; ME='a" or true or "'; printf '%s\n' "$ME" > "$STUB_DIR/login"
+before_after "$(review someone-else COMMENTED "$HEAD_SHA" "$GOOD_BODY")"
+run 270
+ok "a login is matched as data, so one that reads as jq cannot widen the filter" 'not_counted'
+ME=octocat
 new_case; chain_ok; reply 4 "Reviewed."; before_after "$(review "$ME" COMMENTED "$HEAD_SHA" $'<!-- review-pr -->\nNo tier line.')"
 run 270
 ok "a review without the Risk tier line does not count" 'not_counted'
@@ -162,6 +189,7 @@ echo "The pull request reviewed must be this branch's:"
 new_case; chain_ok; printf '%s\n' https://github.com/other/repo/pull/5 > "$STUB_DIR/branch-pr"
 run 270
 ok "a chain naming another pull request than the branch's runs no review" '[ "$RC" = 1 ] && [ "$(calls)" = 3 ] && grep -qF "the checked-out branch'"'"'s pull request is https://github.com/other/repo/pull/5; no review ran" <<<"$OUTPUT"'
+ok "and does not suggest reviewing the refused pull request by hand" '! grep -qF "/gaffer:review-pr" <<<"$OUTPUT"'
 new_case; chain_ok; rm "$STUB_DIR/branch-pr"
 run 270
 ok "a branch gh finds no pull request for runs no review" '[ "$RC" = 1 ] && [ "$(calls)" = 3 ] && grep -qF "gh found no pull request for the checked-out branch" <<<"$OUTPUT"'
@@ -212,7 +240,10 @@ run 270
 ok "reviews gh cannot read afterwards fail closed" '[ "$RC" = 1 ] && grep -qF "could not read the pull request'"'"'s reviews after" <<<"$OUTPUT"'
 new_case; chain_ok
 run 270
-ok "reviews gh cannot read beforehand stop before the review starts" '[ "$RC" = 1 ] && [ "$(calls)" = 3 ] && grep -qF "reviews before the review started" <<<"$OUTPUT"'
+ok "reviews gh cannot read beforehand stop before the review starts" '[ "$RC" = 1 ] && [ "$(calls)" = 3 ] && grep -qF "gh could not read the pull request'"'"'s reviews; no review ran" <<<"$OUTPUT"'
+new_case; chain_ok; before_after "$(good)"; rm "$STUB_DIR/head"
+run 270
+ok "a head commit gh cannot read stops before the review starts" '[ "$RC" = 1 ] && [ "$(calls)" = 3 ] && grep -qF "could not read the pull request'"'"'s head commit" <<<"$OUTPUT"'
 new_case; chain_ok; before_after "$(good)"
 jq -n '{type:"result",subtype:"error_during_execution",is_error:true,result:"",session_id:"sess-4"}' > "$STUB_DIR/reply-4.json"
 run 270

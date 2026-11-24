@@ -8,13 +8,11 @@
 # — and, only when the chain ends with `chain: done — <pull request>`, runs /gaffer:review-pr
 # against that pull request as one more headless `claude -p` stage, loaded from the same checkout.
 #
-# THE REVIEW'S RESULT. review-pr writes no verdict, so the stage is judged by the post-condition
-# docs/unattended.md states for it, read back from GitHub: one more review than before the stage
-# started that is by the account `gh` is signed in as, submitted rather than pending, on the pull
-# request's head commit, and carrying both the `<!-- review-pr -->` marker and the `Risk tier:`
-# line. A stage that exits 0 having posted nothing is a failure, and a review someone else posts
-# meanwhile does not count. The pull request reviewed must be the one `gh` finds for the checked-out
-# branch: the URL arrives through a model's verdict, and the review posts under the user's account.
+# THE REVIEW'S RESULT. review-pr writes no verdict, so the stage is judged by what it posted, read
+# back from GitHub (review_count): a stage that exits 0 having posted nothing is a failure, and a
+# review someone else posts meanwhile does not count. The pull request reviewed must be the one `gh`
+# finds for the checked-out branch: the URL arrives through a model's verdict, and the review posts
+# under the user's account.
 #
 # WHAT IT LEAVES. A chain failure is the chain's own: its output, its closing lines and its exit
 # code — 75 for the usage limit, 78 for a configuration fault — pass through, and no review runs.
@@ -109,19 +107,27 @@ review_fail() {
   exit "${2:-1}"
 }
 
-branch_pr=$(gh pr view --json url --jq .url 2>/dev/null) \
-  || review_fail "gh found no pull request for the checked-out branch, so $pr could not be confirmed as this branch's; no review ran"
-[ "$branch_pr" = "$pr" ] \
-  || review_fail "the chain named $pr, but the checked-out branch's pull request is $branch_pr; no review ran"
+# A refusal before the review: unlike review_fail, it does not suggest reviewing $pr by hand,
+# because what was refused may be the pull request itself.
+refuse() {
+  echo "chain-local: FAILED before review-pr — $1; no review ran."
+  echo "chain-local: the chain's work is on the checked-out branch; check its pull request before reviewing it."
+  exit 1
+}
 
-# review_count — the reviews that meet the post-condition in the header. The login is checked
-# before it is spliced into the filter, since `gh --jq` takes no variables. Fails closed: a gh
-# error or an answer that is not a number is no count.
+branch_pr=$(gh pr view --json url --jq .url 2>/dev/null) \
+  || refuse "gh found no pull request for the checked-out branch, so $pr could not be confirmed as this branch's"
+[ "$branch_pr" = "$pr" ] || refuse "the chain named $pr, but the checked-out branch's pull request is $branch_pr"
+
+# review_count <head> — the reviews the stage is judged by: those by the signed-in account,
+# submitted, on <head>, carrying the marker and the tier line (docs/unattended.md, plus the account
+# and state). <head> is the one read before the review, so a push during it does not disown the
+# review posted on the commit it read. Fails closed on a gh or jq error.
 review_count() {
   local n
-  n=$(gh pr view "$pr" --json reviews,headRefOid --jq ".headRefOid as \$head | [.reviews[] | select(
-      .author.login == \"$me\" and .state != \"PENDING\" and .commit.oid == \$head
-      and (.body | contains(\"$MARKER\")) and (.body | contains(\"Risk tier:\")))] | length" 2>/dev/null) || return 1
+  n=$(gh pr view "$pr" --json reviews 2>/dev/null | jq -e --arg me "$me" --arg head "$1" --arg marker "$MARKER" \
+      '[.reviews[] | select(.author.login == $me and .state != "PENDING" and .commit.oid == $head
+        and (.body | contains($marker)) and (.body | contains("Risk tier:")))] | length' 2>/dev/null) || return 1
   case "$n" in ''|*[!0-9]*) return 1 ;; esac
   echo "$n"
 }
@@ -129,14 +135,14 @@ review_count() {
 before=0
 if [ "$review_dry_run" = 0 ]; then
   me=$(gh api user --jq .login 2>/dev/null)
-  [[ $me =~ ^[A-Za-z0-9][A-Za-z0-9-]*$ ]] \
-    || review_fail "gh could not name the account it is signed in as; no review ran"
-  before=$(review_count) || review_fail "gh could not read the pull request's reviews before the review started"
+  [ -n "$me" ] || refuse "gh could not name the account it is signed in as"
+  head=$(gh pr view "$pr" --json headRefOid --jq .headRefOid 2>/dev/null)
+  [ -n "$head" ] || refuse "gh could not read the pull request's head commit"
+  before=$(review_count "$head") || refuse "gh could not read the pull request's reviews"
 fi
 
 echo "chain-local: review-pr — starting"
-# As chain.sh runs a stage: the prompt as the one positional after -p, stdin closed, and the
-# background-agent ceiling lifted so review-pr's parallel passes finish within the time limit.
+# Run as chain.sh's run_stage runs a stage; its comment says why each part is there.
 cmd=(claude -p "$(review_prompt "$pr")" --plugin-dir "$PLUGIN_ROOT" --model "$REVIEW_MODEL" --effort "$REVIEW_EFFORT" --output-format json)
 [ "$skip_permissions" = 0 ] || cmd+=(--dangerously-skip-permissions)
 reply=$(CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 timeout --kill-after=60 "$REVIEW_LIMIT" "${cmd[@]}" </dev/null)
@@ -175,8 +181,8 @@ if [ "$review_dry_run" = 1 ]; then
   exit 0
 fi
 
-after=$(review_count) || review_fail "gh could not read the pull request's reviews after the review"
+after=$(review_count "$head") || review_fail "gh could not read the pull request's reviews after the review"
 [ "$after" -gt "$before" ] \
-  || review_fail "the review finished but no new review by $me, submitted on the head commit and carrying the $MARKER marker and the Risk tier line, is on the pull request"
+  || review_fail "the review finished but no new review by $me, submitted on commit ${head:0:7} and carrying the $MARKER marker and the Risk tier line, is on the pull request"
 echo "chain-local: done — $pr reviewed"
 exit 0
