@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# chain-review.tests.sh — standalone test matrix for chain-review.sh.
+# chain-local.tests.sh — standalone test matrix for chain-local.sh.
 #
 # What the wrapper adds to the chain is one gate and one stage: the review runs only after the
 # chain ends on a pull request, and succeeds only when a review marked `<!-- review-pr -->` was
@@ -9,12 +9,12 @@
 # throwaway git repo under a mktemp sandbox. chain.tests.sh specifies the chain itself; this
 # matrix only checks what the wrapper passes to it and takes from it.
 #
-#   Usage:  bash chain/chain-review.tests.sh
+#   Usage:  bash chain/chain-local.tests.sh
 
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-WRAPPER="$HERE/chain-review.sh"
+WRAPPER="$HERE/chain-local.sh"
 PLUGIN_ROOT="$(cd "$HERE/.." && pwd)"
 
 SB="$(mktemp -d)"
@@ -94,7 +94,7 @@ ok "no stage can read the terminal" '[ ! -f "$STUB_DIR/stdin-leak" ]'
 ok "the chain's own output is shown" 'grep -qF "chain: done — $PR" <<<"$OUTPUT"'
 ok "the review's report is shown" 'grep -qx "Reviewed." <<<"$OUTPUT"'
 ok "the marked reviews are counted either side of the review" '[ "$(gh_calls)" = 2 ] && grep -qF "pr|view|$PR|--json|reviews|" "$STUB_DIR/gh-log"'
-ok "the closing line names the reviewed pull request" 'last_line | grep -qxF "chain-review: done — $PR reviewed"'
+ok "the closing line names the reviewed pull request" 'last_line | grep -qxF "chain-local: done — $PR reviewed"'
 
 echo "The chain's options reach it, and the review's model follows CHAIN_MODEL:"
 new_case; chain_ok; reply 4 "Reviewed."; counts 2 3
@@ -170,7 +170,7 @@ ok "a chain refusal in report mode passes through" '[ "$RC" = 78 ] && ! grep -qF
 echo "Arguments:"
 new_case
 run --bogus 270
-ok "an unknown option is refused before anything runs" '[ "$RC" = 1 ] && [ "$(calls)" = 0 ] && grep -qF "usage: chain-review.sh" <<<"$OUTPUT"'
+ok "an unknown option is refused before anything runs" '[ "$RC" = 1 ] && [ "$(calls)" = 0 ] && grep -qF "usage: chain-local.sh" <<<"$OUTPUT"'
 
 echo
 echo "$pass passed, $fail failed"

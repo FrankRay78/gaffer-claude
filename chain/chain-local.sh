@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# chain-review.sh — run the chain for one issue, then review the pull request it opened, by hand.
+# chain-local.sh — run the chain for one issue, then review the pull request it opened, by hand.
 #
 # For a repository with no CI review and no runner on a timer: the person starts this against one
 # confirmed issue from a terminal, and it takes the issue to a reviewed pull request. It runs
@@ -20,11 +20,11 @@
 # line names the pull request and the session to reopen, and the exit codes keep the chain's
 # meanings. This script writes nothing itself; only the review stage posts.
 #
-# Usage: chain-review.sh [--dry-run] [--review-dry-run] [--skip-permissions] [--settings <file>] <issue>
+# Usage: chain-local.sh [--dry-run] [--review-dry-run] [--skip-permissions] [--settings <file>] <issue>
 #   Every option but --review-dry-run is chain.sh's and is passed to it. --review-dry-run runs the
 #   review with --dry-run, so it prints what it would post and posts nothing. --skip-permissions
 #   applies to the review stage too. The review runs on CHAIN_MODEL, else opus, at high effort,
-#   within CHAIN_STAGE_TIMEOUT seconds, else 2h. Tests: chain-review.tests.sh beside this file.
+#   within CHAIN_STAGE_TIMEOUT seconds, else 2h. Tests: chain-local.tests.sh beside this file.
 
 set -uo pipefail
 
@@ -42,7 +42,7 @@ USAGE_LIMIT_EXIT=75
 MARKER='<!-- review-pr -->'
 
 usage() {
-  echo "usage: chain-review.sh [--dry-run] [--review-dry-run] [--skip-permissions] [--settings <file>] <issue>" >&2
+  echo "usage: chain-local.sh [--dry-run] [--review-dry-run] [--skip-permissions] [--settings <file>] <issue>" >&2
   echo "  runs chain.sh for the issue, then /gaffer:review-pr on the pull request it opened" >&2
   echo "  --review-dry-run: the review prints what it would post, and posts nothing" >&2
   echo "  every other option is chain.sh's; see docs/chain.md" >&2
@@ -91,7 +91,7 @@ rc=${PIPESTATUS[0]}
 # request shape so nothing else on that line is reviewed.
 pr=$(tail -n 1 "$log" | sed -n 's/^chain: done — //p')
 if ! [[ $pr =~ ^https://[^[:space:]]+/pull/[0-9]+$ ]]; then
-  echo "chain-review: FAILED — the chain succeeded but its closing line names no pull request; no review ran."
+  echo "chain-local: FAILED — the chain succeeded but its closing line names no pull request; no review ran."
   exit 1
 fi
 
@@ -106,12 +106,12 @@ review_count() {
 
 session=
 review_fail() {
-  echo "chain-review: FAILED at review-pr — $1"
-  echo "chain-review: $pr is open as the chain left it."
+  echo "chain-local: FAILED at review-pr — $1"
+  echo "chain-local: $pr is open as the chain left it."
   if [ -n "$session" ]; then
-    echo "chain-review: reopen the review with \`claude --resume $session\`, or run \`/gaffer:review-pr $pr\` again."
+    echo "chain-local: reopen the review with \`claude --resume $session\`, or run \`/gaffer:review-pr $pr\` again."
   else
-    echo "chain-review: run \`/gaffer:review-pr $pr\` again."
+    echo "chain-local: run \`/gaffer:review-pr $pr\` again."
   fi
   exit "${2:-1}"
 }
@@ -122,7 +122,7 @@ if [ "$review_dry_run" = 0 ]; then
 fi
 
 prompt=$(review_prompt "$pr")
-echo "chain-review: review-pr — starting"
+echo "chain-local: review-pr — starting"
 # As chain.sh runs a stage: the prompt as the one positional after -p, stdin closed, the
 # background-agent ceiling lifted so review-pr's parallel passes finish, and the time limit as the
 # stall detector.
@@ -155,12 +155,12 @@ else
 fi
 
 if [ "$review_dry_run" = 1 ]; then
-  echo "chain-review: done — $pr reviewed as a dry run; nothing was posted"
+  echo "chain-local: done — $pr reviewed as a dry run; nothing was posted"
   exit 0
 fi
 
 # The post-condition, checked on GitHub rather than taken from the report.
 after=$(review_count) || review_fail "gh could not read the pull request's reviews after the review"
 [ "$after" -gt "$before" ] || review_fail "the review finished but posted no review marked $MARKER"
-echo "chain-review: done — $pr reviewed"
+echo "chain-local: done — $pr reviewed"
 exit 0
