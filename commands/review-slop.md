@@ -19,7 +19,7 @@ Where neither file states a comment rule, criterion 1 runs on its generic text a
 
 "AI code slop" refers to code patterns that are characteristic of AI-generated code but inconsistent with human coding practices or the existing codebase style. Specifically, you should identify and remove:
 
-1. **Excessive or unnatural comments**: Comments that over-explain obvious code, are overly verbose, or break the comment rule (`CONVENTIONS.md` → *Code quality*). Judge each comment the diff adds or changes against that rule, not against the file: a comment that breaks it is slop even where the rest of the file — including comments this same branch wrote — shares its style. Cut it to the one non-obvious why it carries, or remove it. Leave comments the diff does not touch alone. Commented-out code counts too: delete it, git remembers.
+1. **Excessive or unnatural comments**: Comments that over-explain obvious code, are overly verbose, or break the comment rule (`CONVENTIONS.md` → *Code quality*). Judge each comment the diff adds or changes against that rule, not against the file: a comment that breaks it is slop even where the rest of the file — including comments this same branch wrote — shares its style. Cut it as the rule says, or remove it. Leave comments the diff does not touch alone. Commented-out code counts too: delete it, git remembers.
 
 2. **Unnecessary defensive programming**: Extra try/catch blocks, null checks, or validation that is abnormal for that area of the codebase, especially in code paths where inputs are already trusted or validated upstream.
 
