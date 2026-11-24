@@ -85,7 +85,7 @@ To enable it for every clone of a repository, commit this to its `.claude/settin
 - [`docs/workflow.md`](docs/workflow.md) — how the stages fit together, and why they are shaped this way.
 - [`docs/interfaces.md`](docs/interfaces.md) — everything that crosses between the plugin and a repository.
 - [`docs/verdict-schema.md`](docs/verdict-schema.md) — the verdict the build chain ends on, and how to read it.
-- [`docs/chain.md`](docs/chain.md) — running the build chain unattended: the two scripts, their settings file, the permissions opt-in and a scheduler.
+- [`docs/chain.md`](docs/chain.md) — running the build chain unattended: the three scripts, their settings file, the permissions opt-in and a scheduler.
 - [`docs/unattended.md`](docs/unattended.md) — running commands with nobody watching: what each touches, permissions, and the CI pattern.
 - [`docs/troubleshooting.md`](docs/troubleshooting.md) — the common failures.
 - [`docs/contributing.md`](docs/contributing.md) — how the plugin itself is changed.

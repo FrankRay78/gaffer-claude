@@ -37,15 +37,16 @@ bash /path/to/gaffer-claude/chain/chain-local.sh [--dry-run] [--review-dry-run] 
 For a repository with no CI review and no runner: started by hand against one confirmed issue, from the same place and with the same prerequisites as `chain.sh`. It runs `chain.sh` unchanged with the options it was given and, only when the chain ends on `chain: done — <pull request>`, runs `/gaffer:review-pr <pull request>` as one more headless stage, loaded from the same checkout. With `"pre_review": true` that is build → verify → raise-pr --draft → pre-review → review-pr: the posted review reads a pull request whose dry-run findings are already fixed.
 
 - **A chain failure is the chain's.** Its output, closing lines and exit code pass through, 75 and 78 included, and no review runs.
-- **The review is checked on GitHub.** `review-pr` writes no verdict, so the stage succeeds only when the pull request carries one more review marked `<!-- review-pr -->` than before it started. A review that exits cleanly having posted nothing fails, as does one claude reports as an error, a reply that is not JSON, or a stall; the usage limit exits 75. A failure leaves the pull request open as the chain raised it and names the session to reopen.
+- **Only this branch's pull request is reviewed.** The pull request the chain names must be the one `gh` finds for the checked-out branch, or no review runs: the name comes from a model's verdict, and the review posts under your account.
+- **The review is checked on GitHub.** `review-pr` writes no verdict, so the stage succeeds only on the post-condition [`unattended.md`](unattended.md) states for it: one more review than before it started that is by the account `gh` is signed in as, submitted rather than pending, on the head commit, and carrying the `<!-- review-pr -->` marker and the `Risk tier:` line. A review someone else posts meanwhile does not count. A review that exits cleanly having posted nothing fails, as does one claude reports as an error, a reply that is not JSON, or a stall; the usage limit exits 75. A failure leaves the pull request open as the chain raised it and names the session to reopen.
 - **It posts under your `gh` account**, as `review-pr` run by hand does. `--review-dry-run` has the review print what it would post and post nothing; `--dry-run` lists the chain's stages and the review and runs nothing.
 - **Don't use it where CI already reviews.** A repository whose workflow runs `review-pr` when a pull request is opened or marked ready would be reviewed twice.
 
-The review runs on `CHAIN_MODEL`, else `opus`, at high effort, within `CHAIN_STAGE_TIMEOUT`, else 2h; `--skip-permissions` applies to it too. It takes no row in the settings file.
+The review runs on `CHAIN_MODEL`, else `opus`, at high effort, within `CHAIN_STAGE_TIMEOUT`, else 2h; `--skip-permissions` applies to it too. It takes no row in the settings file. Skipping permissions on a machine you also work on is what [*Permissions*](#permissions) warns against: the review reads text the pull request's author controls.
 
 ## The settings file
 
-Both scripts read one JSON file in the repository they run for, conventionally `.gaffer/chain.json`, committed so a change to it is reviewed. Everything in it has a default except the two things that make the runner safe to leave alone:
+`chain.sh` and `chain-next.sh` read one JSON file in the repository they run for, conventionally `.gaffer/chain.json`, committed so a change to it is reviewed. Everything in it has a default except the two things that make the runner safe to leave alone:
 
 ```json
 {
@@ -137,4 +138,4 @@ To retry a parked issue, remove the label. To finish a parked attempt instead of
 
 ## Tests
 
-`bash chain/chain.tests.sh`, `bash chain/chain-next.tests.sh` and `bash chain/chain-local.tests.sh`, all run by CI. They use a stub `claude`, a stub `gh` and throwaway repositories under a temp directory, so no model is called, nothing reaches GitHub and your checkout is untouched. The chain matrix is the specification of how a verdict is read; the runner matrix, of what is selected and what a failure leaves behind.
+`bash chain/chain.tests.sh`, `bash chain/chain-next.tests.sh` and `bash chain/chain-local.tests.sh`, all run by CI. They use a stub `claude`, a stub `gh` and throwaway repositories under a temp directory, so no model is called, nothing reaches GitHub and your checkout is untouched. The chain matrix is the specification of how a verdict is read; the runner matrix, of what is selected and what a failure leaves behind; the local matrix, of when the hand-run wrapper reviews and which reviews count as posted.

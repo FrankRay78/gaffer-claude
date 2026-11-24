@@ -8,21 +8,25 @@
 # — and, only when the chain ends with `chain: done — <pull request>`, runs /gaffer:review-pr
 # against that pull request as one more headless `claude -p` stage, loaded from the same checkout.
 #
-# WHY A WRAPPER. review-pr writes no verdict: it posts a review and reports. Where a repository's CI
-# runs it on a pull request marked ready, the chain must not run it too, so it stays out of
-# chain.sh and out of the runner. What stands in for a verdict here is the post-condition
-# docs/unattended.md states for it: one more review marked `<!-- review-pr -->` on the pull request
-# than before the stage started. A stage that exits 0 having posted nothing is a failure.
+# THE REVIEW'S RESULT. review-pr writes no verdict, so the stage is judged by the post-condition
+# docs/unattended.md states for it, read back from GitHub: one more review than before the stage
+# started that is by the account `gh` is signed in as, submitted rather than pending, on the pull
+# request's head commit, and carrying both the `<!-- review-pr -->` marker and the `Risk tier:`
+# line. A stage that exits 0 having posted nothing is a failure, and a review someone else posts
+# meanwhile does not count. The pull request reviewed must be the one `gh` finds for the checked-out
+# branch: the URL arrives through a model's verdict, and the review posts under the user's account.
 #
 # WHAT IT LEAVES. A chain failure is the chain's own: its output, its closing lines and its exit
-# code — 75 for the usage limit, 78 for a configuration fault — pass through untouched, and no
-# review runs. A review failure leaves the pull request open, as the chain raised it; the closing
-# line names the pull request and the session to reopen, and the exit codes keep the chain's
-# meanings. This script writes nothing itself; only the review stage posts.
+# code — 75 for the usage limit, 78 for a configuration fault — pass through, and no review runs.
+# A review failure leaves the pull request open, as the chain raised it; the closing line names the
+# pull request and the session to reopen, and a usage-limit stop exits 75 as the chain's does. This
+# script writes nothing itself; only the review stage posts.
+#
+# Prerequisites: those of chain.sh, which checks them before its first stage.
 #
 # Usage: chain-local.sh [--dry-run] [--review-dry-run] [--skip-permissions] [--settings <file>] <issue>
-#   Every option but --review-dry-run is chain.sh's and is passed to it. --review-dry-run runs the
-#   review with --dry-run, so it prints what it would post and posts nothing. --skip-permissions
+#   Every listed option but --review-dry-run is chain.sh's and is passed to it. --review-dry-run runs
+#   the review with --dry-run, so it prints what it would post and posts nothing. --skip-permissions
 #   applies to the review stage too. The review runs on CHAIN_MODEL, else opus, at high effort,
 #   within CHAIN_STAGE_TIMEOUT seconds, else 2h. Tests: chain-local.tests.sh beside this file.
 
@@ -32,14 +36,14 @@ CHAIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_ROOT="$(cd "$CHAIN_DIR/.." && pwd)"
 CHAIN="$CHAIN_DIR/chain.sh"
 
-# review-pr is a multi-pass review with a verification pass, the shape the chain's verify and
-# pre-review stages have, so it takes their limit, model and effort.
 REVIEW_LIMIT=${CHAIN_STAGE_TIMEOUT:-7200}
 REVIEW_MODEL=${CHAIN_MODEL:-opus}
 REVIEW_EFFORT=high
-# The chain's own exit codes, kept for the review stage so a caller reads one set of meanings.
+# chain.sh's code for the usage limit, so a caller reads one meaning for it from either stage.
 USAGE_LIMIT_EXIT=75
 MARKER='<!-- review-pr -->'
+# chain.sh's own pull request shape (chain.sh PR_URL), so nothing it would refuse is reviewed here.
+PR_URL='^https://github\.com/[^[:space:]]+/pull/[0-9]+$'
 
 usage() {
   echo "usage: chain-local.sh [--dry-run] [--review-dry-run] [--skip-permissions] [--settings <file>] <issue>" >&2
@@ -68,10 +72,10 @@ review_prompt() {
   if [ "$review_dry_run" = 1 ]; then echo "/gaffer:review-pr $1 --dry-run"; else echo "/gaffer:review-pr $1"; fi
 }
 
-# Report mode: the chain's own listing, then the stage this script adds. The chain refuses bad
-# arguments here as it does on a real run, and its exit code is returned unchanged.
+# The guarded expansion: bash before 4.4 (macOS's /bin/bash) treats an empty array as unset under
+# `set -u`, so a run with no arguments would die here instead of showing chain.sh's usage.
 if [ "$dry_run" = 1 ]; then
-  bash "$CHAIN" "${chain_args[@]}"
+  bash "$CHAIN" ${chain_args[@]+"${chain_args[@]}"}
   rc=$?
   [ "$rc" = 0 ] || exit "$rc"
   echo "  then review-pr: $(review_prompt '<the pull request raise-pr opens>')"
@@ -79,30 +83,19 @@ if [ "$dry_run" = 1 ]; then
   exit 0
 fi
 
-# The chain's output is shown as it runs and kept, because its last line names the pull request.
-# The chain redirects every stage's stdin itself, so nothing here can reach a stage's terminal.
-log=$(mktemp)
+# Checked before the chain starts: without the log, a chain that opened a pull request would be
+# reported as having named none.
+log=$(mktemp) || { echo "chain-local: refused — mktemp failed; no stage was started."; exit 1; }
 trap 'rm -f "$log"' EXIT
-bash "$CHAIN" "${chain_args[@]}" 2>&1 | tee "$log"
+bash "$CHAIN" ${chain_args[@]+"${chain_args[@]}"} | tee "$log"
 rc=${PIPESTATUS[0]}
 [ "$rc" = 0 ] || exit "$rc"
 
-# Read from the chain's closing line alone, the line its own matrix pins, and held to the pull
-# request shape so nothing else on that line is reviewed.
 pr=$(tail -n 1 "$log" | sed -n 's/^chain: done — //p')
-if ! [[ $pr =~ ^https://[^[:space:]]+/pull/[0-9]+$ ]]; then
+if ! [[ $pr =~ $PR_URL ]]; then
   echo "chain-local: FAILED — the chain succeeded but its closing line names no pull request; no review ran."
   exit 1
 fi
-
-# review_count — how many reviews on the pull request carry the marker. Fails closed: a gh error
-# or an answer that is not a number is no count.
-review_count() {
-  local n
-  n=$(gh pr view "$pr" --json reviews --jq "[.reviews[] | select(.body | startswith(\"$MARKER\"))] | length" 2>/dev/null) || return 1
-  case "$n" in ''|*[!0-9]*) return 1 ;; esac
-  echo "$n"
-}
 
 session=
 review_fail() {
@@ -116,20 +109,46 @@ review_fail() {
   exit "${2:-1}"
 }
 
+branch_pr=$(gh pr view --json url --jq .url 2>/dev/null) \
+  || review_fail "gh found no pull request for the checked-out branch, so $pr could not be confirmed as this branch's; no review ran"
+[ "$branch_pr" = "$pr" ] \
+  || review_fail "the chain named $pr, but the checked-out branch's pull request is $branch_pr; no review ran"
+
+# review_count — the reviews that meet the post-condition in the header. The login is checked
+# before it is spliced into the filter, since `gh --jq` takes no variables. Fails closed: a gh
+# error or an answer that is not a number is no count.
+review_count() {
+  local n
+  n=$(gh pr view "$pr" --json reviews,headRefOid --jq ".headRefOid as \$head | [.reviews[] | select(
+      .author.login == \"$me\" and .state != \"PENDING\" and .commit.oid == \$head
+      and (.body | contains(\"$MARKER\")) and (.body | contains(\"Risk tier:\")))] | length" 2>/dev/null) || return 1
+  case "$n" in ''|*[!0-9]*) return 1 ;; esac
+  echo "$n"
+}
+
 before=0
 if [ "$review_dry_run" = 0 ]; then
+  me=$(gh api user --jq .login 2>/dev/null)
+  [[ $me =~ ^[A-Za-z0-9][A-Za-z0-9-]*$ ]] \
+    || review_fail "gh could not name the account it is signed in as; no review ran"
   before=$(review_count) || review_fail "gh could not read the pull request's reviews before the review started"
 fi
 
-prompt=$(review_prompt "$pr")
 echo "chain-local: review-pr — starting"
-# As chain.sh runs a stage: the prompt as the one positional after -p, stdin closed, the
-# background-agent ceiling lifted so review-pr's parallel passes finish, and the time limit as the
-# stall detector.
-cmd=(claude -p "$prompt" --plugin-dir "$PLUGIN_ROOT" --model "$REVIEW_MODEL" --effort "$REVIEW_EFFORT" --output-format json)
+# As chain.sh runs a stage: the prompt as the one positional after -p, stdin closed, and the
+# background-agent ceiling lifted so review-pr's parallel passes finish within the time limit.
+cmd=(claude -p "$(review_prompt "$pr")" --plugin-dir "$PLUGIN_ROOT" --model "$REVIEW_MODEL" --effort "$REVIEW_EFFORT" --output-format json)
 [ "$skip_permissions" = 0 ] || cmd+=(--dangerously-skip-permissions)
 reply=$(CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 timeout --kill-after=60 "$REVIEW_LIMIT" "${cmd[@]}" </dev/null)
 rc=$?
+
+exit_reason() {
+  case $1 in
+    124|137) echo "stalled or killed (exit $1), limit ${REVIEW_LIMIT}s" ;;
+    125|126|127) echo "the review could not be launched (exit $1)" ;;
+    *) echo "claude exited with $1" ;;
+  esac
+}
 
 if [ "$(jq -r 'type' 2>/dev/null <<<"$reply")" = object ]; then
   session=$(jq -r '.session_id // empty' <<<"$reply")
@@ -137,21 +156,18 @@ if [ "$(jq -r 'type' 2>/dev/null <<<"$reply")" = object ]; then
   [ -z "$result" ] || printf '%s\n' "$result"
   # Read from the typed field alone, as chain.sh reads it, never from the report's prose.
   if [ "$(jq -r '.api_error // empty' <<<"$reply")" = usage_limit_reached ]; then
-    review_fail "the Claude usage limit was reached — $(printf '%s\n' "$result" | tr -d '\r' | sed -e 's/[[:space:]]*$//' -e '/^$/d' | tail -n 1)" "$USAGE_LIMIT_EXIT"
+    detail=$(printf '%s\n' "$result" | tr -d '\r' | sed -e 's/[[:space:]]*$//' -e '/^$/d' | tail -n 1)
+    if [ -n "$detail" ]; then
+      review_fail "the Claude usage limit was reached — $detail" "$USAGE_LIMIT_EXIT"
+    fi
+    review_fail "the Claude usage limit was reached; the reply gave no reset time" "$USAGE_LIMIT_EXIT"
   fi
-  case $rc in
-    0) ;;
-    124|137) review_fail "stalled or killed (exit $rc), limit ${REVIEW_LIMIT}s" ;;
-    *) review_fail "claude exited with $rc" ;;
-  esac
+  [ "$rc" = 0 ] || review_fail "$(exit_reason "$rc")"
   [ "$(jq -r '.is_error // false' <<<"$reply")" != true ] \
     || review_fail "claude reported an error$(s=$(jq -r '.subtype // empty' <<<"$reply"); [ -z "$s" ] || echo " ($s)")"
 else
-  case $rc in
-    0) printf '%s\n' "$reply" >&2; review_fail "reply was not a JSON object (raw reply above)" ;;
-    124|137) review_fail "stalled or killed (exit $rc), limit ${REVIEW_LIMIT}s" ;;
-    *) review_fail "claude exited with $rc" ;;
-  esac
+  [ "$rc" != 0 ] || { printf '%s\n' "$reply" >&2; review_fail "reply was not a JSON object (raw reply above)"; }
+  review_fail "$(exit_reason "$rc")"
 fi
 
 if [ "$review_dry_run" = 1 ]; then
@@ -159,8 +175,8 @@ if [ "$review_dry_run" = 1 ]; then
   exit 0
 fi
 
-# The post-condition, checked on GitHub rather than taken from the report.
 after=$(review_count) || review_fail "gh could not read the pull request's reviews after the review"
-[ "$after" -gt "$before" ] || review_fail "the review finished but posted no review marked $MARKER"
+[ "$after" -gt "$before" ] \
+  || review_fail "the review finished but no new review by $me, submitted on the head commit and carrying the $MARKER marker and the Risk tier line, is on the pull request"
 echo "chain-local: done — $pr reviewed"
 exit 0
