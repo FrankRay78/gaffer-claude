@@ -40,9 +40,9 @@ No default rules beyond what the codebase shows, and the comment rule below: `/g
 
 A comment earns its place by telling the reader what the code cannot: why it is written this way, a constraint it works within, or a trap that an obvious edit would fall into. Before keeping one, ask whether a competent reader of this code would miss it if it were gone, and if they would not, delete it. Say it plainly and briefly, and never restate what the code or a test name already says.
 
-A comment points out a gotcha; it does not argue a decision. Where the reasoning is a choice between alternatives, or a constraint future work must respect, it belongs in a change-intent record where the repository keeps them (*Change-intent records*), and the comment links it. Otherwise it belongs in the commit message.
+A comment points out a gotcha; it does not argue a decision. Where the reasoning is a choice between alternatives, or a constraint future work must respect, it belongs in a change-intent record where the repository keeps them (*Change-intent records*), and the comment links it. Where the repository keeps none, it belongs in the commit message.
 
-A wrong comment is fixed by saying less, or by deleting it.
+A wrong comment is fixed by saying less, or by deleting it; required public API documentation is corrected to whatever a caller needs, as below.
 
 Where a repository requires public API documentation (XML docs, docstrings), every public member gets it in full: whatever a caller needs in order to use it. Design rationale stays out of it, as above.
 
