@@ -18,6 +18,8 @@ The approach is a *harness*: an agent constrained by context, feedback loops and
 2. `/gaffer:reviewissue` — reads the codebase and posts the gaps the issue leaves open, each with a recommendation. The author answers inline.
 3. `/gaffer:confirmissue` — folds the answers into *Confirmed decisions* and labels the issue `ready`.
 
+`/gaffer:graft` runs all three in one terminal session for one issue — the review in a clean-context agent, the answers settled with you as a conversation instead of on GitHub — and resumes where you stopped. The three commands still run separately, by hand or in CI.
+
 The confirmed issue **is** the specification. There is no separate spec, plan or task list.
 
 **The build chain**, unattended:

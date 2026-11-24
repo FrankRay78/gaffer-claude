@@ -29,6 +29,7 @@ Commands are typed as `/gaffer:<name>`. Each command's prompt under [`commands/`
 | `draftissue` | Turns an idea, a document, a backlog item or an old issue into a needs-first GitHub issue and raises it. | No — discusses open decisions |
 | `reviewissue` | Reviews an issue before building: posts the gaps and a recommendation for each as an inline-answerable comment, labels it `needs answers`. | Yes, given an issue number |
 | `confirmissue` | Folds the answered review into *Confirmed decisions* on the issue, labels it `ready`, deletes the review comment. | Yes, given an issue number |
+| `graft` | Takes one idea or issue to `ready` in a single terminal session: drafts it if needed, has a clean-context agent review it, settles each gap with you as a conversation, then confirms it. Saves each answer to the review comment, so `/gaffer:graft #N` resumes where you stopped. | No — a conversation, gap by gap |
 | `build` | Builds one issue to a green, committed `feature/<N>-<slug>` branch — RED-GREEN-REFACTOR, docs, nothing pushed. | Yes |
 | `verify` | Formats, runs the whole suite as the gate, reviews the branch once in clean context, fixes and commits. | Yes |
 | `raise-pr` | Pushes the branch and opens the pull request with a verified `Closes #N`, as a draft when passed `--draft`. | Yes |
