@@ -107,8 +107,8 @@ review_fail() {
   exit "${2:-1}"
 }
 
-# A refusal before the review: unlike review_fail, it does not suggest reviewing $pr by hand,
-# because what was refused may be the pull request itself.
+# For a pull request not confirmed as the branch's: unlike review_fail, it does not suggest
+# reviewing $pr by hand, because $pr itself is what was refused.
 refuse() {
   echo "chain-local: FAILED before review-pr — $1; no review ran."
   echo "chain-local: the chain's work is on the checked-out branch; check its pull request before reviewing it."
@@ -119,10 +119,9 @@ branch_pr=$(gh pr view --json url --jq .url 2>/dev/null) \
   || refuse "gh found no pull request for the checked-out branch, so $pr could not be confirmed as this branch's"
 [ "$branch_pr" = "$pr" ] || refuse "the chain named $pr, but the checked-out branch's pull request is $branch_pr"
 
-# review_count <head> — the reviews the stage is judged by: those by the signed-in account,
-# submitted, on <head>, carrying the marker and the tier line (docs/unattended.md, plus the account
-# and state). <head> is the one read before the review, so a push during it does not disown the
-# review posted on the commit it read. Fails closed on a gh or jq error.
+# review_count <head> — review-pr's post-condition from docs/unattended.md, plus the account and
+# state. <head> is the one read before the review, so a push during it does not disown the review
+# posted on the commit it read.
 review_count() {
   local n
   n=$(gh pr view "$pr" --json reviews 2>/dev/null | jq -e --arg me "$me" --arg head "$1" --arg marker "$MARKER" \
@@ -135,10 +134,10 @@ review_count() {
 before=0
 if [ "$review_dry_run" = 0 ]; then
   me=$(gh api user --jq .login 2>/dev/null)
-  [ -n "$me" ] || refuse "gh could not name the account it is signed in as"
+  [ -n "$me" ] || review_fail "gh could not name the account it is signed in as; no review ran"
   head=$(gh pr view "$pr" --json headRefOid --jq .headRefOid 2>/dev/null)
-  [ -n "$head" ] || refuse "gh could not read the pull request's head commit"
-  before=$(review_count "$head") || refuse "gh could not read the pull request's reviews"
+  [ -n "$head" ] || review_fail "gh could not read the pull request's head commit; no review ran"
+  before=$(review_count "$head") || review_fail "gh could not read the pull request's reviews; no review ran"
 fi
 
 echo "chain-local: review-pr — starting"

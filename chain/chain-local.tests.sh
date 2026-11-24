@@ -235,6 +235,7 @@ echo "The review's own failures:"
 new_case; chain_ok; before_after "$(good)"; rm "$STUB_DIR/login"
 run 270
 ok "an account gh cannot name stops before the review starts" '[ "$RC" = 1 ] && [ "$(calls)" = 3 ] && grep -qF "could not name the account" <<<"$OUTPUT"'
+ok "and, the pull request being confirmed, names it and offers the review again" 'grep -qF "$PR is open as the chain left it" <<<"$OUTPUT" && last_line | grep -qF "/gaffer:review-pr $PR"'
 new_case; chain_ok; reply 4 "Reviewed."; reviews 1
 run 270
 ok "reviews gh cannot read afterwards fail closed" '[ "$RC" = 1 ] && grep -qF "could not read the pull request'"'"'s reviews after" <<<"$OUTPUT"'
