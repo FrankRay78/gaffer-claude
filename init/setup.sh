@@ -39,10 +39,6 @@ MARKETPLACE='gaffer-claude'
 MARKETPLACE_SOURCE='{"source":{"source":"github","repo":"FrankRay78/gaffer-claude"}}'
 PLUGINS=('gaffer@gaffer-claude' 'pr-review-toolkit@claude-plugins-official')
 ASK_RULE='Bash(chmod:*)'
-# The tracker entry point as the commands call it, unquoted, from an installed plugin: any config
-# directory, marketplace and version, so the rule outlives a plugin update. Anchored on the plugin
-# cache rather than on tracker/tracker.sh alone, which a repository's own files could match.
-ALLOW_RULE='Bash(bash */plugins/cache/*/gaffer/*/tracker/tracker.sh *)'
 SCRATCH='.claude/scratch/'
 MEMORY_INDEX='.claude/memory/MEMORY.md'
 MEMORY_HEADER='<!-- Memory index: one line per entry, `- [Title](file.md) — one-line hook`. -->'
@@ -90,19 +86,17 @@ settings_merge() {
   else
     json='{}'
   fi
-  jq --arg m "$MARKETPLACE" --argjson ms "$MARKETPLACE_SOURCE" --arg ask "$ASK_RULE" --arg allow "$ALLOW_RULE" \
+  jq --arg m "$MARKETPLACE" --argjson ms "$MARKETPLACE_SOURCE" --arg ask "$ASK_RULE" \
      --args '
     def ensure(path; v): if (getpath(path) == null) then setpath(path; v) else . end;
-    def rule(kind; r): if ((.permissions[kind] // []) | index(r)) then . else .permissions[kind] += [r] end;
     ensure(["extraKnownMarketplaces", $m]; $ms)
     | reduce $ARGS.positional[] as $p (.; ensure(["enabledPlugins", $p]; true))
-    | rule("ask"; $ask) | rule("allow"; $allow)
+    | if ((.permissions.ask // []) | index($ask)) then . else .permissions.ask = ((.permissions.ask // []) + [$ask]) end
   ' "${PLUGINS[@]}" <<<"$json" > "$out" || fail "could not merge $src"
-  jq -r --arg m "$MARKETPLACE" --arg ask "$ASK_RULE" --arg allow "$ALLOW_RULE" --args '
-    def missing_rule(kind; r): if ((.permissions[kind] // []) | index(r)) then empty else "permission \(kind) \(r)" end;
+  jq -r --arg m "$MARKETPLACE" --arg ask "$ASK_RULE" --args '
     (if .extraKnownMarketplaces[$m] == null then "marketplace \($m)" else empty end),
     ($ARGS.positional[] as $p | if .enabledPlugins[$p] == null then "plugin \($p)" else empty end),
-    missing_rule("ask"; $ask), missing_rule("allow"; $allow)
+    (if ((.permissions.ask // []) | index($ask)) then empty else "permission ask \($ask)" end)
   ' "${PLUGINS[@]}" <<<"$json"
 }
 
@@ -117,7 +111,7 @@ report_settings() {
     rm -f "$tmp"
   fi
   local item
-  for item in "marketplace $MARKETPLACE" "${PLUGINS[@]/#/plugin }" "permission ask $ASK_RULE" "permission allow $ALLOW_RULE"; do
+  for item in "marketplace $MARKETPLACE" "${PLUGINS[@]/#/plugin }" "permission ask $ASK_RULE"; do
     if grep -qxF "$item" <<<"$missing"; then echo "added: .claude/settings.json $item"; else echo "present: .claude/settings.json $item"; fi
   done
 }

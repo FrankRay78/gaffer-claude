@@ -272,6 +272,19 @@ settings '{"tracker": "jira"}'
 chain --dry-run 270
 ok "… refused by the dry run too" '[ "$RC" = 78 ] && [ "$(calls)" = 0 ]'
 
+new_case
+reply 1 "$(ready)"
+chain https://github.com/other/repo/issues/5
+ok "another repository's issue: exits 1 with usage, no stage started, as no branch name here can carry it" '[ "$RC" = 1 ] && [ "$(calls)" = 0 ] && grep -q usage <<<"$OUTPUT" && grep -qF "another repository" <<<"$OUTPUT"'
+new_case
+SPACED="$SB/case$cases/my plugin"
+mkdir -p "$SPACED/chain" "$SPACED/.claude-plugin"
+cp -R "$PLUGIN_ROOT/tracker" "$SPACED/tracker"
+cp "$CHAIN" "$SPACED/chain/chain.sh"
+cp "$PLUGIN_ROOT/.claude-plugin/plugin.json" "$SPACED/.claude-plugin/plugin.json"
+CHAIN="$SPACED/chain/chain.sh" chain 270
+ok "a plugin checkout whose path holds whitespace: the configuration code, no stage started" '[ "$RC" = 78 ] && [ "$(calls)" = 0 ] && grep -qF "whitespace" <<<"$OUTPUT"'
+
 echo "Each stage may call the tracker under the repository's own permissions:"
 TRACKER_RULE="Bash(bash $PLUGIN_ROOT/tracker/tracker.sh *)"
 new_case

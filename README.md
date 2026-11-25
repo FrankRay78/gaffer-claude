@@ -70,9 +70,9 @@ To enable it for every clone of a repository, commit this to its `.claude/settin
 
 ## What a repository needs
 
-- **`git`, `gh` (authenticated) and `jq`** on the path. The hook also needs `awk`.
+- **`git`, `gh` 2.73.0 or later (authenticated) and `jq`** on the path. An older `gh` cannot read an issue's linked pull requests, so every issue command stops at its first read. The hook also needs `awk`.
 - **The `pr-review-toolkit` plugin**: `/gaffer:verify` spawns its reviewers by their `pr-review-toolkit:` names.
-- **`Bash(chmod:*)` on `permissions.ask`** in `.claude/settings.json`, as the backstop for the forms the hook declines to decide; a plugin cannot set permission rules. Beside it, **the allow rule for the tracker interface**, so the issue commands reach the tracker without a prompt.
+- **`Bash(chmod:*)` on `permissions.ask`** in `.claude/settings.json`, as the backstop for the forms the hook declines to decide; a plugin cannot set permission rules.
 - **An issue tracker the plugin has an adapter for**, named by `tracker` in `.gaffer/chain.json` — GitHub issues when it is not named — with its states created by the tracker's setup.
 - **`.claude/scratch/` git-ignored**, for every command's working files.
 - **`main` as the default branch**, `CLAUDE.md` for project context, and `.claude/memory/` for durable learnings, loaded by an `@.claude/memory/MEMORY.md` line in `CLAUDE.md`. Without that line no session sees an entry.

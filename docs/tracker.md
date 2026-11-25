@@ -1,6 +1,6 @@
 # The tracker interface
 
-Every command and the chain reach the issue tracker through one script, [`tracker/tracker.sh`](../tracker/tracker.sh), never through a tracker's own CLI or API. The script reads which tracker the repository uses and hands each call to that tracker's adapter, under [`tracker/adapters/`](../tracker/adapters/). The plugin ships one adapter, `github`, which makes the calls the commands made before the interface existed. Pull requests and their reviews are not tracker business: they stay on GitHub whatever the tracker.
+Every command and the chain reach the issue tracker through one script, [`tracker/tracker.sh`](../tracker/tracker.sh), never through a tracker's own CLI or API. The script reads which tracker the repository uses and hands each call to that tracker's adapter, under [`tracker/adapters/`](../tracker/adapters/). The plugin ships one adapter, `github`, which makes the calls the commands made before the interface existed, and for `link`, which no command made, a comment mentioning the other issue. It needs `gh` 2.73.0 or later: `view` reads the pull requests linked to an issue, which older `gh` cannot, and refuses an older one by name. Pull requests and their reviews are not tracker business: they stay on GitHub whatever the tracker.
 
 ```bash
 bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh <operation> [arguments…]
@@ -52,9 +52,9 @@ Markers are the text by which the commands find each other's output on an issue:
 
 ## Issue references
 
-A reference is whatever the user typed to name an issue. `ref` checks that the tracker recognises it and normalises it; every other operation takes the normalised form. On GitHub, `N` and `#N` normalise to `N` — digits with a leading `#` removed, nothing else changed — and an issue URL to `<owner>/<repo>#<N>`, GitHub's cross-repository form, which every operation also accepts.
+A reference is whatever the user typed to name an issue. `ref` checks that the tracker recognises it and normalises it; every other operation takes the normalised form. On GitHub, `N` and `#N` normalise to `N` — digits with a leading `#` removed, nothing else changed. An issue URL or `<owner>/<repo>#<N>` normalises to `N` when it names this repository, the `origin` remote's, and otherwise to `<owner>/<repo>#<N>`, GitHub's cross-repository form, which every operation also accepts. Every call names its repository — the one the reference names, else `origin` — so `gh`'s own default, which in a fork clone is often the upstream, never decides.
 
-`ref --forms` gives the two other forms a reference takes: `branch`, the text in a branch name `feature/<branch>-<slug>`, and `mention`, the text in a commit subject `Refs <mention>: …` and in a note pointing at the issue. On GitHub, issue 50 is `{"ref": "50", "branch": "50", "mention": "#50"}`. An adapter whose tracker uses keys such as `PROJ-12` returns the key for all three, so branches, commit subjects and pull request titles carry the key.
+`ref --forms` gives the two other forms a reference takes: `branch`, the text in a branch name `feature/<branch>-<slug>`, and `mention`, the text in a commit subject `Refs <mention>: …` and in a note pointing at the issue. On GitHub, issue 50 is `{"ref": "50", "branch": "50", "mention": "#50"}`. An adapter whose tracker uses keys such as `PROJ-12` returns the key for all three, so branches, commit subjects and pull request titles carry the key. `ref --forms` exits 1 for a reference no branch name can carry back: on GitHub, another repository's issue, whose branch form would be read back as this repository's issue of the same number.
 
 `branch-ref <branch>` reads a reference back out of a branch name: the shortest run of hyphen-separated words after the `<prefix>/` that `ref` recognises, with a slug after it. `feature/248-pr-closing-keyword` gives `248`, `feature/PROJ-12-add-thing` gives `PROJ-12` where the tracker recognises keys, and `feature/net10-upgrade` gives nothing. It is the dispatcher's, built on the adapter's `ref`, and an adapter does not implement it.
 
@@ -66,7 +66,7 @@ Every operation is required except `comment-delete` and `search-title`. An opera
 |---|---|---|
 | `setup` | — | Makes sure every state exists in the tracker. One `added: …` or `present: …` line per state; a second run adds nothing. On GitHub, `added: label ready`. |
 | `ref` | `<reference>`, or `--forms <reference>` | The normalised reference, one line; with `--forms`, `{"ref", "branch", "mention"}`. Exit 1 for a reference the tracker does not recognise. Reaches no tracker. |
-| `view` | `<ref>` | The issue: `{"ref", "title", "body", "state", "states", "labels", "url", "links", "comments"}`. `state` is `open` or `closed`; `states` the contract states the issue is in; `labels` the tracker's own tags, for reading only; `links` `[{"kind", "url"}]`, where `kind` `closing-pull-request` is a pull request that will close it; `comments` `[{"id", "author", "created_at", "body", "url"}]`, oldest first, every one. |
+| `view` | `<ref>` | The issue: `{"ref", "title", "body", "state", "states", "labels", "url", "links", "comments"}`. `state` is `open` or `closed`, and a reference that names a pull request is exit 1; `states` the contract states the issue is in; `labels` the tracker's own tags, for reading only; `links` `[{"kind", "url"}]`, where `kind` `closing-pull-request` is a pull request that will close it; `comments` `[{"id", "author", "created_at", "body", "url"}]`, oldest first, every one. |
 | `create` | `--title <title> --body-file <file> [--state <state>]…` | `{"ref", "url"}` of the new issue, in the given states. |
 | `body-set` | `<ref> <file>` | Replaces the body with the file's bytes. `{"ref", "url"}`. |
 | `state-add`, `state-remove` | `<ref> <state>` | Nothing. Adding a state the issue is in, or removing one it is not, is not an error. |
@@ -86,10 +86,11 @@ On GitHub, `pr-reference` carries the check `raise-pr` used to make itself: GitH
 
 ## Permissions
 
-A headless session denies, without asking, a command its permission rules do not allow ([`unattended.md`](unattended.md)). Two rules cover the tracker:
+A headless session denies, without asking, a command its permission rules do not allow ([`unattended.md`](unattended.md)).
 
-- **The chain** passes every stage `--allowedTools "Bash(bash <checkout>/tracker/tracker.sh *)"` for the checkout it loads the plugin from, unless it runs with `--skip-permissions`, where nothing is denied anyway. A stage needs nothing from the repository's settings to reach the tracker.
-- **An interactive session** needs the allow rule `/gaffer:init` writes into `.claude/settings.json`: `Bash(bash */plugins/cache/*/gaffer/*/tracker/tracker.sh *)`. It matches the plugin as Claude Code installs it, under any configuration directory, marketplace and version, so it outlives a plugin update. Without it, each tracker call asks first. A session started with `claude --plugin-dir <checkout>` loads the plugin from outside the cache and is asked too; add `Bash(bash <checkout>/tracker/tracker.sh *)` to your own settings for it.
+- **The chain** passes every stage `--allowedTools "Bash(bash <checkout>/tracker/tracker.sh *)"` for the checkout it loads the plugin from, unless it runs with `--skip-permissions`, where nothing is denied anyway. A stage needs nothing from the repository's settings to reach the tracker. It refuses, with exit 78, a checkout whose path holds whitespace: the unquoted path would split, and every tracker call in a stage would fail.
+- **Any other headless run** — a CI job, a `claude -p` loop outside the chain — passes the same `--allowedTools` rule for the plugin directory it loads.
+- **An interactive session** asks before each tracker call, unless permissions are bypassed. Answering "don't ask again" saves a rule for that exact path in your own settings. The plugin writes no allow rule into a repository: a committed rule cannot name the plugin's path on every machine, and one with a `*` before the script name matches commands that are not the tracker, `bash -c '…'` included.
 
 The commands write the script's path unquoted — `bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh view 50` — because that is the form the rules match, and a reference the user typed in single quotes — `ref '#50'` — because unquoted a leading `#` starts a shell comment. Each call stands alone, never piped into or chained with another command, which a rule for the tracker would not cover.
 

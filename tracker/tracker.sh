@@ -102,7 +102,8 @@ case "$OP" in
     jq -n --arg t "$TRACKER" --arg s "$SETTINGS" --arg impl "$IMPLEMENTED" \
       --arg req "${REQUIRED_OPS[*]}" --arg opt "${OPTIONAL_OPS[*]}" \
       '{tracker: $t, settings: (if $s == "" then null else $s end), required: ($req | split(" ")), optional: ($opt | split(" ")),
-        implemented: ($impl | split("\n") | map(select(length > 0)))}'
+        implemented: ($impl | split("\n") | map(select(length > 0)))}' \
+      || { echo "tracker: operations needs jq on PATH" >&2; exit 1; }
     exit 0 ;;
   branch-ref)
     [ $# -eq 1 ] || usage

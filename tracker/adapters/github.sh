@@ -3,15 +3,17 @@
 # github.sh — the tracker contract (docs/tracker.md) on GitHub issues, through `gh`.
 #
 # Called by tracker.sh, which has already checked the operation and any state or marker name.
-# Each operation makes the call the commands made before the interface existed, so a repository
-# on GitHub sees the same labels, comments and edits.
+# Each operation the commands used before the interface existed makes the call they made, so a
+# repository on GitHub sees the same labels, comments and edits; `link` is new, a mention comment.
 #
 # STATES are labels. The names come from `github.labels` in the settings file TRACKER_SETTINGS
 # names, each state defaulting to the label the commands have always used.
 #
-# REFERENCES. `<N>` or `#<N>` is issue N of the repository gh resolves from the working directory;
-# an issue URL is `<owner>/<repo>#<N>`, GitHub's own cross-repository form, and every operation
-# accepts either.
+# REFERENCES. `<N>` or `#<N>` is issue N of this repository, the origin remote's. An issue URL or
+# `<owner>/<repo>#<N>` naming this repository normalises to the bare `N`; naming another, to
+# `<owner>/<repo>#<N>`, GitHub's own cross-repository form. Every operation accepts any of them.
+# Every call names its repository with --repo, never leaving gh to choose one: in a fork clone,
+# gh's own choice (gh repo set-default, an `upstream` remote) is another repository.
 
 set -uo pipefail
 
@@ -20,6 +22,15 @@ OPERATIONS=(setup ref view create body-set state-add state-remove comment-find c
 
 die() { echo "tracker: github: $*" >&2; exit 1; }
 need_gh() { command -v gh >/dev/null 2>&1 || die "gh is not on PATH"; }
+# need_gh_version <major> <minor> <why> — refuse an older gh, which would fail the call with only
+# `Unknown JSON field`. A version gh does not print is let through to fail on its own.
+need_gh_version() {
+  local v
+  v=$(gh --version 2>/dev/null | sed -n '1s/^gh version \([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\1 \2/p')
+  [ -n "$v" ] || return 0
+  set -- "$1" "$2" "$3" $v
+  [ "$4" -gt "$1" ] || { [ "$4" = "$1" ] && [ "$5" -ge "$2" ]; } || die "needs gh $1.$2.0 or later ($3); this gh is $4.$5"
+}
 
 # The label each state maps to, as "state|label" lines.
 labels() {
@@ -57,27 +68,31 @@ origin_repo() {
   [[ $url =~ github\.com[:/]([^/]+)/([^/]+)$ ]] && echo "${BASH_REMATCH[1]}/${BASH_REMATCH[2]%.git}"
 }
 
-# parse_ref <reference> — sets NUM, REPO (owner/repo, or empty for this repository), REPO_ARGS and
-# API_REPO, or fails. A URL or owner/repo#N naming this repository is this repository's issue N,
-# so its mention stays #N.
+# parse_ref <reference> — sets NUM, REPO, REPO_ARGS and API_REPO, or fails. REPO is the display
+# repository: owner/repo, or empty for this repository, so a URL or owner/repo#N naming this
+# repository is mentioned as #N. REPO_ARGS and API_REPO are where the calls go: REPO, else origin.
+# Only where origin is not on GitHub is the choice left to gh.
 parse_ref() {
-  local r=$1
+  local r=$1 here
   if [[ $r =~ ^#?([0-9]+)$ ]]; then
     NUM=${BASH_REMATCH[1]}; REPO=
-  elif [[ $r =~ ^https://github\.com/([^/[:space:]]+)/([^/[:space:]]+)/issues/([0-9]+)/?$ ]] \
+  elif [[ $r =~ ^https://github\.com/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)/issues/([0-9]+)/?$ ]] \
     || [[ $r =~ ^([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)#([0-9]+)$ ]]; then
     NUM=${BASH_REMATCH[3]}; REPO="${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
     [ "$(lower "$REPO")" != "$(lower "$(origin_repo)")" ] || REPO=
   else
     return 1
   fi
-  if [ -n "$REPO" ]; then REPO_ARGS=(--repo "$REPO"); API_REPO=$REPO; else REPO_ARGS=(); API_REPO='{owner}/{repo}'; fi
+  here=${REPO:-$(origin_repo)}
+  if [ -n "$here" ]; then REPO_ARGS=(--repo "$here"); API_REPO=$here; else REPO_ARGS=(); API_REPO='{owner}/{repo}'; fi
 }
 target() { parse_ref "$1" || { echo "tracker: github: '$1' is not a GitHub issue reference (N, #N, an issue URL or owner/repo#N)" >&2; exit 1; }; }
 normal() { if [ -n "$REPO" ]; then echo "$REPO#$NUM"; else echo "$NUM"; fi; }
 mention() { if [ -n "$REPO" ]; then echo "$REPO#$NUM"; else echo "#$NUM"; fi; }
 
 # The issue's comments, every page, as one JSON array. --paginate prints one array per page.
+# Every REST path here is written without a leading `/`: Git Bash on Windows rewrites `/repos/...`
+# as a filesystem path.
 comments() {
   local raw
   raw=$(gh api --paginate "repos/$API_REPO/issues/$NUM/comments") || die "could not list the comments on $(normal)"
@@ -90,6 +105,8 @@ op_ref() {
   [ $# -eq 1 ] || die "usage: ref [--forms] <reference>"
   target "$1"
   if [ "$forms" = 1 ]; then
+    # A branch name carries only the number, which read back is this repository's issue N.
+    [ -z "$REPO" ] || die "$REPO#$NUM is an issue of another repository, which no branch name here can carry"
     jq -n -c --arg r "$(normal)" --arg n "$NUM" --arg m "$(mention)" '{ref: $r, branch: $n, mention: $m}'
   else
     normal
@@ -98,10 +115,12 @@ op_ref() {
 
 op_view() {
   [ $# -eq 1 ] || die "usage: view <reference>"
-  target "$1"; need_gh
+  target "$1"; need_gh; need_gh_version 2 73 "view reads closedByPullRequestsReferences"
   local issue cs map
   issue=$(gh issue view "$NUM" ${REPO_ARGS[@]+"${REPO_ARGS[@]}"} --json number,title,body,state,labels,url,closedByPullRequestsReferences) \
     || die "could not read issue $(normal)"
+  # gh issue view resolves a pull request number too, and its state can be MERGED.
+  jq -e '.url | test("/issues/[0-9]+$")' <<<"$issue" >/dev/null || die "$(normal) is a pull request, not an issue"
   cs=$(comments) || exit 1
   map=$(labels | jq -R 'split("|") | {(.[1] | ascii_downcase): .[0]}' | jq -s 'add') || exit 78
   jq -c --arg r "$(normal)" --argjson cs "$cs" --argjson map "$map" '{

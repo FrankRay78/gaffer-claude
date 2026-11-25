@@ -22,7 +22,7 @@ This repository's additions to the gaffer plugin's default review criteria. Each
 
 ## Change map
 
-- **Top-level directories** — [`docs/contributing.md`](docs/contributing.md) → *Layout*: `.claude-plugin/`, `commands/`, `hooks/`, `chain/`, `init/`, `defaults/`, `templates/`, `docs/`.
+- **Top-level directories** — [`docs/contributing.md`](docs/contributing.md) → *Layout*: `.claude-plugin/`, `commands/`, `hooks/`, `chain/`, `init/`, `tracker/`, `defaults/`, `templates/`, `docs/`.
 
 ## Tests
 

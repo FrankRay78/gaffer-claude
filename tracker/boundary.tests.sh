@@ -4,7 +4,7 @@
 #
 # Scans what the plugin runs or tells a model to run — every committed file under commands/,
 # defaults/ and templates/, and every committed shell script that is not a test matrix — for a
-# `gh issue` call, an issue REST path, or an issue label call. Two files are exempt by
+# `gh issue` call, an issue REST path, an issue search, or a label call. Two files are exempt by
 # name: the GitHub adapter, which is where those calls belong, and chain/chain-next.sh, the runner,
 # which selects and parks issues on GitHub alone. Test matrices stub gh, and docs describe rather
 # than run, so neither is scanned. The scanner is checked against planted calls first, so a pattern
@@ -16,7 +16,7 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 EXEMPT=(tracker/adapters/github.sh chain/chain-next.sh)
-PATTERN='gh issue|gh label|repos/[^[:space:]]*/issues|issues/[^[:space:]]*comments|--(add|remove)-label'
+PATTERN='gh issue|gh label|gh search issues|search/issues|repos/[^[:space:]]*/(issues|labels)|issues/[^[:space:]]*comments|--(add|remove)-label'
 
 # scan <root> — every offending line under <root>'s committed files, as path:line:text.
 scan() {
@@ -47,10 +47,13 @@ printf 'gh issue view 5\n' > "$SB/docs/guide.md"
 printf 'gh pr view 5; gh api repos/o/r/pulls/5/reviews\n' > "$SB/commands/f.md"
 printf 'gh api --method PATCH repos/<owner>/<repo>/issues/<number> --input p.json\n' > "$SB/commands/g.md"
 printf 'gh api repos/{owner}/{repo}/issues -f title=x\n' > "$SB/commands/h.md"
+printf 'gh search issues "audit in:title"\n' > "$SB/commands/i.md"
+printf 'gh api "search/issues?q=repo:o/r+audit"\n' > "$SB/commands/j.md"
+printf 'gh api repos/o/r/labels -f name=ready\n' > "$SB/commands/k.md"
 git -C "$SB" add -A
 OUT=$(scan "$SB")
 echo "The scanner:"
-for f in commands/a.md commands/b.md commands/c.md commands/d.md commands/e.md commands/g.md commands/h.md chain/run.sh; do
+for f in commands/a.md commands/b.md commands/c.md commands/d.md commands/e.md commands/g.md commands/h.md commands/i.md commands/j.md commands/k.md chain/run.sh; do
   ok "finds the planted call in $f" 'grep -q "^$f:" <<<"$OUT"'
 done
 for f in chain/chain-next.sh tracker/adapters/github.sh chain/run.tests.sh docs/guide.md commands/f.md; do

@@ -24,8 +24,12 @@ unset GAFFER_SETTINGS
 # The fake gh. Every call is logged to gh-log, arguments separated by `|`. A file named `fail`
 # makes every call print its contents to stderr and exit 1, as gh does on a broken sign-in, and one
 # named fail-<command>-<subcommand> (fail-issue-view) does the same for that call alone.
-# Comment listings come back two to a page, as --paginate prints them: one array per page.
-# Comment timestamps follow `clock`, which each new comment advances by one second.
+# Comment listings come back two to a page when --paginate is passed, as gh prints them: one array
+# per page; without it, the first page alone. Comment timestamps follow `clock`, which each new
+# comment advances by one second. The fake's own repository is `repo`, whose issues are keyed by
+# number; an issue of any other repository is keyed `<owner>/<repo>#<N>`, and a call reaches it
+# only through --repo or its repos/<owner>/<repo>/ path. `gh --version` prints the version in the
+# file gh-version, 2.80.0 if there is none.
 mkdir -p "$SB/bin"
 cat > "$SB/bin/gh" <<'STUB'
 #!/usr/bin/env bash
@@ -40,15 +44,18 @@ set -- "${args[@]}"
 out() { if [ -n "$filter" ]; then jq -r "$filter"; else cat; fi; }
 repo=$(jq -r .repo "$S")
 opt() { local want=$1 i; for ((i = 2; i <= $#; i++)); do [ "${!i}" = "$want" ] && { i=$((i + 1)); printf '%s' "${!i}"; return 0; }; done; return 1; }
-other_repo() { local r; r=$(opt --repo "$@" || opt -R "$@") || return 1; [ "$r" != "$repo" ]; }
+# key <owner/repo> <N> — the issue's key in the state.
+key() { if [ "$1" = "$repo" ]; then echo "$2"; else echo "$1#$2"; fi; }
+# The key of issue $3 in the repository --repo or -R names, else the fake's own.
+k=; [ "${1:-}" = issue ] && [ -n "${3:-}" ] && k=$(key "$(opt --repo "$@" || opt -R "$@" || echo "$repo")" "$3")
 missing() { echo "GraphQL: Could not resolve to an issue or pull request with the number of $1. (repository.issue)" >&2; exit 1; }
 exists() { jq -e --arg n "$1" '.issues[$n] != null' "$S" >/dev/null; }
-case "$1 $2" in
+case "$1 ${2:-}" in
+  "--version ") echo "gh version $(cat "$STUB_DIR/gh-version" 2>/dev/null || echo 2.80.0) (2025-06-01)" ;;
   "repo view") jq -n --arg r "$repo" '{nameWithOwner: $r}' | out ;;
   "issue view")
-    other_repo "$@" && missing "$3"
-    exists "$3" || missing "$3"
-    jq --arg n "$3" '.issues[$n] | {number, title, body, state, url, labels: [.labels[] | {name: .}],
+    exists "$k" || missing "$3"
+    jq --arg n "$k" '.issues[$n] | {number, title, body, state, url, labels: [.labels[] | {name: .}],
       closedByPullRequestsReferences: [.closing[] | {url: .}]}' "$S" | out ;;
   "issue create")
     title=$(opt --title "$@"); body=$(cat "$(opt --body-file "$@")")
@@ -58,57 +65,62 @@ case "$1 $2" in
       '.next += 1 | .issues[$n] = {number: ($n | tonumber), title: $t, body: $b, state: "OPEN", labels: $l, closing: [], url: "https://github.com/\(.repo)/issues/\($n)"}'
     echo "https://github.com/$repo/issues/$n" ;;
   "issue edit")
-    exists "$3" || missing "$3"
+    exists "$k" || missing "$3"
     if l=$(opt --add-label "$@"); then
       jq -e --arg l "$l" 'any(.labels[]; .name == $l)' "$S" >/dev/null || { echo "failed to update: '$l' not found" >&2; exit 1; }
-      save --arg n "$3" --arg l "$l" '.issues[$n].labels |= (. + [$l] | unique)'
+      save --arg n "$k" --arg l "$l" '.issues[$n].labels |= (. + [$l] | unique)'
     fi
-    if l=$(opt --remove-label "$@"); then save --arg n "$3" --arg l "$l" '.issues[$n].labels -= [$l]'; fi ;;
+    if l=$(opt --remove-label "$@"); then save --arg n "$k" --arg l "$l" '.issues[$n].labels -= [$l]'; fi ;;
   "issue comment")
-    exists "$3" || missing "$3"
+    exists "$k" || missing "$3"
     if f=$(opt --body-file "$@"); then body=$(cat "$f"); else body=$(opt --body "$@"); fi
     id=$(jq -r .next_comment "$S")
-    save --arg n "$3" --arg b "$body" '.clock += 1 | .next_comment += 1
-      | .comments += [{id: (.next_comment - 1), issue: ($n | tonumber), body: $b, user: {login: "me"}, created_at: (1767225600 + .clock | todate),
-        html_url: "https://github.com/\(.repo)/issues/\($n)#issuecomment-\(.next_comment - 1)"}]'
-    echo "https://github.com/$repo/issues/$3#issuecomment-$id" ;;
+    url="$(jq -r --arg n "$k" '.issues[$n].url' "$S")#issuecomment-$id"
+    save --arg n "$k" --arg b "$body" --arg u "$url" '.clock += 1 | .next_comment += 1
+      | .comments += [{id: (.next_comment - 1), issue: $n, body: $b, user: {login: "me"}, created_at: (1767225600 + .clock | todate), html_url: $u}]'
+    echo "$url" ;;
   "issue close")
-    exists "$3" || missing "$3"
+    exists "$k" || missing "$3"
     if c=$(opt --comment "$@"); then printf '%s' "$c" > "$STUB_DIR/close-note"; fi
-    save --arg n "$3" '.issues[$n].state = "CLOSED"' ;;
+    save --arg n "$k" '.issues[$n].state = "CLOSED"' ;;
   "issue list")
     s=$(opt --search "$@"); s=${s% in:title}
-    jq --arg s "$s" '[.issues[] | select(.url | contains("/issues/")) | select(.title | contains($s)) | {number, title, state, url}]' "$S" | out ;;
+    jq --arg s "$s" --arg p "https://github.com/$repo/issues/" '[.issues[] | select(.url | startswith($p)) | select(.title | contains($s)) | {number, title, state, url}]' "$S" | out ;;
   "label list") jq '[.labels[] | {name}]' "$S" | out ;;
   "label create") save --arg l "$3" --arg d "$(opt --description "$@")" '.labels += [{name: $l, description: $d}]' ;;
   "api "*)
-    method=GET; path=; input=; field=
+    method=GET; path=; input=; field=; paginate=0
     shift
     while [ $# -gt 0 ]; do
       case $1 in
         -X|--method) method=$2; shift 2 ;;
         --input) input=$2; shift 2 ;;
         -F|-f) field=$2; shift 2 ;;
-        --paginate) shift ;;
+        --paginate) paginate=1; shift ;;
         *) path=$1; shift ;;
       esac
     done
     path=${path#/}; path=${path/\{owner\}\/\{repo\}/$repo}
-    case "$method $path" in
-      "GET repos/$repo/issues/"*/comments)
-        n=${path#repos/$repo/issues/}; n=${n%/comments}
-        jq -c --arg n "$n" '[.comments[] | select(.issue == ($n | tonumber))] | _nwise(2)' "$S" ;;
-      "PATCH repos/$repo/issues/comments/"*)
-        id=${path##*/}; body=$(cat "${field#body=@}")
-        jq -e --argjson id "$id" 'any(.comments[]; .id == $id)' "$S" >/dev/null || { echo "HTTP 404: Not Found" >&2; exit 1; }
+    [[ $path =~ ^repos/([^/]+/[^/]+)/issues/(.+)$ ]] || { echo "fake gh: unexpected api $method $path" >&2; exit 1; }
+    r=${BASH_REMATCH[1]}; rest=${BASH_REMATCH[2]}
+    # A comment id is global; it is this repository's only when its issue is.
+    owned() { jq -e --argjson id "$1" --arg r "$r" --arg home "$repo" \
+      'any(.comments[]; .id == $id and (if $r == $home then (.issue | test("^[0-9]+$")) else (.issue | startswith($r + "#")) end))' "$S" >/dev/null \
+      || { echo "HTTP 404: Not Found" >&2; exit 1; }; }
+    case "$method $rest" in
+      "GET "*/comments)
+        n=$(key "$r" "${rest%/comments}")
+        if [ "$paginate" = 1 ]; then pages='_nwise(2)'; else pages='.[:2]'; fi
+        jq -c --arg n "$n" "[.comments[] | select(.issue == \$n)] | $pages" "$S" ;;
+      "PATCH comments/"*)
+        id=${rest#comments/}; body=$(cat "${field#body=@}"); owned "$id"
         save --argjson id "$id" --arg b "$body" '(.comments[] | select(.id == $id) | .body) = $b'
         jq --argjson id "$id" '.comments[] | select(.id == $id)' "$S" | out ;;
-      "DELETE repos/$repo/issues/comments/"*)
-        id=${path##*/}
-        jq -e --argjson id "$id" 'any(.comments[]; .id == $id)' "$S" >/dev/null || { echo "HTTP 404: Not Found" >&2; exit 1; }
+      "DELETE comments/"*)
+        id=${rest#comments/}; owned "$id"
         save --argjson id "$id" '.comments |= map(select(.id != $id))' ;;
-      "PATCH repos/$repo/issues/"*)
-        n=${path##*/}; exists "$n" || { echo "HTTP 404: Not Found" >&2; exit 1; }
+      "PATCH "*)
+        n=$(key "$r" "$rest"); exists "$n" || { echo "HTTP 404: Not Found" >&2; exit 1; }
         body=$(jq -r .body "$input")
         save --arg n "$n" --arg b "$body" '.issues[$n].body = $b'
         jq --arg n "$n" '.issues[$n] | {html_url: .url}' "$S" | out ;;
@@ -119,6 +131,9 @@ esac
 STUB
 chmod +x "$SB/bin/gh"
 export PATH="$SB/bin:$PATH"
+# A PATH with what the dispatcher and adapter need but gh.
+mkdir -p "$SB/nogh"
+for t in bash git jq sed tr grep mktemp rm cat dirname awk tail; do ln -s "$(command -v "$t")" "$SB/nogh/$t"; done
 
 PASS=0; FAIL=0
 ok() {
@@ -147,6 +162,13 @@ issue() {
 # pr <number> — a pull request at that number, sharing the issues' sequence as on GitHub.
 pr() { jq --arg n "$1" '.issues[$n] = {number: ($n | tonumber), title: "a pull request", body: "", state: "MERGED", labels: [], closing: [], url: "https://github.com/o/r/pull/\($n)"} | .next = (($n | tonumber) + 1)' \
   "$STUB_DIR/state.json" > "$STUB_DIR/s" && mv "$STUB_DIR/s" "$STUB_DIR/state.json"; }
+# foreign <owner/repo> <N> — an issue of another repository in the fake, with one comment.
+foreign() {
+  jq --arg r "$1" --arg n "$2" '.issues["\($r)#\($n)"] = {number: ($n | tonumber), title: "elsewhere", body: "theirs", state: "OPEN", labels: [], closing: [], url: "https://github.com/\($r)/issues/\($n)"}
+    | .comments += [{id: 5000, issue: "\($r)#\($n)", body: "their comment", user: {login: "them"}, created_at: "2026-01-01T00:00:00Z", html_url: "https://github.com/\($r)/issues/\($n)#issuecomment-5000"}]' \
+    "$STUB_DIR/state.json" > "$STUB_DIR/s" && mv "$STUB_DIR/s" "$STUB_DIR/state.json"
+}
+home_state() { jq -c '{issues: (.issues | with_entries(select(.key | test("^[0-9]+$")))), comments: [.comments[] | select(.issue | test("^[0-9]+$"))]}' "$STUB_DIR/state.json"; }
 gh_calls() { if [ -f "$STUB_DIR/gh-log" ]; then grep -c '' "$STUB_DIR/gh-log"; else echo 0; fi; }
 logged() { grep -qxF -- "$1" "$STUB_DIR/gh-log"; }
 reset_log() { rm -f "$STUB_DIR/gh-log"; }
@@ -191,6 +213,14 @@ for c in "--body-file b --title" "--title t --body-file"; do
   OUT=$(cd "$R" && timeout 10 bash "$TRACKER" create $c 2>&1); RC=$?
   ok "create ending in a flag with no value fails rather than hangs: $c" '[ $RC = 1 ] && grep -q usage <<<"$OUT"'
 done
+fresh
+for c in "state-add 7" "marker" "branch-ref" "comment-find 7"; do
+  run $c; ok "'$c' with an argument missing: exit 2, before gh is run" '[ $RC = 2 ] && [ "$(gh_calls)" = 0 ]'
+done
+printf b > "$R/b"; run create --title t --body-file b --state
+ok "create ending in --state with no value: exit 2" '[ $RC = 2 ] && [ "$(gh_calls)" = 0 ]'
+run require view frobnicate
+ok "require with an operation outside the contract: exit 2" '[ $RC = 2 ]'
 fresh; run require view state-add comment-delete search-title
 ok "require: every operation the github adapter implements" '[ $RC = 0 ] && [ -z "$OUT" ]'
 
@@ -234,7 +264,7 @@ fresh
 for c in "50|50" "#50|50" "007|007" "https://github.com/a/b/issues/5|a/b#5" "a/b#5|a/b#5"; do
   run_out ref "${c%%|*}"; ok "ref ${c%%|*} → ${c#*|}" '[ $RC = 0 ] && [ "$OUT" = "${c#*|}" ]'
 done
-for c in "" "abc" "5a" "#" "##5" "https://github.com/a/b/pull/5"; do
+for c in "" "abc" "5a" "#" "##5" "https://github.com/a/b/pull/5" 'https://github.com/a/b$(id)/issues/1'; do
   run ref "$c"; ok "ref '$c' is not recognised: exit 1" '[ $RC = 1 ]'
 done
 run_out ref --forms 50
@@ -245,14 +275,16 @@ run_out ref --forms https://github.com/O/R/issues/5
 ok "… whatever its case, so its mention is #5" '[ "$(jq -r .mention <<<"$OUT")" = "#5" ]'
 run_out ref "o/r#5"
 ok "owner/repo#N naming this repository is the bare number too" '[ "$OUT" = 5 ]'
-run_out ref --forms https://github.com/a/b/issues/5
-ok "ref --forms of another repository's issue mentions it as a/b#5" '[ "$(jq -r .mention <<<"$OUT")" = "a/b#5" ] && [ "$(jq -r .branch <<<"$OUT")" = 5 ]'
+run ref --forms https://github.com/a/b/issues/5
+ok "ref --forms of another repository's issue: exit 1, as a branch name would carry only its number" '[ $RC = 1 ] && grep -qF "another repository" <<<"$OUT"'
 ok "ref reaches no tracker" '[ "$(gh_calls)" = 0 ]'
 run_out branch-ref feature/248-pr-closing-keyword; ok "branch-ref feature/248-pr-closing-keyword → 248" '[ $RC = 0 ] && [ "$OUT" = 248 ]'
 run branch-ref feature/build-command; ok "branch-ref of a branch with no number: no candidate" '[ $RC = 1 ]'
 run branch-ref feature/net10-upgrade; ok "branch-ref never takes a number from inside a word" '[ $RC = 1 ]'
 run branch-ref feature/248; ok "branch-ref needs the <N>-<slug> shape" '[ $RC = 1 ]'
 run branch-ref main; ok "branch-ref of main: no candidate" '[ $RC = 1 ]'
+settings '{"github": 5}'
+run ref 50; ok "a github key that is not an object is refused: exit 78" '[ $RC = 78 ]'
 settings '{"github": {"labels": {"ready": ""}}}'
 run ref 50; ok "a malformed github.labels is refused by ref too, so the chain finds it before a stage" '[ $RC = 78 ]'
 run branch-ref feature/248-x; ok "branch-ref passes on a refusal rather than reading it as no candidate" '[ $RC = 78 ] && grep -qF "github.labels" <<<"$OUT"'
@@ -260,13 +292,19 @@ rm -f "$R/.gaffer/chain.json"
 
 echo "The GitHub calls are the ones the commands made:"
 fresh; n=$(issue "An issue"); reset_log
-run state-add "$n" needs-answers; ok "state-add needs-answers adds the 'needs answers' label" '[ $RC = 0 ] && logged "issue|edit|$n|--add-label|needs answers|"'
-run state-remove "$n" needs-answers; ok "state-remove needs-answers removes it" '[ $RC = 0 ] && logged "issue|edit|$n|--remove-label|needs answers|"'
-run state-add "$n" ready; ok "state-add ready adds 'ready'" 'logged "issue|edit|$n|--add-label|ready|"'
-run state-add "https://github.com/a/b/issues/$n" parked; ok "another repository's issue URL passes --repo" 'logged "issue|edit|$n|--repo|a/b|--add-label|parked|"'
-run state-add "https://github.com/o/r/issues/$n" parked; ok "this repository's issue URL passes none" 'logged "issue|edit|$n|--add-label|parked|"'
+run state-add "$n" needs-answers; ok "state-add needs-answers adds the 'needs answers' label, on the origin repository" '[ $RC = 0 ] && logged "issue|edit|$n|--repo|o/r|--add-label|needs answers|"'
+run state-remove "$n" needs-answers; ok "state-remove needs-answers removes it" '[ $RC = 0 ] && logged "issue|edit|$n|--repo|o/r|--remove-label|needs answers|"'
+run state-add "$n" ready; ok "state-add ready adds 'ready'" 'logged "issue|edit|$n|--repo|o/r|--add-label|ready|"'
+foreign a/b "$n"; before=$(home_state); reset_log
+run state-add "https://github.com/a/b/issues/$n" parked; ok "another repository's issue URL passes its --repo, and this repository's issue is untouched" '[ $RC = 0 ] && logged "issue|edit|$n|--repo|a/b|--add-label|parked|" && [ "$(home_state)" = "$before" ]'
+run state-add "https://github.com/o/r/issues/$n" parked; ok "this repository's issue URL passes the origin repository" 'logged "issue|edit|$n|--repo|o/r|--add-label|parked|"'
+# A fork clone: gh would resolve a bare number to the upstream remote; the adapter names origin.
+git -C "$R" remote add upstream https://github.com/up/r.git; reset_log
+run state-add "$n" ready; ok "with an upstream remote beside origin, a bare number still goes to origin" 'logged "issue|edit|$n|--repo|o/r|--add-label|ready|"'
+git -C "$R" remote remove upstream
+jq '.labels += [{name: "go"}]' "$STUB_DIR/state.json" > "$STUB_DIR/s" && mv "$STUB_DIR/s" "$STUB_DIR/state.json"
 settings '{"github": {"labels": {"ready": "go"}}, "labels": {"ready": "queued"}}'; reset_log
-run state-add "$n" ready; ok "github.labels names the label a state maps to; the runner's labels key does not" 'logged "issue|edit|$n|--add-label|go|"'
+run state-add "$n" ready; ok "github.labels names the label a state maps to; the runner's labels key does not" '[ $RC = 0 ] && logged "issue|edit|$n|--repo|o/r|--add-label|go|"'
 settings '{"github": {"labels": {"done": "x"}}}'; run state-add "$n" ready
 ok "github.labels naming no state is refused: exit 78" '[ $RC = 78 ]'
 settings '{"github": {"labels": {"ready": ""}}}'; run state-add "$n" ready
@@ -277,43 +315,71 @@ for m in "review|<!-- speckit:review -->" "confirmed-decisions|<!-- confirmed-de
 done
 printf 'A comment with `code` and $HOME.\n' > "$R/c"; reset_log
 run_out comment-post "$n" c
-ok "comment-post posts the file as the body, and returns its id and URL" 'logged "issue|comment|$n|--body-file|c|" && [ "$(jq -r .id <<<"$OUT")" = 1001 ] && [ "$(jq -r ".comments[0].body" "$STUB_DIR/state.json")" = "A comment with \`code\` and \$HOME." ]'
+ok "comment-post posts the file as the body, and returns its id and URL" 'logged "issue|comment|$n|--repo|o/r|--body-file|c|" && [ "$(jq -r .id <<<"$OUT")" = 1001 ] && [ "$(jq -r ".comments[] | select(.id == 1001) | .body" "$STUB_DIR/state.json")" = "A comment with \`code\` and \$HOME." ]'
 printf 'Edited.\n' > "$R/e"; reset_log
 run_out comment-edit "$n" 1001 e
-ok "comment-edit patches the comment over REST by its numeric id" 'logged "api|-X|PATCH|repos/{owner}/{repo}/issues/comments/1001|-F|body=@e|--jq|{id, url: .html_url}|" && [ "$(jq -r .id <<<"$OUT")" = 1001 ]'
+ok "comment-edit patches the comment over REST by its numeric id" 'logged "api|-X|PATCH|repos/o/r/issues/comments/1001|-F|body=@e|--jq|{id, url: .html_url}|" && [ "$(jq -r .id <<<"$OUT")" = 1001 ]'
 reset_log; run comment-delete "$n" 1001
-ok "comment-delete deletes it over REST" '[ $RC = 0 ] && logged "api|--method|DELETE|repos/{owner}/{repo}/issues/comments/1001|" && [ "$(jq ".comments | length" "$STUB_DIR/state.json")" = 0 ]'
+ok "comment-delete deletes it over REST" '[ $RC = 0 ] && logged "api|--method|DELETE|repos/o/r/issues/comments/1001|" && ! jq -e "any(.comments[]; .id == 1001)" "$STUB_DIR/state.json" >/dev/null'
 printf 'New body: `x` $y \\ "q"\n' > "$R/b"; reset_log
 run_out body-set "$n" b
-ok "body-set patches the issue with the file's bytes as the body" 'logged "api|--method|PATCH|repos/{owner}/{repo}/issues/$n|--input|-|--jq|.html_url|" && [ "$(jq -r --arg n "$n" ".issues[\$n].body" "$STUB_DIR/state.json")" = "$(cat "$R/b")" ]'
+ok "body-set patches the issue with the file's bytes as the body" 'logged "api|--method|PATCH|repos/o/r/issues/$n|--input|-|--jq|.html_url|" && [ "$(jq -r --arg n "$n" ".issues[\$n].body" "$STUB_DIR/state.json")" = "$(cat "$R/b")" ]'
 printf 'Superseded by #9' > "$R/note"; reset_log
 run close "$n" note
-ok "close closes with the note as its comment" 'logged "issue|close|$n|--comment|Superseded by #9|" && [ "$(jq -r --arg n "$n" ".issues[\$n].state" "$STUB_DIR/state.json")" = CLOSED ]'
+ok "close closes with the note as its comment" 'logged "issue|close|$n|--repo|o/r|--comment|Superseded by #9|" && [ "$(jq -r --arg n "$n" ".issues[\$n].state" "$STUB_DIR/state.json")" = CLOSED ]'
 reset_log; printf 'An audit.\n' > "$R/ab"; run_out create --title "Codebase audit" --body-file ab --state audit
 ok "create with a state labels the new issue, and returns its reference" 'logged "issue|create|--title|Codebase audit|--body-file|ab|--label|audit|" && [ "$(jq -r .ref <<<"$OUT")" = 2 ]'
 reset_log; run_out search-title "Codebase audit"
 ok "search-title searches every issue's title" 'logged "issue|list|--state|all|--search|Codebase audit in:title|--json|number,title,state,url|--limit|100|" && [ "$(jq -r ".[0].ref" <<<"$OUT")" = 2 ]'
+touch "$STUB_DIR/fail-issue-list"; run search-title "Codebase audit"
+ok "a search that fails: exit 1, never an empty list" '[ $RC = 1 ] && ! grep -q "^\[" <<<"$OUT"'
+rm -f "$STUB_DIR/fail-issue-list"
 reset_log; m=$(issue "Other"); reset_log; run link "$n" "$m"
-ok "link mentions the other issue on this one" 'logged "issue|comment|$n|--body|Related: #$m|"'
-reset_log; run link a/b#5 "$m"
-ok "on another repository's issue, link names this repository in the mention" 'logged "issue|comment|5|--repo|a/b|--body|Related: o/r#$m|"'
+ok "link mentions the other issue on this one" '[ $RC = 0 ] && logged "issue|comment|$n|--repo|o/r|--body|Related: #$m|"'
+foreign a/b 5; reset_log; run link a/b#5 "$m"
+ok "on another repository's issue, link names this repository in the mention" '[ $RC = 0 ] && logged "issue|comment|5|--repo|a/b|--body|Related: o/r#$m|"'
+
+echo "Another repository's issue, over REST:"
+fresh; n=$(issue "Ours"); printf 'ours\n' > "$R/c"; gh issue comment "$n" --body-file "$R/c" >/dev/null
+foreign a/b "$n"; before=$(home_state)
+printf 'replaced\n' > "$R/b"; reset_log; run_out body-set "a/b#$n" b
+ok "body-set a/b#N patches a/b's issue, not this repository's" '[ $RC = 0 ] && logged "api|--method|PATCH|repos/a/b/issues/$n|--input|-|--jq|.html_url|" && [ "$(jq -r --arg k "a/b#$n" ".issues[\$k].body" "$STUB_DIR/state.json")" = replaced ] && [ "$(home_state)" = "$before" ]'
+reset_log; run_out comment-find "a/b#$n" review
+ok "comment-find a/b#N lists a/b's comments" '[ $RC = 0 ] && logged "api|--paginate|repos/a/b/issues/$n/comments|" && [ "$OUT" = null ]'
+run_out view "a/b#$n"
+ok "view a/b#N reads a/b's issue and its comments only" '[ $RC = 0 ] && [ "$(jq -r .title <<<"$OUT")" = elsewhere ] && [ "$(jq -c "[.comments[].id]" <<<"$OUT")" = "[5000]" ]'
+reset_log; run comment-edit "a/b#$n" 1001 b
+ok "comment-edit a/b#N of this repository's comment id: refused by a/b, and ours is unchanged" '[ $RC = 1 ] && logged "api|-X|PATCH|repos/a/b/issues/comments/1001|-F|body=@b|--jq|{id, url: .html_url}|" && [ "$(home_state)" = "$before" ]'
+run_out comment-edit "a/b#$n" 5000 b
+ok "comment-edit a/b#N edits a/b's comment" '[ $RC = 0 ] && [ "$(jq -r ".comments[] | select(.id == 5000) | .body" "$STUB_DIR/state.json")" = replaced ]'
+reset_log; run comment-delete "a/b#$n" 1001
+ok "comment-delete a/b#N of this repository's comment id: refused by a/b, and ours is kept" '[ $RC = 1 ] && logged "api|--method|DELETE|repos/a/b/issues/comments/1001|" && [ "$(home_state)" = "$before" ]'
+run comment-delete "a/b#$n" 5000
+ok "comment-delete a/b#N deletes a/b's comment" '[ $RC = 0 ] && ! jq -e "any(.comments[]; .id == 5000)" "$STUB_DIR/state.json" >/dev/null'
 
 echo "view and comment-find:"
 fresh; n=$(issue "Read me" ready "needs answers" bug)
 jq --arg n "$n" '.issues[$n].closing = ["https://github.com/o/r/pull/40"]' "$STUB_DIR/state.json" > "$STUB_DIR/s" && mv "$STUB_DIR/s" "$STUB_DIR/state.json"
 for b in "first <!-- speckit:review -->" "plain" "second <!-- speckit:review -->"; do printf '%s\n' "$b" > "$R/c"; gh issue comment "$n" --body-file "$R/c" >/dev/null; done
-# The newest comment gets the lowest id, as ids across GitHub's two id spaces can.
+# The newest comment gets the lowest id, so only selection by created_at finds it.
 jq '.comments |= map(if .id == 1003 then .id = 900 else . end)' "$STUB_DIR/state.json" > "$STUB_DIR/s" && mv "$STUB_DIR/s" "$STUB_DIR/state.json"
 run_out view "$n"
 ok "view: title, body, state, labels and the states among them" '[ "$(jq -r .title <<<"$OUT")" = "Read me" ] && [ "$(jq -r .state <<<"$OUT")" = open ] && [ "$(jq -c .states <<<"$OUT")" = "[\"needs-answers\",\"ready\"]" ] && [ "$(jq -c .labels <<<"$OUT")" = "[\"ready\",\"needs answers\",\"bug\"]" ]'
 ok "view: the closing pull requests as links" '[ "$(jq -c .links <<<"$OUT")" = "[{\"kind\":\"closing-pull-request\",\"url\":\"https://github.com/o/r/pull/40\"}]" ]'
-ok "view: every comment, across pages, with numeric ids" '[ "$(jq ".comments | length" <<<"$OUT")" = 3 ] && [ "$(jq -c "[.comments[].id]" <<<"$OUT")" = "[1001,1002,900]" ]'
+ok "view: every comment, across pages (--paginate), with numeric ids" '[ "$(jq ".comments | length" <<<"$OUT")" = 3 ] && [ "$(jq -c "[.comments[].id]" <<<"$OUT")" = "[1001,1002,900]" ]'
 run_out comment-find "$n" review
 ok "comment-find: the newest marker comment by time, not by id" '[ "$(jq -r .id <<<"$OUT")" = 900 ] && grep -q "^second" <<<"$(jq -r .body <<<"$OUT")"'
 run_out comment-find "$n" confirmed-decisions
 ok "comment-find with no such comment prints null" '[ $RC = 0 ] && [ "$OUT" = null ]'
 run view 999
 ok "view of no issue: exit 1" '[ $RC = 1 ]'
+pr 40; run view 40
+ok "view of a pull request's number: exit 1, naming it a pull request" '[ $RC = 1 ] && grep -qF "pull request" <<<"$OUT"'
+echo 2.72.1 > "$STUB_DIR/gh-version"; reset_log; run view "$n"
+ok "view with gh older than 2.73.0: exit 1 naming the version needed, before the issue is read" '[ $RC = 1 ] && grep -qF "gh 2.73.0 or later" <<<"$OUT" && ! grep -q "^issue|view" "$STUB_DIR/gh-log"'
+echo 3.0.0 > "$STUB_DIR/gh-version"; run_out view "$n"
+ok "… and a later major version passes" '[ $RC = 0 ]'
+rm -f "$STUB_DIR/gh-version"
 fresh; n=$(issue "Mapped" go Ready)
 settings '{"github": {"labels": {"ready": "go"}}}'
 run_out view "$n"
@@ -327,6 +393,10 @@ run_out pr-reference "$open"
 ok "an open issue of this repository: linked, Closes #N" '[ "$(jq -r .outcome <<<"$OUT")" = linked ] && [ "$(jq -r .line <<<"$OUT")" = "Closes #$open" ] && [ "$(jq -r .title <<<"$OUT")" = "Open one" ]'
 run_out pr-reference "000$open"
 ok "leading zeros are dropped" '[ "$(jq -r .line <<<"$OUT")" = "Closes #$open" ]'
+run_out pr-reference 000
+ok "a number that is all zeros: none" '[ $RC = 0 ] && [ "$(jq -r .outcome <<<"$OUT")" = none ]'
+OUT=$(cd "$R" && PATH="$SB/nogh" bash "$TRACKER" pr-reference "$open" 2>/dev/null); RC=$?
+ok "with gh not on PATH: unverified, and exit 0" '[ $RC = 0 ] && [ "$(jq -r .outcome <<<"$OUT")" = unverified ]'
 run_out pr-reference "https://github.com/o/r/issues/$open"
 ok "this repository's issue URL: linked as #N" '[ "$(jq -r .line <<<"$OUT")" = "Closes #$open" ]'
 run_out pr-reference 4

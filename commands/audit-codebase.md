@@ -90,7 +90,7 @@ A section under any other heading is read too, and applied where its text says. 
    - **Public surface** — the tool does not look at public members. Walk the public API of the published library `CONVENTIONS.md` → *Public API and breaking changes* names and report members nothing in the repository uses, **as a question for the maintainer, not as dead code**: a published library's public member may have external callers.
    - **Files and assets** — tracked files nothing references: source files outside every project, snapshots whose test is gone, scripts no workflow, command or document invokes, resources nothing embeds or packs.
    - **Duplication** — from the clone report, group clones and read each group. Report **semantic drift between near-copies** — two copies that were once the same and now differ in behaviour — ahead of plain duplication; the drift is the danger. Repetition inside test arrangement code is a finding only where the copies have drifted or a helper already exists and is not used.
-   - **Baseline** — look for a previous audit issue with `bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh search-title "Codebase audit"`, which prints the issues, open or closed, whose title matches the text. `search-title` is optional in the tracker contract: where it exits 3, the tracker cannot search, so treat this run as the baseline and say in the issue that no earlier audit could be looked for. If there is one, report only what is new since it, plus anything it listed that has since become live. If there is none, this run is the baseline: report everything confirmed, and say so in the issue.
+   - **Baseline** — look for a previous audit issue with `bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh search-title "Codebase audit"`, which prints the issues, open or closed, whose title matches the text. `search-title` is optional in the tracker contract: where it exits 3, the tracker cannot search, so treat this run as the baseline and say in the issue that no earlier audit could be looked for. Any other non-zero exit is a failed search, not an empty one: run it once more, and if it fails again treat this run as the baseline and say in the issue that the search failed, quoting what it printed. If there is one, report only what is new since it, plus anything it listed that has since become live. If there is none, this run is the baseline: report everything confirmed, and say so in the issue.
 
 4. **Verify every finding before it is reported.** Reviewer severities are not reliable enough to relay, and a lens is briefed to find things. So no lens output goes into the issue unchallenged.
 
@@ -100,13 +100,15 @@ A section under any other heading is read too, and applied where its text says. 
 
    This step costs one agent per finding and is not to be thinned, sampled or batched several-findings-to-an-agent to save cost. A verifier holding several findings stops being independent of any of them.
 
-5. **Raise one issue.** Compose the body at `.claude/scratch/audit/issue-body.md`, then create it through the tracker interface — never a tracker's own CLI or API, and written unquoted, as here, so the allow rule `/gaffer:init` writes matches it:
+5. **Raise one issue.** Compose the body at `.claude/scratch/audit/issue-body.md`, then create it through the tracker interface — never a tracker's own CLI or API, and written unquoted, as here, so an allow rule for it matches:
 
    ```bash
    bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh create --title "Codebase audit: <short HEAD> (<date>)" --body-file .claude/scratch/audit/issue-body.md --state audit
    ```
 
    It prints the new issue's `{ref, url}`. One issue per run, whatever the run found.
+
+   If it exits non-zero, nothing was raised. Keep `.claude/scratch/audit/issue-body.md`, and report its path and what the call printed, so the run's findings are not lost. Where it says the `audit` state's label does not exist, the remedy is `bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh setup` (or re-running `/gaffer:init`), then the same `create`.
 
    The body, in this order:
 

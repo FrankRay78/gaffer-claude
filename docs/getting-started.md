@@ -27,7 +27,7 @@ In a session at the repository root, on a clean default branch:
 
 It asks nothing. It checks the repository can take a pull request — no uncommitted or untracked files, on the default branch with nothing unpushed, a GitHub repository behind the remote, `gh` signed in, `jq` on the path — and stops before changing anything if not. Otherwise it raises a pull request titled *Set up gaffer* carrying:
 
-- **`.claude/settings.json` entries** that enable gaffer and `pr-review-toolkit` for every clone, allow the commands' calls to the tracker interface without a prompt ([`tracker.md`](tracker.md) → *Permissions*), and put `Bash(chmod:*)` on `permissions.ask`. The `ask` rule is the backstop behind the plugin's `no-chmod` hook: the hook refuses the executable-bit forms with a message naming `bash script.sh`, and the rule catches the forms the hook declines to decide.
+- **`.claude/settings.json` entries** that enable gaffer and `pr-review-toolkit` for every clone, and put `Bash(chmod:*)` on `permissions.ask`. The `ask` rule is the backstop behind the plugin's `no-chmod` hook: the hook refuses the executable-bit forms with a message naming `bash script.sh`, and the rule catches the forms the hook declines to decide.
 - **`.claude/scratch/` git-ignored**, since every command writes its working files there.
 - **`.claude/memory/MEMORY.md`**, and **`CLAUDE.md` importing it** and `CONVENTIONS.md` (once there is one), so the memory entries `/gaffer:capture-learnings` writes and the conventions are in every session's context.
 - **A `CONVENTIONS.md` and a `REVIEW.md`** with a section for each template heading the repository already answers: pointers to its CI workflows, scripts and guides, and the build, test and format commands copied word for word from the file that runs them. It writes no principle or decision; a heading with nothing to point at is left out, so the plugin's default applies.
@@ -48,10 +48,7 @@ What `/gaffer:init` adds to `.claude/settings.json`:
     "gaffer-claude": { "source": { "source": "github", "repo": "FrankRay78/gaffer-claude" } }
   },
   "enabledPlugins": { "gaffer@gaffer-claude": true, "pr-review-toolkit@claude-plugins-official": true },
-  "permissions": {
-    "allow": ["Bash(bash */plugins/cache/*/gaffer/*/tracker/tracker.sh *)"],
-    "ask": ["Bash(chmod:*)"]
-  }
+  "permissions": { "ask": ["Bash(chmod:*)"] }
 }
 ```
 
@@ -61,7 +58,7 @@ Then git-ignore `.claude/scratch/`, and add `@CONVENTIONS.md` and `@.claude/memo
 bash ~/.claude/plugins/cache/gaffer-claude/gaffer/<version>/tracker/tracker.sh setup
 ```
 
-The commands also assume `main` is the default branch and that `git`, `gh` (signed in) and `jq` are on the path. The full list is under *What a repository needs* in the [README](../README.md).
+The commands also assume `main` is the default branch and that `git`, `gh` 2.73.0 or later (signed in) and `jq` are on the path. The full list is under *What a repository needs* in the [README](../README.md).
 
 ## 3. Run the issue stage on an idea
 

@@ -91,7 +91,7 @@ CONFIG_EXIT=78
 
 usage() {
   echo "usage: chain.sh [--dry-run] [--skip-permissions] [--settings <file>] <issue>" >&2
-  echo "  <issue>: one issue, as the repository's tracker names it; on GitHub 270 or #270" >&2
+  echo "  <issue>: one issue of this repository, as its tracker names it; on GitHub 270 or #270" >&2
   echo "  --dry-run: list the stages that would run, and run nothing" >&2
   echo "  --skip-permissions: run every stage with --dangerously-skip-permissions (see docs/chain.md)" >&2
   echo "  --settings <file>: the settings file to read stage models from (default .gaffer/chain.json, if present)" >&2
@@ -149,6 +149,10 @@ fi
 command -v jq >/dev/null 2>&1 || { echo "chain: refused — jq is not on PATH; no stage was started."; exit 1; }
 TRACKER="$PLUGIN_ROOT/tracker/tracker.sh"
 [ -f "$TRACKER" ] || config_refused "$PLUGIN_ROOT has no tracker/tracker.sh, so the issue cannot be read"
+# The commands call the tracker with its path unquoted, the form an allow rule matches, so in a
+# stage a path with whitespace splits and every tracker call fails, which would park the issue.
+[[ $PLUGIN_ROOT != *[[:space:]]* ]] \
+  || config_refused "the plugin checkout $PLUGIN_ROOT has whitespace in its path, which breaks the stages' unquoted tracker calls; move it"
 # The issue, as the tracker the settings name recognises it: `ref` normalises it for the stage
 # prompts, `mention` names it in the dry run. Before report mode, so a dry run refuses what a run
 # would. A reference the tracker does not recognise is a usage error; a tracker that cannot answer
@@ -173,7 +177,8 @@ else
   RAISE_PR_PROMPT="/gaffer:raise-pr $issue"
 fi
 
-# Report mode reaches no git or claude command, so it cannot change anything.
+# Report mode reaches no claude command, and git only read-only (the tracker's `ref` reads the
+# origin remote), so it cannot change anything.
 if [ "$dry_run" = 1 ]; then
   echo "chain: dry run for issue $mention — nothing will be run"
   echo "  1. build: /gaffer:build $issue"

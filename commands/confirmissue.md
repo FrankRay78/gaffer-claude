@@ -19,7 +19,7 @@ $ARGUMENTS
 
 You **MUST** resolve this before proceeding. If empty, ask the user which issue to confirm.
 
-**Every tracker call goes through the tracker interface**, `bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh <operation> …`, never a tracker's own CLI or API: the repository's settings choose the tracker, and [`docs/tracker.md`](../docs/tracker.md) is the contract — each operation's arguments, its JSON output and its exit codes. Write the script's path unquoted, as shown, so the allow rule `/gaffer:init` writes matches it. Put a reference the user typed in single quotes, as shown: unquoted, a leading `#` starts a shell comment and the reference is lost. States are the contract's tokens (`needs-answers`, `ready`); on GitHub each is a label (`needs answers`, `ready`).
+**Every tracker call goes through the tracker interface**, `bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh <operation> …`, never a tracker's own CLI or API: the repository's settings choose the tracker, and [`docs/tracker.md`](../docs/tracker.md) is the contract — each operation's arguments, its JSON output and its exit codes. Write the script's path unquoted, as shown, so an allow rule for it matches. Put a reference the user typed in single quotes, as shown: unquoted, a leading `#` starts a shell comment and the reference is lost. States are the contract's tokens (`needs-answers`, `ready`); on GitHub each is a label (`needs answers`, `ready`).
 
 ---
 
