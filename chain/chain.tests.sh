@@ -287,10 +287,10 @@ call="bash $PLUGIN_ROOT/tracker/tracker.sh ref #270"
 bash "$PLUGIN_ROOT/tracker/tracker.sh" ref '#270' > "$STUB_DIR/tracker-out"
 printf '%s' "${GAFFER_SETTINGS-unset}" > "$STUB_DIR/stage-settings"
 ACT
-PLUGIN_ROOT="$PLUGIN_ROOT" chain 270
+GAFFER_SETTINGS="$SB/no-such-settings.json" PLUGIN_ROOT="$PLUGIN_ROOT" chain 270
 ok "every stage is allowed the tracker entry point of the checkout it loads" '[ "$RC" = 0 ] && [ "$(grep -cF -- "--allowedTools|$TRACKER_RULE|" "$STUB_DIR/log")" = 3 ]'
 ok "a stage's tracker call matches that rule, and runs" '[ -f "$STUB_DIR/tracker-matched" ] && [ "$(cat "$STUB_DIR/tracker-out" 2>/dev/null)" = 270 ]'
-ok "with no settings file the stages are given none" '[ "$(cat "$STUB_DIR/stage-settings")" = "" ] || [ "$(cat "$STUB_DIR/stage-settings")" = unset ]'
+ok "with no settings file the stages are given none, whatever the caller's environment held" '[ "$(cat "$STUB_DIR/stage-settings")" = unset ]'
 new_case
 reply 1 "$(ready)"; reply 2 "$(verified)"; reply 3 "$(raised)"
 chain --skip-permissions 270

@@ -14,10 +14,10 @@
 # the setting serve these operations?), `operations` (what the adapter implements) and `branch-ref`
 # (the issue reference a branch name carries, found with the adapter's own `ref`).
 #
-# EXIT. 0 success; 1 the operation failed, or a reference is not one the tracker recognises; 2 bad
-# usage, including a state or marker name outside the contract's closed lists; 3 the adapter does
-# not implement the operation; 78 the setting names no usable adapter. On 2, 3 and 78 nothing has
-# reached the tracker. Tests: tracker.tests.sh beside this file, and conformance.sh for an adapter.
+# EXIT. 0 success; 1 the operation failed, or a reference is not one the tracker recognises; 2 an
+# operation outside the contract, or a state or marker name outside its closed list; 3 the adapter
+# does not implement the operation; 78 the setting names no usable adapter, or the adapter's own key
+# is malformed. On 2, 3 and 78 nothing has been changed. Tests: tracker.tests.sh beside this file, and conformance.sh for an adapter.
 
 set -uo pipefail
 
@@ -72,10 +72,9 @@ ADAPTER="$TRACKER_DIR/adapters/$TRACKER.sh"
 export TRACKER_SETTINGS=$SETTINGS
 adapter() { bash "$ADAPTER" "$@"; }
 
-implemented() {
-  local list
-  list=$(adapter operations 2>/dev/null) || refused "$SETTING_NAME, whose adapter cannot list its operations"
-  printf '%s\n' "$list"
+# Not a $(…) helper: refused's exit must end the script, not a subshell.
+load_implemented() {
+  IMPLEMENTED=$(adapter operations 2>/dev/null) || refused "$SETTING_NAME, whose adapter cannot list its operations"
 }
 
 # check_op <op> — the operation is in the contract and the adapter implements it.
@@ -88,47 +87,51 @@ check_op() {
   fi
 }
 
+check_marker() { in_list "$1" "${MARKERS[@]}" || { echo "tracker: '$1' is not a marker; the markers are $(joined "${MARKERS[@]}")" >&2; exit 2; }; }
 check_state() { in_list "$1" "${STATES[@]}" || { echo "tracker: '$1' is not a state; the states are $(joined "${STATES[@]}")" >&2; exit 2; }; }
 
 case "$OP" in
   -h|--help) usage ;;
   require)
     [ $# -ge 1 ] || usage
-    IMPLEMENTED=$(implemented)
+    load_implemented
     for op in "$@"; do check_op "$op"; done
     exit 0 ;;
   operations)
-    IMPLEMENTED=$(implemented)
+    load_implemented
     jq -n --arg t "$TRACKER" --arg s "$SETTINGS" --arg impl "$IMPLEMENTED" \
-      --argjson req "$(printf '%s\n' "${REQUIRED_OPS[@]}" | jq -R . | jq -s .)" \
-      --argjson opt "$(printf '%s\n' "${OPTIONAL_OPS[@]}" | jq -R . | jq -s .)" \
-      '{tracker: $t, settings: (if $s == "" then null else $s end), required: $req, optional: $opt,
+      --arg req "${REQUIRED_OPS[*]}" --arg opt "${OPTIONAL_OPS[*]}" \
+      '{tracker: $t, settings: (if $s == "" then null else $s end), required: ($req | split(" ")), optional: ($opt | split(" ")),
         implemented: ($impl | split("\n") | map(select(length > 0)))}'
     exit 0 ;;
   branch-ref)
     [ $# -eq 1 ] || usage
-    IMPLEMENTED=$(implemented)
+    load_implemented
     check_op ref
     # <prefix>/<reference>-<slug>: the shortest run of hyphen-separated words after the prefix that
     # the tracker recognises, so a key that itself holds a hyphen (PROJ-12) is found whole and a
     # slug word with digits in it (net10) is never taken for one.
     case "$1" in */*) rest=${1#*/} ;; *) echo "tracker: the branch $1 has no <prefix>/ to read a reference after" >&2; exit 1 ;; esac
     IFS=- read -r -a words <<<"$rest"
+    TRACKER_ERR=$(mktemp) || exit 1
+    trap 'rm -f "$TRACKER_ERR"' EXIT
     candidate=
     for ((i = 0; i < ${#words[@]} - 1; i++)); do
       candidate=${candidate:+$candidate-}${words[i]}
-      if ref=$(adapter ref "$candidate" 2>/dev/null); then echo "$ref"; exit 0; fi
+      ref=$(adapter ref "$candidate" 2>"$TRACKER_ERR"); rc=$?
+      [ "$rc" = 0 ] && { echo "$ref"; exit 0; }
+      [ "$rc" = 1 ] || { cat "$TRACKER_ERR" >&2; exit "$rc"; }
     done
     echo "tracker: the branch $1 carries no issue reference the $TRACKER tracker recognises" >&2
     exit 1 ;;
 esac
 
-IMPLEMENTED=$(implemented)
+load_implemented
 check_op "$OP"
 case "$OP" in
   state-add|state-remove) [ $# -eq 2 ] || usage; check_state "$2" ;;
-  marker) [ $# -eq 1 ] || usage
-          in_list "$1" "${MARKERS[@]}" || { echo "tracker: '$1' is not a marker; the markers are $(joined "${MARKERS[@]}")" >&2; exit 2; } ;;
+  marker) [ $# -eq 1 ] || usage; check_marker "$1" ;;
+  comment-find) [ $# -eq 2 ] || usage; check_marker "$2" ;;
   create) args=("$@")
           for ((i = 0; i < ${#args[@]}; i++)); do
             [ "${args[i]}" != --state ] || { [ $((i + 1)) -lt ${#args[@]} ] || usage; check_state "${args[i+1]}"; }

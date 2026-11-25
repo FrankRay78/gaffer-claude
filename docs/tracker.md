@@ -25,7 +25,7 @@ An adapter may read its own key from the same file. The `github` adapter reads `
 
 Each state defaults to the label shown. `github.labels.ready` is the label `/gaffer:confirmissue` applies; the runner's own `labels.ready` is the label it selects on, and the two are kept apart so a repository can confirm and queue separately, as before.
 
-A setting that names no adapter, a tracker name that is not a plain lower-case name, or an adapter that does not implement an operation stops the call before the tracker is reached, with a message naming the setting, the file and the operation. Each command first runs `require` for every operation it needs, so a broken setting stops it before it changes anything.
+A setting that names no adapter, a tracker name that is not a plain lower-case name, or an adapter that does not implement an operation stops the call before the tracker is reached, with a message naming the setting, the file and the operation. `draftissue`, `reviewissue`, `confirmissue` and `graft` first run `require` for every operation they need, so a broken setting stops them before they change anything; `build` reads the issue before it changes anything, `audit-codebase` makes one tracker call that changes anything, at its end, and `raise-pr` treats a failed lookup as an abstain.
 
 ## Exit codes
 
@@ -60,7 +60,7 @@ A reference is whatever the user typed to name an issue. `ref` checks that the t
 
 ## Operations
 
-Every operation is required except `comment-delete` and `search-title`. An operation that returns content prints one JSON value on stdout, never text for a shell to evaluate; one that only changes something prints nothing.
+Every operation is required except `comment-delete` and `search-title`. An operation that returns content prints one JSON value on stdout, never text for a shell to evaluate — except `ref` without `--forms` and `marker`, which print one line, and `setup`, which prints a line per state; one that only changes something prints nothing.
 
 | Operation | Arguments | Output |
 |---|---|---|
@@ -78,7 +78,7 @@ Every operation is required except `comment-delete` and `search-title`. An opera
 | `close` | `<ref> <note file>` | Closes the issue with the note as its closing comment; nothing. |
 | `pr-reference` | `<ref>` | What a pull request body may say about the issue, as one of `{"outcome": "linked", "line", "ref", "title"}` — an open issue of this repository, and `line` the text that closes it on merge (`Closes #N`); `{"outcome": "none", "reason", "line"}` — the lookup settled that nothing may be closed, and `line`, where not `null`, still references it (`Refs #N` for a closed issue); `{"outcome": "unverified", "reason"}` — the lookup could not answer (auth, network, rate limit). Exit 0 for all three: `raise-pr` abstains rather than fails. |
 | `marker` | `<name>` | The marker's text, one line. Reaches no tracker. |
-| `search-title` | `<text>` | Optional. `[{"ref", "title", "state", "url"}]` for every issue, open or closed, whose title holds the text. Where it is missing, `audit-codebase` runs with no baseline and says so. |
+| `search-title` | `<text>` | Optional. `[{"ref", "title", "state", "url"}]` for the issues, open or closed, whose title matches the text — on GitHub, up to 100 by GitHub's search. Where it is missing, `audit-codebase` runs with no baseline and says so. |
 
 Three operations are the dispatcher's own: `require <operation>…` (exit 0 when the adapter implements them all, else the exit and message the first missing one would give), `operations` (`{"tracker", "settings", "required", "optional", "implemented"}`) and `branch-ref`.
 
@@ -91,7 +91,7 @@ A headless session denies, without asking, a command its permission rules do not
 - **The chain** passes every stage `--allowedTools "Bash(bash <checkout>/tracker/tracker.sh *)"` for the checkout it loads the plugin from, unless it runs with `--skip-permissions`, where nothing is denied anyway. A stage needs nothing from the repository's settings to reach the tracker.
 - **An interactive session** needs the allow rule `/gaffer:init` writes into `.claude/settings.json`: `Bash(bash */plugins/cache/*/gaffer/*/tracker/tracker.sh *)`. It matches the plugin as Claude Code installs it, under any configuration directory, marketplace and version, so it outlives a plugin update. Without it, each tracker call asks first. A session started with `claude --plugin-dir <checkout>` loads the plugin from outside the cache and is asked too; add `Bash(bash <checkout>/tracker/tracker.sh *)` to your own settings for it.
 
-The commands write every call unquoted — `bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh view 50` — because that is the form the rules match. Each call stands alone, never piped into another command, which a rule for the tracker would not cover.
+The commands write the script's path unquoted — `bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh view 50` — because that is the form the rules match, and a reference the user typed in single quotes — `ref '#50'` — because unquoted a leading `#` starts a shell comment. Each call stands alone, never piped into or chained with another command, which a rule for the tracker would not cover.
 
 ## Writing an adapter
 

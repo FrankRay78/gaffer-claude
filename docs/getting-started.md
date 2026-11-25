@@ -55,10 +55,10 @@ What `/gaffer:init` adds to `.claude/settings.json`:
 }
 ```
 
-Then git-ignore `.claude/scratch/`, and add `@CONVENTIONS.md` and `@.claude/memory/MEMORY.md` lines to `CLAUDE.md`, creating it if there is none. Claude Code does not read `.claude/memory/` on its own, so without the second line no session sees a memory entry; the import is harmless before the first entry exists. Then, from the root of the repository, create the labels — every state the commands use, in whichever tracker the repository names:
+Then git-ignore `.claude/scratch/`, and add `@CONVENTIONS.md` and `@.claude/memory/MEMORY.md` lines to `CLAUDE.md`, creating it if there is none. Claude Code does not read `.claude/memory/` on its own, so without the second line no session sees a memory entry; the import is harmless before the first entry exists. Then, from the root of the repository, create the labels — every state the commands use, in whichever tracker the repository names — with the tracker's setup from the installed plugin, where `<version>` is the newest directory under `~/.claude/plugins/cache/gaffer-claude/gaffer/`:
 
 ```bash
-bash ~/.claude/plugins/cache/gaffer-claude/gaffer/*/tracker/tracker.sh setup
+bash ~/.claude/plugins/cache/gaffer-claude/gaffer/<version>/tracker/tracker.sh setup
 ```
 
 The commands also assume `main` is the default branch and that `git`, `gh` (signed in) and `jq` are on the path. The full list is under *What a repository needs* in the [README](../README.md).

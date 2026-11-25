@@ -21,7 +21,7 @@ OPERATIONS=(setup ref view create body-set state-add state-remove comment-find c
 die() { echo "tracker: github: $*" >&2; exit 1; }
 need_gh() { command -v gh >/dev/null 2>&1 || die "gh is not on PATH"; }
 
-# The label each state maps to, as "state|label|description" lines.
+# The label each state maps to, as "state|label" lines.
 labels() {
   local defaults='{"needs-answers": "needs answers", "ready": "ready", "parked": "parked", "audit": "audit"}' conf='{}'
   if [ -n "${TRACKER_SETTINGS:-}" ]; then
@@ -47,21 +47,35 @@ description_of() {
   esac
 }
 
-# parse_ref <reference> — sets NUM, REPO_ARGS (--repo, or nothing for this repository) and
-# API_REPO, or fails.
+lower() { tr '[:upper:]' '[:lower:]' <<<"$1"; }
+
+# This repository's owner/repo, read from the origin remote's URL — locally, as `ref` must not reach
+# GitHub. Empty when origin is not a GitHub URL.
+origin_repo() {
+  local url
+  url=$(git remote get-url origin 2>/dev/null) || return 0
+  [[ $url =~ github\.com[:/]([^/]+)/([^/]+)$ ]] && echo "${BASH_REMATCH[1]}/${BASH_REMATCH[2]%.git}"
+}
+
+# parse_ref <reference> — sets NUM, REPO (owner/repo, or empty for this repository), REPO_ARGS and
+# API_REPO, or fails. A URL or owner/repo#N naming this repository is this repository's issue N,
+# so its mention stays #N.
 parse_ref() {
   local r=$1
   if [[ $r =~ ^#?([0-9]+)$ ]]; then
-    NUM=${BASH_REMATCH[1]}; REPO=; REPO_ARGS=(); API_REPO='{owner}/{repo}'
+    NUM=${BASH_REMATCH[1]}; REPO=
   elif [[ $r =~ ^https://github\.com/([^/[:space:]]+)/([^/[:space:]]+)/issues/([0-9]+)/?$ ]] \
     || [[ $r =~ ^([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)#([0-9]+)$ ]]; then
-    NUM=${BASH_REMATCH[3]}; REPO="${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"; REPO_ARGS=(--repo "$REPO"); API_REPO=$REPO
+    NUM=${BASH_REMATCH[3]}; REPO="${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
+    [ "$(lower "$REPO")" != "$(lower "$(origin_repo)")" ] || REPO=
   else
     return 1
   fi
+  if [ -n "$REPO" ]; then REPO_ARGS=(--repo "$REPO"); API_REPO=$REPO; else REPO_ARGS=(); API_REPO='{owner}/{repo}'; fi
 }
 target() { parse_ref "$1" || { echo "tracker: github: '$1' is not a GitHub issue reference (N, #N, an issue URL or owner/repo#N)" >&2; exit 1; }; }
 normal() { if [ -n "$REPO" ]; then echo "$REPO#$NUM"; else echo "$NUM"; fi; }
+mention() { if [ -n "$REPO" ]; then echo "$REPO#$NUM"; else echo "#$NUM"; fi; }
 
 # The issue's comments, every page, as one JSON array. --paginate prints one array per page.
 comments() {
@@ -74,10 +88,9 @@ op_ref() {
   local forms=0
   [ "${1:-}" = --forms ] && { forms=1; shift; }
   [ $# -eq 1 ] || die "usage: ref [--forms] <reference>"
-  parse_ref "$1" || { echo "tracker: github: '$1' is not a GitHub issue reference (N, #N, an issue URL or owner/repo#N)" >&2; exit 1; }
+  target "$1"
   if [ "$forms" = 1 ]; then
-    jq -n -c --arg r "$(normal)" --arg n "$NUM" --arg repo "$REPO" \
-      '{ref: $r, branch: $n, mention: (if $repo == "" then "#\($n)" else $r end)}'
+    jq -n -c --arg r "$(normal)" --arg n "$NUM" --arg m "$(mention)" '{ref: $r, branch: $n, mention: $m}'
   else
     normal
   fi
@@ -104,9 +117,10 @@ op_create() {
   local title= body= label url
   local -a label_args=()
   while [ $# -gt 0 ]; do
+    [ $# -ge 2 ] || die "usage: create --title <title> --body-file <file> [--state <state>]…"
     case $1 in
-      --title) title=${2:-}; shift 2 ;;
-      --body-file) body=${2:-}; shift 2 ;;
+      --title) title=$2; shift 2 ;;
+      --body-file) body=$2; shift 2 ;;
       --state) label=$(label_of "$2") || exit 78; label_args+=(--label "$label"); shift 2 ;;
       *) die "usage: create --title <title> --body-file <file> [--state <state>]…" ;;
     esac
@@ -145,8 +159,7 @@ op_marker() {
   esac
 }
 
-# The newest comment carrying the marker, by created_at: comment ids are not issued in time order
-# across GitHub's two id spaces, so they never pick the newest.
+# The newest comment carrying the marker, by created_at.
 op_comment_find() {
   [ $# -eq 2 ] || die "usage: comment-find <reference> <marker name>"
   target "$1"; need_gh
@@ -186,10 +199,13 @@ op_comment_delete() {
 op_link() {
   [ $# -eq 2 ] || die "usage: link <reference> <other reference>"
   target "$2"
-  local mention
-  if [ -n "$REPO" ]; then mention="$REPO#$NUM"; else mention="#$NUM"; fi
+  local other here full
+  other=$(mention); full=$other; here=$(origin_repo)
+  [ -n "$REPO" ] || [ -z "$here" ] || full="$here#$NUM"
   target "$1"; need_gh
-  gh issue comment "$NUM" ${REPO_ARGS[@]+"${REPO_ARGS[@]}"} --body "Related: $mention" >/dev/null || die "could not link $(normal) to $mention"
+  # On another repository's issue, #N would name that repository's issue N.
+  [ -z "$REPO" ] || other=$full
+  gh issue comment "$NUM" ${REPO_ARGS[@]+"${REPO_ARGS[@]}"} --body "Related: $other" >/dev/null || die "could not link $(normal) to $other"
 }
 
 op_close() {
@@ -206,7 +222,7 @@ op_close() {
 op_pr_reference() {
   [ $# -eq 1 ] || die "usage: pr-reference <reference>"
   target "$1"
-  local this out err rc n line
+  local this out err rc n
   unverified() { jq -n -c --arg r "$1" '{outcome: "unverified", reason: $r}'; exit 0; }
   none() { jq -n -c --arg r "$1" --arg l "${2:-}" '{outcome: "none", reason: $r, line: (if $l == "" then null else $l end)}'; exit 0; }
   command -v gh >/dev/null 2>&1 || unverified "gh is not on PATH"
@@ -214,7 +230,7 @@ op_pr_reference() {
   this=$(gh repo view --json nameWithOwner -q .nameWithOwner 2>"$err") || { out=$(tr '\n' ' ' <"$err"); rm -f "$err"; unverified "${out% }"; }
   n=$(sed 's/^0*//' <<<"$NUM")
   if [ -z "$n" ]; then rm -f "$err"; none "#$NUM is not an issue number"; fi
-  if [ -n "$REPO" ] && [ "$REPO" != "$this" ]; then rm -f "$err"; none "$REPO#$NUM is in another repository, not $this"; fi
+  if [ -n "$REPO" ] && [ "$(lower "$REPO")" != "$(lower "$this")" ]; then rm -f "$err"; none "$REPO#$NUM is in another repository, not $this"; fi
   out=$(gh issue view "$n" --json number,state,title,url -R "$this" 2>"$err"); rc=$?
   if [ "$rc" != 0 ]; then
     out=$(tr '\n' ' ' <"$err"); rm -f "$err"; out=${out% }
@@ -223,15 +239,15 @@ op_pr_reference() {
   fi
   rm -f "$err"
   local url state title
-  url=$(jq -r '.url' <<<"$out"); state=$(jq -r '.state' <<<"$out"); title=$(jq -r '.title' <<<"$out")
-  case $url in
-    "https://github.com/$this/pull/$n") none "#$n is a pull request" ;;
-    "https://github.com/$this/issues/$n") ;;
+  url=$(jq -er '.url | strings' <<<"$out" 2>/dev/null) || unverified "gh gave no issue URL for #$n: $out"
+  state=$(jq -r '.state' <<<"$out"); title=$(jq -r '.title' <<<"$out")
+  case $(lower "$url") in
+    "$(lower "https://github.com/$this/pull/$n")") none "#$n is a pull request" ;;
+    "$(lower "https://github.com/$this/issues/$n")") ;;
     *) none "#$n resolves to $url, not an issue of $this" ;;
   esac
   [ "$state" = OPEN ] || none "#$n is closed" "Refs #$n"
-  line="Closes #$n"
-  jq -n -c --arg l "$line" --arg r "$n" --arg t "$title" '{outcome: "linked", line: $l, ref: $r, title: $t}'
+  jq -n -c --arg l "Closes #$n" --arg r "$n" --arg t "$title" '{outcome: "linked", line: $l, ref: $r, title: $t}'
 }
 
 op_search_title() {
@@ -245,9 +261,9 @@ op_search_title() {
 op_setup() {
   [ $# -eq 0 ] || die "usage: setup"
   need_gh
-  local existing entry state name
+  local existing mapping state name
   existing=$(gh label list --limit 1000 --json name --jq '.[].name' 2>/dev/null) || die "could not list labels (gh label list failed)"
-  entry=$(labels) || exit 78
+  mapping=$(labels) || exit 78
   while IFS='|' read -r state name; do
     # GitHub label names are case-insensitive: an existing `Ready` is the `ready` label.
     if grep -qixF -- "$name" <<<"$existing"; then
@@ -256,11 +272,14 @@ op_setup() {
       gh label create "$name" --description "$(description_of "$state")" >/dev/null 2>&1 || die "could not create label '$name'"
       echo "added: label $name"
     fi
-  done <<<"$entry"
+  done <<<"$mapping"
 }
 
 [ $# -ge 1 ] || die "usage: github.sh <operation> [arguments…]"
 op=$1; shift
+# A malformed github.labels is refused by every operation, ref included, so the chain's check of
+# the issue reference also catches it before a stage starts.
+[ "$op" = operations ] || labels >/dev/null || exit 78
 case $op in
   operations) printf '%s\n' "${OPERATIONS[@]}" ;;
   setup) op_setup "$@" ;;

@@ -26,7 +26,7 @@ The argument may add guidance alongside the source ("item 12, but leave CSV out"
 
 If `$ARGUMENTS` is empty, ask the user for the source. Do not invent one.
 
-**Every tracker call goes through the tracker interface**, `bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh <operation> …`, never a tracker's own CLI or API: the repository's settings choose the tracker, and [`docs/tracker.md`](../docs/tracker.md) is the contract — each operation's arguments, its JSON output and its exit codes. Write the call unquoted, as shown, so the allow rule `/gaffer:init` writes matches it. Tell an existing issue from free text with `bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh ref <argument>`: exit 0 means it is an issue reference, and prints the `<ref>` every later call uses.
+**Every tracker call goes through the tracker interface**, `bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh <operation> …`, never a tracker's own CLI or API: the repository's settings choose the tracker, and [`docs/tracker.md`](../docs/tracker.md) is the contract — each operation's arguments, its JSON output and its exit codes. Write the script's path unquoted, as shown, so the allow rule `/gaffer:init` writes matches it. Put a reference the user typed in single quotes, as shown: unquoted, a leading `#` starts a shell comment and the reference is lost. Tell an existing issue from free text with `bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh ref '<argument>'`: exit 0 means it is an issue reference, and prints the `<ref>` every later call uses.
 
 ---
 
@@ -174,13 +174,13 @@ Choose a short title naming the capability. First check the tracker can raise it
 bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh require create
 ```
 
-Add `ref close` to that list for a migration. If it exits non-zero, stop here, keep the scratch file, and tell the user its path so they can post it by hand, passing on what the check printed — it names the setting and the operation at fault. Otherwise create the issue and delete the scratch file in one step:
+Add `ref close` to that list for a migration. If it exits non-zero, stop here, keep the scratch file, and tell the user its path so they can post it by hand, passing on what the check printed — it names the setting and the operation at fault. Otherwise create the issue:
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh create --title "<title>" --body-file <scratch-file> && rm <scratch-file>
+bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh create --title "<title>" --body-file <scratch-file>
 ```
 
-It prints the new issue's `{ref, url}`. If the create fails, stop here the same way, keeping the scratch file.
+It prints the new issue's `{ref, url}`; then delete the scratch file. If the create fails, stop here the same way, keeping the scratch file.
 
 **Migration — supersede the source issue.** Once the new issue exists, ask the user before closing each source issue, even if the argument said to close it — they may want to read the new one first. Close each one they confirm, one at a time. Write the note `Superseded by <mention>` to a scratch file with the **Write tool**, where `<mention>` is the `mention` that `bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh ref --forms <new ref>` prints (on GitHub, `#<M>`), then:
 

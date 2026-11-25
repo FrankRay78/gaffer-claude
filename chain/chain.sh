@@ -47,7 +47,7 @@
 # below where the file or the key is absent.
 # The issue is named however the repository's tracker recognises it (its `tracker` key, read by
 # tracker/tracker.sh beside the stage commands; GitHub by default), and is checked by the tracker
-# before anything else is. Every stage's tracker reads the same settings file this script read,
+# before any stage starts. Every stage's tracker reads the same settings file this script read,
 # through GAFFER_SETTINGS.
 # Overrides: CHAIN_MODEL replaces every stage's model; the effort stays as configured.
 # CHAIN_STAGE_TIMEOUT (seconds) replaces every stage's time limit.
@@ -134,10 +134,6 @@ if [ -n "$settings_file" ]; then
     config_refused "the settings file $settings_file is not a JSON object" ;;
   esac
 fi
-# The issue, as the tracker the settings name recognises it: `ref` normalises it for the stage
-# prompts, `mention` names it in the dry run. Before report mode, so a dry run refuses what a run
-# would. A reference the tracker does not recognise is a usage error; a tracker that cannot answer
-# at all is the chain's configuration, not the issue.
 if [ -n "$settings_file" ]; then
   GAFFER_SETTINGS="$(cd "$(dirname "$settings_file")" && pwd)/$(basename "$settings_file")"
   export GAFFER_SETTINGS
@@ -153,14 +149,22 @@ fi
 command -v jq >/dev/null 2>&1 || { echo "chain: refused — jq is not on PATH; no stage was started."; exit 1; }
 TRACKER="$PLUGIN_ROOT/tracker/tracker.sh"
 [ -f "$TRACKER" ] || config_refused "$PLUGIN_ROOT has no tracker/tracker.sh, so the issue cannot be read"
-forms=$(bash "$TRACKER" ref --forms "$1" 2>&1); rc=$?
+# The issue, as the tracker the settings name recognises it: `ref` normalises it for the stage
+# prompts, `mention` names it in the dry run. Before report mode, so a dry run refuses what a run
+# would. A reference the tracker does not recognise is a usage error; a tracker that cannot answer
+# at all is the chain's configuration, not the issue.
+tracker_err=$(mktemp) || { echo "chain: refused — mktemp failed; no stage was started."; exit 1; }
+forms=$(bash "$TRACKER" ref --forms "$1" 2>"$tracker_err"); rc=$?
+tracker_says=$(cat "$tracker_err"); rm -f "$tracker_err"
 case $rc in
   0) ;;
-  1) echo "$forms" >&2; usage; exit 1 ;;
-  *) config_refused "the tracker could not read the issue reference: $forms" ;;
+  1) echo "$tracker_says" >&2; usage; exit 1 ;;
+  *) config_refused "the tracker could not read the issue reference: $tracker_says" ;;
 esac
-issue=$(jq -r '.ref' <<<"$forms")
-mention=$(jq -r '.mention' <<<"$forms")
+issue=$(jq -er '.ref | select(type == "string" and length > 0)' <<<"$forms" 2>/dev/null) \
+  || config_refused "the tracker gave no reference for $1: $forms"
+mention=$(jq -er '.mention | select(type == "string" and length > 0)' <<<"$forms" 2>/dev/null) \
+  || config_refused "the tracker gave no mention for $1: $forms"
 if [ "$PRE_REVIEW" = true ]; then
   STAGE_COUNT=4
   RAISE_PR_PROMPT="/gaffer:raise-pr --draft $issue"
@@ -199,8 +203,8 @@ fi
 
 # Every tool the run depends on, named before an hour of model time is spent. Without this a
 # missing jq reads as a stage with no verdict and a missing git as a clean tree on no branch —
-# each blaming the model for a tool that was never installed. jq is already checked above when a
-# settings file is given; it is listed here for a run without one.
+# each blaming the model for a tool that was never installed. jq is checked above, before the
+# tracker is asked about the issue; it is listed here with the rest.
 for tool in jq git claude gh timeout; do
   if ! command -v "$tool" >/dev/null 2>&1; then
     echo "chain: refused — $tool is not on PATH; no stage was started."
@@ -527,7 +531,7 @@ run_stage() {
   # so each stage is allowed the tracker entry point of the checkout it loads, as the commands call
   # it. Last on the line: the flag takes every word after it.
   if [ "$skip_permissions" = 0 ]; then
-    cmd+=(--allowedTools "Bash(bash $PLUGIN_ROOT/tracker/tracker.sh *)")
+    cmd+=(--allowedTools "Bash(bash $TRACKER *)")
   else
     cmd+=(--dangerously-skip-permissions)
   fi

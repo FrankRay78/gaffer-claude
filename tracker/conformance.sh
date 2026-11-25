@@ -9,15 +9,15 @@
 # two issues, comments on them, sets every state, links them and closes both. Every operation is
 # reached through tracker.sh, so what is checked is what a command would see. Prints one line per
 # operation — `met: <op>`, `not met: <op> — <why>` or, for an optional one the adapter leaves out,
-# `not implemented (optional): <op>` — then a summary, and exits 0 only when every required
-# operation is met.
+# `not implemented (optional): <op>` — then a summary, and exits 0 only when every operation the
+# adapter implements is met.
 #
 # What it cannot check is the tracker's own side: that a state shows where people look, or that a
 # link is visible. Those are for the adapter's author to look at once.
 
 set -uo pipefail
 
-TRACKER="bash $(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/tracker.sh"
+TRACKER="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/tracker.sh"
 WORK=$(mktemp -d) || { echo "conformance: mktemp failed" >&2; exit 1; }
 trap 'rm -rf "$WORK"' EXIT
 
@@ -26,9 +26,12 @@ mkdir -p "$WORK/result"
 met() { [ -f "$WORK/result/$1" ] || echo met > "$WORK/result/$1"; }
 not_met() { echo "not met — $2" > "$WORK/result/$1"; }
 result() { cat "$WORK/result/$1" 2>/dev/null || echo "not met — not checked"; }
-t() { $TRACKER "$@"; }
+t() { bash "$TRACKER" "$@"; }
 # json_has <json> <jq test> — the output is one JSON value passing the test.
 json_has() { jq -e "$2" >/dev/null 2>&1 <<<"$1"; }
+# body_reads_back <view output> <file> — the issue's body is the file's, trailing whitespace on each
+# line aside.
+body_reads_back() { [ "$(jq -r .body <<<"$1" | sed -e 's/[[:space:]]*$//')" = "$(sed -e 's/[[:space:]]*$//' "$2")" ]; }
 
 ops=$(t operations) || { echo "conformance: tracker.sh could not name the adapter's operations; see above." >&2; exit 1; }
 echo "conformance: tracker $(jq -r .tracker <<<"$ops"), settings $(jq -r '.settings // "none"' <<<"$ops")"
@@ -48,7 +51,6 @@ else
   not_met setup "it failed: $out"
 fi
 
-# create
 A=; B=
 if out=$(t create --title "Conformance A" --body-file "$WORK/body" --state audit) && json_has "$out" '(.ref | type) == "string" and (.url | type) == "string"'; then
   A=$(jq -r .ref <<<"$out"); met create
@@ -70,18 +72,16 @@ else
   met ref
 fi
 
-# view
 out=$(t view "$A")
 if json_has "$out" '(.ref | type) == "string" and .title == "Conformance A" and (.body | type) == "string" and .state == "open"
     and (.states | type) == "array" and (.labels | type) == "array" and (.links | type) == "array" and (.comments | type) == "array"
     and (.states | index("audit")) != null'; then
-  if [ "$(jq -r .body <<<"$out" | sed -e 's/[[:space:]]*$//')" = "$(sed -e 's/[[:space:]]*$//' "$WORK/body")" ]; then met view; else not_met view "the body read back is not the body written"; fi
+  if body_reads_back "$out" "$WORK/body"; then met view; else not_met view "the body read back is not the body written"; fi
 else
   not_met view "the issue read back lacks a field, or the state create set: $out"
 fi
 
-# body-set
-if t body-set "$A" "$WORK/body2" >/dev/null && [ "$(t view "$A" | jq -r .body | sed -e 's/[[:space:]]*$//')" = "$(sed -e 's/[[:space:]]*$//' "$WORK/body2")" ]; then
+if t body-set "$A" "$WORK/body2" >/dev/null && body_reads_back "$(t view "$A")" "$WORK/body2"; then
   met body-set
 else
   not_met body-set "the replaced body did not read back byte for byte"
@@ -94,7 +94,6 @@ for s in "${STATES[@]}"; do
 done
 if t state-add "$B" not-a-state >/dev/null 2>&1; then not_met state-add "a state outside the contract was accepted"; fi
 
-# marker
 review=$(t marker review); decided=$(t marker confirmed-decisions); rpr=$(t marker review-pr)
 if [ -n "$review" ] && [ -n "$decided" ] && [ "$review" != "$decided" ] && [ "$rpr" = '<!-- review-pr -->' ] \
   && [ "$(grep -c '' <<<"$review$decided")" -le 1 ]; then
@@ -119,12 +118,10 @@ found=$(t comment-find "$A" review)
 if [ "$(jq -r '.id' <<<"$found")" = "$c2" ] && json_has "$found" '(.body | type) == "string" and (.created_at | type) == "string"'; then met comment-find; else not_met comment-find "the newest marker comment was not the one found: $found"; fi
 if t comment-edit "$A" "$c2" "$WORK/c3" >/dev/null && t comment-find "$A" review | jq -e '.body | startswith("Second review, edited.")' >/dev/null; then met comment-edit; else not_met comment-edit "the edited body did not read back"; fi
 
-# comment-delete, optional
 if has comment-delete; then
   if t comment-delete "$A" "$c2" && [ "$(t comment-find "$A" review | jq -r .id)" = "$c1" ]; then met comment-delete; else not_met comment-delete "after deleting the newest marker comment, the older one was not the one found"; fi
 fi
 
-# link
 if t link "$A" "$B" >/dev/null; then met link; else not_met link "it failed"; fi
 
 # pr-reference: an open issue is linked with a line to write; a closed one is not.
@@ -133,28 +130,25 @@ if ! json_has "$out" '.outcome == "linked" and (.line | type) == "string" and (.
   not_met pr-reference "an open issue was not linked: $out"
 fi
 
-# close
 printf 'Closed by the conformance suite.\n' > "$WORK/note"
 if t close "$A" "$WORK/note" >/dev/null && t view "$A" | jq -e '.state == "closed"' >/dev/null; then met close; else not_met close "the issue did not read back closed"; fi
 t close "$B" "$WORK/note" >/dev/null
 out=$(t pr-reference "$A")
 if json_has "$out" '.outcome == "none" and (.reason | type) == "string"'; then met pr-reference; else not_met pr-reference "a closed issue was not refused: $out"; fi
 
-# search-title, optional
 if has search-title; then
   if t search-title "Conformance A" | jq -e --arg a "$A" 'type == "array" and any(.[]; .ref == $a and .title == "Conformance A")' >/dev/null; then met search-title; else not_met search-title "the issue was not found by its title"; fi
 fi
 
 failed=0
-for op in "${REQUIRED[@]}"; do
-  r=$(result "$op")
-  case $r in met) ;; *) failed=$((failed + 1)) ;; esac
-  case $r in met) echo "met: $op" ;; *) echo "not met: $op — ${r#not met — }" ;; esac
-done
+report() {
+  local r
+  r=$(result "$1")
+  case $r in met) echo "met: $1" ;; *) failed=$((failed + 1)); echo "not met: $1 — ${r#not met — }" ;; esac
+}
+for op in "${REQUIRED[@]}"; do report "$op"; done
 for op in "${OPTIONAL[@]}"; do
-  if ! has "$op"; then echo "not implemented (optional): $op"; continue; fi
-  r=$(result "$op")
-  case $r in met) echo "met: $op" ;; *) failed=$((failed + 1)); echo "not met: $op — ${r#not met — }" ;; esac
+  if has "$op"; then report "$op"; else echo "not implemented (optional): $op"; fi
 done
 if [ "$failed" = 0 ]; then echo "conformance: every operation the adapter implements is met"; exit 0; fi
 echo "conformance: $failed operation(s) not met"

@@ -16,7 +16,7 @@
 # <repo> defaults to the current directory and must be the root of a git work tree.
 #
 # OUTPUT. One line per item, `<status>: <item>`, so the command can list the outcome in the pull
-# request body. `files` prints `added:` for something they put in place and `present:`
+# request body. `files` prints `added:` for something it puts in place and `present:`
 # for something already there; `check` prints `ready: <default branch>` or `not ready: <reason>`.
 # `files` also prints `ignored: <path>` for any file it manages that the repository git-ignores,
 # since a pull request cannot carry it, and `skipped:` for the CONVENTIONS.md import when there is
@@ -93,16 +93,16 @@ settings_merge() {
   jq --arg m "$MARKETPLACE" --argjson ms "$MARKETPLACE_SOURCE" --arg ask "$ASK_RULE" --arg allow "$ALLOW_RULE" \
      --args '
     def ensure(path; v): if (getpath(path) == null) then setpath(path; v) else . end;
-    def rule(kind; r): if ((.permissions[kind] // []) | index(r)) then . else .permissions[kind] = ((.permissions[kind] // []) + [r]) end;
+    def rule(kind; r): if ((.permissions[kind] // []) | index(r)) then . else .permissions[kind] += [r] end;
     ensure(["extraKnownMarketplaces", $m]; $ms)
     | reduce $ARGS.positional[] as $p (.; ensure(["enabledPlugins", $p]; true))
     | rule("ask"; $ask) | rule("allow"; $allow)
   ' "${PLUGINS[@]}" <<<"$json" > "$out" || fail "could not merge $src"
   jq -r --arg m "$MARKETPLACE" --arg ask "$ASK_RULE" --arg allow "$ALLOW_RULE" --args '
+    def missing_rule(kind; r): if ((.permissions[kind] // []) | index(r)) then empty else "permission \(kind) \(r)" end;
     (if .extraKnownMarketplaces[$m] == null then "marketplace \($m)" else empty end),
     ($ARGS.positional[] as $p | if .enabledPlugins[$p] == null then "plugin \($p)" else empty end),
-    (if ((.permissions.ask // []) | index($ask)) then empty else "permission ask \($ask)" end),
-    (if ((.permissions.allow // []) | index($allow)) then empty else "permission allow \($allow)" end)
+    missing_rule("ask"; $ask), missing_rule("allow"; $allow)
   ' "${PLUGINS[@]}" <<<"$json"
 }
 

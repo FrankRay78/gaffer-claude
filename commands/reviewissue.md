@@ -19,7 +19,7 @@ $ARGUMENTS
 
 You **MUST** resolve this before proceeding. If empty, ask the user which issue to review.
 
-**Every tracker call goes through the tracker interface**, `bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh <operation> …`, never a tracker's own CLI or API: the repository's settings choose the tracker, and [`docs/tracker.md`](../docs/tracker.md) is the contract — each operation's arguments, its JSON output and its exit codes. Write the call unquoted, as shown, so the allow rule `/gaffer:init` writes matches it. States are the contract's tokens (`needs-answers`, `ready`); on GitHub each is a label (`needs answers`, `ready`).
+**Every tracker call goes through the tracker interface**, `bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh <operation> …`, never a tracker's own CLI or API: the repository's settings choose the tracker, and [`docs/tracker.md`](../docs/tracker.md) is the contract — each operation's arguments, its JSON output and its exit codes. Write the script's path unquoted, as shown, so the allow rule `/gaffer:init` writes matches it. Put a reference the user typed in single quotes, as shown: unquoted, a leading `#` starts a shell comment and the reference is lost. States are the contract's tokens (`needs-answers`, `ready`); on GitHub each is a label (`needs answers`, `ready`).
 
 ---
 
@@ -60,7 +60,7 @@ The output is a **single GitHub comment** posted on the issue, structured so the
 First normalise the argument and check the tracker serves every operation this command needs, before anything is posted:
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh ref <argument>
+bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh ref '<argument>'
 bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh require view comment-find comment-post comment-edit state-add marker
 ```
 
@@ -74,7 +74,7 @@ Check two things, in this order.
 
 - **The issue carries the `ready` label** (`ready` is in its `states`) → **already confirmed**. **Stop.** Post nothing, edit nothing, and tell the user the issue has already been through the pre-build gate, pointing them at its `## Confirmed decisions` section — or, if there is no such section, say so plainly: the label was applied by hand, and removing it is the fix. Say how to reopen it: remove the `ready` label (`bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh state-remove <ref> ready`) and request the review again — an issue whose scope has moved is by definition no longer ready, and with the marker gone this command treats it as a first run. Never post a second review over settled decisions: it buries the `## Confirmed decisions` section under exactly the deliberation that confirming it was meant to clear away.
 
-**Otherwise, look for an existing review comment** marked with the review sentinel: `bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh comment-find <ref> review` prints the most recent one by creation time, or `null`.
+**Otherwise, look for an existing review comment** marked with the review sentinel: `bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh comment-find <ref> review` prints the most recent one by creation time, or `null`. A non-zero exit from it or from `view` is a **stop**, passing on what it printed: only a printed `null` means there is no review, and posting a second one over a review that could not be read is the failure this check exists to prevent.
 
 - **No existing review comment** → **first run**. Continue to step 2 (full gap analysis, post a new comment).
 - **Existing review comment found** → **refine run**. Skip to step 6 (re-frame hedging questions only; do not re-do gap analysis).

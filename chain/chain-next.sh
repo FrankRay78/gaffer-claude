@@ -78,7 +78,7 @@ read_settings() {
   unknown=$(jq -r 'keys - ["clone", "writers", "labels", "stages", "skip_permissions", "state_dir", "pre_review", "tracker", "github"] | .[]' <<<"$s" | paste -sd' ')
   [ -z "$unknown" ] || die "refused — $f names a setting this runner does not know: $unknown. Nothing was run."
   # The runner selects and parks issues with gh directly, so it serves a repository whose tracker is
-  # GitHub and no other; the tracker's own keys are the tracker interface's to check.
+  # GitHub and no other; the adapter's own key, github.labels, is the tracker interface's to check.
   tracker=$(jq -r 'if .tracker == null then "github" elif (.tracker | type) == "string" then .tracker else error("x") end' <<<"$s" 2>/dev/null) \
     || die "refused — in $f, tracker is not a string; nothing was run."
   [ "$tracker" = github ] || die "refused — $f names the tracker \"$tracker\", and this runner selects issues on GitHub only. Nothing was run."

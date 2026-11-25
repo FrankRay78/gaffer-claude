@@ -66,10 +66,10 @@ Two named exceptions, because the project reserves them for discussion. `CONVENT
    - `git fetch origin main` succeeds. If not, STOP. Reason: `git fetch origin main failed`.
    - `git log origin/main..main --oneline` is empty. If not, STOP: "Local main has unpushed commits — push or discard them before building." Step 4 branches from `origin/main`, so those commits would be silently absent from the issue's branch. Reason: `local main has unpushed commits`.
 
-2. **Read the issue** through the tracker interface — never a tracker's own CLI or API; [`docs/tracker.md`](../docs/tracker.md) is the contract, and each call is written unquoted, as here, so the allow rule `/gaffer:init` writes matches it:
+2. **Read the issue** through the tracker interface — never a tracker's own CLI or API; [`docs/tracker.md`](../docs/tracker.md) is the contract, and each call's script path is written unquoted, as here, so the allow rule `/gaffer:init` writes matches it, with the reference the user typed in single quotes, since unquoted a leading `#` starts a shell comment:
 
    ```bash
-   bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh ref --forms <argument>
+   bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh ref --forms '<argument>'
    bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh view <ref>
    ```
 
