@@ -24,10 +24,3 @@ This repository's additions to the gaffer plugin's default conventions. Each sec
 ## Documentation
 
 - **Where an interface change is documented** — [`docs/contributing.md`](docs/contributing.md) → *What a change must keep to*: a heading, combination rule or assumed convention in [`docs/interfaces.md`](docs/interfaces.md); a verdict field in [`docs/verdict-schema.md`](docs/verdict-schema.md); a new command in the [`README.md`](README.md) table; an unattended command's outward-facing act or post-condition in [`docs/unattended.md`](docs/unattended.md).
-
-## Change-intent records
-
-This project keeps them. The convention is [`docs/conventions/change-intent-records.md`](docs/conventions/change-intent-records.md), whose decision table `/gaffer:build` runs, and records live in [`docs/change-intent-records/`](docs/change-intent-records/).
-
-- **The `→ No CIR` rows that most often apply.** Reasoning already recorded in the issue's confirmed decisions is linked, not restated — unless the decision constrains future work (an interface in [`docs/interfaces.md`](docs/interfaces.md), the verdict schema, how the commands divide the work), which keeps a short record linking the issue for its reasoning. A change only to documentation written for the plugin's readers needs none at all; commands, `defaults/`, `templates/` and the chain scripts are not covered by that row, because they direct future work.
-- **Length and shape.** About **150 words**: the intent in a sentence, each rejected alternative with its reason, and any constraint the code will not make obvious.
