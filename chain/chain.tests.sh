@@ -230,6 +230,84 @@ new_case
 reply 1 "$(ready)"
 chain "#270"
 ok "an issue written #270 is the same issue" 'prompt_is 1 "/gaffer:build 270"'
+echo "The issue reference is the configured tracker's:"
+# A copy of the plugin with a second adapter, "fake", that recognises keys like PROJ-12 and
+# nothing else, so a case can show the chain taking what the tracker recognises.
+FAKE_PLUGIN="$SB/fake-plugin"
+mkdir -p "$FAKE_PLUGIN/chain" "$FAKE_PLUGIN/.claude-plugin"
+cp -R "$PLUGIN_ROOT/tracker" "$FAKE_PLUGIN/tracker"
+cp "$CHAIN" "$FAKE_PLUGIN/chain/chain.sh"
+cp "$PLUGIN_ROOT/.claude-plugin/plugin.json" "$FAKE_PLUGIN/.claude-plugin/plugin.json"
+cat > "$FAKE_PLUGIN/tracker/adapters/fake.sh" <<'A'
+case $1 in
+  operations) echo ref ;;
+  ref) [ "$2" = --forms ] && { shift; [[ $2 =~ ^[A-Z]+-[0-9]+$ ]] || exit 1; printf '{"ref":"%s","branch":"%s","mention":"%s"}\n' "$2" "$2" "$2"; exit 0; }
+       [[ $2 =~ ^[A-Z]+-[0-9]+$ ]] || exit 1; echo "$2" ;;
+esac
+A
+new_case
+reply 1 "$(ready)"; reply 2 "$(verified)"; reply 3 "$(raised)"
+settings '{"tracker": "fake"}'
+CHAIN="$FAKE_PLUGIN/chain/chain.sh" chain PROJ-12
+ok "another tracker's key is accepted and handed to every stage that takes the issue" '[ "$RC" = 0 ] && prompt_is 1 "/gaffer:build PROJ-12" && prompt_is 3 "/gaffer:raise-pr PROJ-12"'
+new_case
+settings '{"tracker": "fake"}'
+before="$(repo_state)"
+CHAIN="$FAKE_PLUGIN/chain/chain.sh" chain 270
+ok "a reference that tracker does not recognise: exits 1 with usage, no stage started" '[ "$RC" = 1 ] && [ "$(calls)" = 0 ] && grep -q usage <<<"$OUTPUT" && [ "$(repo_state)" = "$before" ]'
+new_case
+settings '{"tracker": "fake"}'
+CHAIN="$FAKE_PLUGIN/chain/chain.sh" chain --dry-run PROJ-12
+ok "the dry run names the issue the way its tracker mentions it" '[ "$RC" = 0 ] && grep -qF "dry run for issue PROJ-12" <<<"$OUTPUT"'
+new_case
+chain --dry-run 270
+ok "on GitHub the dry run still names #270" '[ "$RC" = 0 ] && grep -qF "dry run for issue #270" <<<"$OUTPUT"'
+new_case
+settings '{"tracker": "jira"}'
+before="$(repo_state)"
+chain 270
+ok "a tracker setting with no adapter: the configuration code, naming the setting, no stage started" '[ "$RC" = 78 ] && [ "$(calls)" = 0 ] && grep -qF "\"tracker\"" <<<"$OUTPUT" && grep -qF "jira" <<<"$OUTPUT" && [ "$(repo_state)" = "$before" ]'
+new_case
+settings '{"tracker": "jira"}'
+chain --dry-run 270
+ok "… refused by the dry run too" '[ "$RC" = 78 ] && [ "$(calls)" = 0 ]'
+
+echo "Each stage may call the tracker under the repository's own permissions:"
+TRACKER_RULE="Bash(bash $PLUGIN_ROOT/tracker/tracker.sh *)"
+new_case
+reply 1 "$(ready)"; reply 2 "$(verified)"; reply 3 "$(raised)"
+# Call 1 plays a stage that calls the tracker as a command file writes the call: it takes the
+# allow rule it was started with, checks the call matches it as the glob it is, and runs it.
+cat > "$STUB_DIR/act-1" <<'ACT'
+args=$(tail -n 1 "$STUB_DIR/log")
+rule=$(tr '|' '\n' <<<"$args" | sed -n '/^--allowedTools$/{n;p;}')
+glob=${rule#Bash(}; glob=${glob%)}
+call="bash $PLUGIN_ROOT/tracker/tracker.sh ref #270"
+[[ $call == $glob ]] && echo matched > "$STUB_DIR/tracker-matched"
+bash "$PLUGIN_ROOT/tracker/tracker.sh" ref '#270' > "$STUB_DIR/tracker-out"
+printf '%s' "${GAFFER_SETTINGS-unset}" > "$STUB_DIR/stage-settings"
+ACT
+PLUGIN_ROOT="$PLUGIN_ROOT" chain 270
+ok "every stage is allowed the tracker entry point of the checkout it loads" '[ "$RC" = 0 ] && [ "$(grep -cF -- "--allowedTools|$TRACKER_RULE|" "$STUB_DIR/log")" = 3 ]'
+ok "a stage's tracker call matches that rule, and runs" '[ -f "$STUB_DIR/tracker-matched" ] && [ "$(cat "$STUB_DIR/tracker-out" 2>/dev/null)" = 270 ]'
+ok "with no settings file the stages are given none" '[ "$(cat "$STUB_DIR/stage-settings")" = "" ] || [ "$(cat "$STUB_DIR/stage-settings")" = unset ]'
+new_case
+reply 1 "$(ready)"; reply 2 "$(verified)"; reply 3 "$(raised)"
+chain --skip-permissions 270
+ok "with permissions skipped no rule is needed, and none is passed" '[ "$RC" = 0 ] && ! grep -qF -- "--allowedTools|" "$STUB_DIR/log"'
+new_case
+reply 1 "$(ready)"; reply 2 "$(verified)"; reply 3 "$(raised)"
+printf '{"tracker": "github"}' > "$SB/case$cases/named.json"
+printf 'printf "%%s" "${GAFFER_SETTINGS-unset}" > "$STUB_DIR/stage-settings"\n' > "$STUB_DIR/act-1"
+chain --settings "$SB/case$cases/named.json" 270
+ok "the stages' tracker reads the settings file the chain read" '[ "$RC" = 0 ] && [ "$(cat "$STUB_DIR/stage-settings")" = "$SB/case$cases/named.json" ]'
+new_case
+reply 1 "$(ready)"; reply 2 "$(verified)"; reply 3 "$(raised)"
+settings '{"stages": {}}'
+printf 'printf "%%s" "${GAFFER_SETTINGS-unset}" > "$STUB_DIR/stage-settings"\n' > "$STUB_DIR/act-1"
+chain 270
+ok "… and the repository's own, as an absolute path" '[ "$RC" = 0 ] && [ "$(cat "$STUB_DIR/stage-settings")" = "$REPO/.gaffer/chain.json" ]'
+
 echo "The chain refuses to run from a checkout that is not a plugin:"
 new_case
 mkdir -p "$SB/case$cases/not-a-plugin/chain"

@@ -421,6 +421,16 @@ issues '[{"number":8,"state":"OPEN","labels":["ready"]}]'
 settings "{\"clone\": \"$CLONE\", \"writers\": [\"User:maintainer\"], \"state_dir\": \"$STATE\", \"pre_review\": true}"
 fire
 ok "the runner accepts the chain's pre_review key and passes the settings on" '[ "$RC" = 0 ] && [ "$(chain_calls)" = 8 ] && grep -qF -- "--settings|$SETTINGS|" "$STUB_DIR/start-1"'
+new_case
+issues '[{"number":8,"state":"OPEN","labels":["ready"]}]'
+settings "{\"clone\": \"$CLONE\", \"writers\": [\"User:maintainer\"], \"state_dir\": \"$STATE\", \"tracker\": \"github\", \"github\": {\"labels\": {\"ready\": \"go\"}}}"
+fire
+ok "the runner accepts the tracker's keys when the tracker is github, and still selects on its own labels.ready" '[ "$RC" = 0 ] && [ "$(chain_calls)" = 8 ]'
+new_case
+issues '[{"number":8,"state":"OPEN","labels":["ready"]}]'
+settings "{\"clone\": \"$CLONE\", \"writers\": [\"User:maintainer\"], \"state_dir\": \"$STATE\", \"tracker\": \"jira\"}"
+fire --dry-run
+ok "a tracker other than github is refused, saying the runner selects issues on GitHub only" '[ "$RC" != 0 ] && grep -qF "GitHub only" <<<"$OUTPUT" && grep -qF "jira" <<<"$OUTPUT"'
 
 echo "A chain that stops on its own configuration does not park the issue:"
 new_case
@@ -575,6 +585,9 @@ for bad in \
   '{"clone": "CLONE", "writers": ["User:maintainer"], "skip_permissions": "yes"}' \
   '{"clone": "CLONE", "writers": ["User:maintainer"], "pre_review": "yes"}' \
   '{"clone": "CLONE", "writers": ["User:maintainer"], "state_dir": ""}' \
+  '{"clone": "CLONE", "writers": ["User:maintainer"], "tracker": "jira"}' \
+  '{"clone": "CLONE", "writers": ["User:maintainer"], "tracker": 1}' \
+  '{"clone": "CLONE", "writers": ["User:maintainer"], "github": "labels"}' \
   '["not", "an", "object"]' \
   '{"clone": '
 do

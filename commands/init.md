@@ -77,17 +77,17 @@ The plugin's own files are read from `${CLAUDE_PLUGIN_ROOT}`: the setup script `
    - **A file that does not exist yet** starts with the template's title and opening paragraph, copied from `${CLAUDE_PLUGIN_ROOT}/templates/`, then the filled headings in template order. Write the file only if at least one heading was filled.
    - **A file that exists** gains the filled headings appended at its end, in template order, after a blank line.
    - Under each heading, one bullet per thing found: what it is, then the file as a relative markdown link — e.g. ``- **Testing guide** — [`docs/testing.md`](docs/testing.md).`` A copied command keeps its own code span and is followed by its source.
-   - Then run the setup, which must come after `CONVENTIONS.md` is written, since it imports that file into `CLAUDE.md` only once it exists, and then the labels:
+   - Then run the setup, which must come after `CONVENTIONS.md` is written, since it imports that file into `CLAUDE.md` only once it exists, and then the tracker's setup, which makes sure every state the commands use exists in the repository's tracker — on GitHub, the `needs answers`, `ready`, `parked` and `audit` labels:
 
      ```bash
      bash "${CLAUDE_PLUGIN_ROOT}/init/setup.sh" files
-     bash "${CLAUDE_PLUGIN_ROOT}/init/setup.sh" labels
+     bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh setup
      ```
 
      Each prints one `added:` or `present:` line per item. `files` also prints `skipped:` for the `CONVENTIONS.md` import when there is no such file, and `ignored:` for each file it manages that the repository git-ignores: that file exists in this checkout but no pull request can carry it. Keep both outputs for the body. A non-zero exit from either is a stop: report its error, leave the branch as it is for the user to inspect, and raise nothing.
 
 6. **Raise the pull request, or report that nothing is missing.**
-   - **Nothing changed** — `git status --porcelain --untracked-files=all` is empty: switch back to the default branch, delete the init branch, raise nothing, and report that the repository is already set up. Say whether `labels` created any label, since that happens outside any pull request, and name any `ignored:` file.
+   - **Nothing changed** — `git status --porcelain --untracked-files=all` is empty: switch back to the default branch, delete the init branch, raise nothing, and report that the repository is already set up. Say whether the tracker's setup created any label, since that happens outside any pull request, and name any `ignored:` file.
    - **Otherwise**: stage, by name, only what this run wrote, never `git add -A`: of `CONVENTIONS.md`, `REVIEW.md`, `CLAUDE.md`, `.gitignore`, `.claude/settings.json` and `.claude/memory/MEMORY.md`, each one this run created or changed and that `files` did not report `ignored:`. Commit as `Set up gaffer: conventions, review criteria and settings`, push with `-u`, and open a pull request against the default branch titled `Set up gaffer`. Write the body to the scratch file `CONVENTIONS.md` → *Scratch files* names (`init-pr-body.md` by default) with the `Write` tool and pass it with `--body-file`. The body is:
 
      ```markdown

@@ -12,6 +12,9 @@
     "pr-review-toolkit@claude-plugins-official": true
   },
   "permissions": {
+    "allow": [
+      "Bash(bash */plugins/cache/*/gaffer/*/tracker/tracker.sh *)"
+    ],
     "ask": [
       "Bash(chmod:*)"
     ]

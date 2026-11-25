@@ -18,13 +18,15 @@ $ARGUMENTS
 `$ARGUMENTS` names the source of the issue. It is one of:
 
 - **A free-text idea** — a sentence, a paragraph or rough bullets describing what the user wants.
-- **An existing issue** — `#N`, a bare number, or an issue URL. This is a **migration**: the old issue is the raw material, and Step 5 offers to close it once the new one exists.
+- **An existing issue** — an issue reference the repository's tracker recognises (on GitHub, `#N`, a bare number, or an issue URL). This is a **migration**: the old issue is the raw material, and Step 5 offers to close it once the new one exists.
 - **A document** — a URL or a repository path, optionally narrowed to one part of it ("the 'Offline mode' section of docs/ideas.md").
 - **A backlog item** — `backlog <number>` or `item <number>`. `CONVENTIONS.md` → *Issue sources* names the backlog it refers to. If that section lists none, ask the user where the backlog is; do not guess.
 
 The argument may add guidance alongside the source ("item 12, but leave CSV out"). That guidance outranks the source.
 
 If `$ARGUMENTS` is empty, ask the user for the source. Do not invent one.
+
+**Every tracker call goes through the tracker interface**, `bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh <operation> …`, never a tracker's own CLI or API: the repository's settings choose the tracker, and [`docs/tracker.md`](../docs/tracker.md) is the contract — each operation's arguments, its JSON output and its exit codes. Write the call unquoted, as shown, so the allow rule `/gaffer:init` writes matches it. Tell an existing issue from free text with `bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh ref <argument>`: exit 0 means it is an issue reference, and prints the `<ref>` every later call uses.
 
 ---
 
@@ -64,7 +66,7 @@ It raises the issue without a draft-approval pause. `/gaffer:reviewissue` and `/
 ### 1. Read the source
 
 - **Free text** — the argument is the whole source.
-- **Existing issue** — `gh issue view <N> --json title,body,comments`. Use the body, any comment marked `<!-- speckit:review -->`, and any `## Confirmed decisions` section as raw material. An old issue often mixes requirements with technical design: draft from the requirements, and treat its technical content like any source's hints. Tell the user which issues were ingested.
+- **Existing issue** — `bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh view <ref>`, which prints the issue's `title`, `body` and `comments` as JSON. Use the body, any comment carrying the review marker (`bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh marker review` prints it; on GitHub `<!-- speckit:review -->`), and any `## Confirmed decisions` section as raw material. An old issue often mixes requirements with technical design: draft from the requirements, and treat its technical content like any source's hints. Tell the user which issues were ingested.
 - **Document** — read it: `gh` or `git` for a GitHub-hosted page (a wiki is a git repository), the file itself for a path, a fetch otherwise. Narrow to the part the argument names.
 - **Backlog item** — read the item as `CONVENTIONS.md` → *Issue sources* describes, together with whatever the backlog says about it elsewhere: the items it depends on, notes or open questions that name it, and anything listed as rejected or already done next to it.
 
@@ -166,18 +168,24 @@ Apply any drafting conventions `CONVENTIONS.md` → *Acceptance criteria* lists.
 
 ### 5. Raise the issue
 
-Choose a short title naming the capability. Create the issue and delete the scratch file in one step:
+Choose a short title naming the capability. First check the tracker can raise it, and for a migration close the source too:
 
 ```bash
-gh issue create --title "<title>" --body-file <scratch-file> && rm <scratch-file>
+bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh require create
 ```
 
-If you are not certain of the target, check `gh auth status` and `gh repo view --json nameWithOwner` first. If the repository has no GitHub remote, stop here, keep the scratch file, and tell the user its path so they can post it by hand.
-
-**Migration — supersede the source issue.** Once the new issue exists, ask the user before closing each source issue, even if the argument said to close it — they may want to read the new one first. Close each one they confirm, one at a time:
+Add `ref close` to that list for a migration. If it exits non-zero, stop here, keep the scratch file, and tell the user its path so they can post it by hand, passing on what the check printed — it names the setting and the operation at fault. Otherwise create the issue and delete the scratch file in one step:
 
 ```bash
-gh issue close <N> --comment "Superseded by #<M>"
+bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh create --title "<title>" --body-file <scratch-file> && rm <scratch-file>
+```
+
+It prints the new issue's `{ref, url}`. If the create fails, stop here the same way, keeping the scratch file.
+
+**Migration — supersede the source issue.** Once the new issue exists, ask the user before closing each source issue, even if the argument said to close it — they may want to read the new one first. Close each one they confirm, one at a time. Write the note `Superseded by <mention>` to a scratch file with the **Write tool**, where `<mention>` is the `mention` that `bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh ref --forms <new ref>` prints (on GitHub, `#<M>`), then:
+
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh close <ref> <note file>
 ```
 
 The command never edits any other source: not a document, not a backlog.

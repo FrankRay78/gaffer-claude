@@ -2,8 +2,9 @@
 #
 # setup.sh — the mechanical part of /gaffer:init.
 #
-# Wires a repository for the plugin: the checks that say it can take a pull request, the files
-# every command assumes, and the labels the issue stage and the chain use. The judgement part of
+# Wires a repository for the plugin: the checks that say it can take a pull request, and the files
+# every command assumes. The states the issue stage and the chain use are made by the tracker's own
+# `setup` operation (tracker/tracker.sh), not here. The judgement part of
 # init (reading the repository and filling CONVENTIONS.md and REVIEW.md) is the command's; this
 # script does only what a person would otherwise type from docs/getting-started.md, so it can be
 # tested without a model.
@@ -11,12 +12,11 @@
 #   bash setup.sh check  [<repo>]   is the repository ready for init? Changes nothing.
 #   bash setup.sh files  [<repo>]   ensure the settings entries, the git-ignore line, the memory
 #                                   index and the CLAUDE.md imports.
-#   bash setup.sh labels [<repo>]   ensure the issue-stage and chain labels exist on GitHub.
 #
 # <repo> defaults to the current directory and must be the root of a git work tree.
 #
 # OUTPUT. One line per item, `<status>: <item>`, so the command can list the outcome in the pull
-# request body. `files` and `labels` print `added:` for something they put in place and `present:`
+# request body. `files` prints `added:` for something they put in place and `present:`
 # for something already there; `check` prints `ready: <default branch>` or `not ready: <reason>`.
 # `files` also prints `ignored: <path>` for any file it manages that the repository git-ignores,
 # since a pull request cannot carry it, and `skipped:` for the CONVENTIONS.md import when there is
@@ -30,7 +30,7 @@
 # EXIT. 0 on success (including `ready`); 1 on `not ready`, an unreadable settings file, or a gh
 # failure, with nothing changed by the step that failed; 2 on bad usage.
 #
-# Needs git, jq and, for `check` and `labels`, gh signed in. Run with `bash`; nothing relies on an
+# Needs git, jq and, for `check`, gh signed in. Run with `bash`; nothing relies on an
 # executable bit.
 
 set -uo pipefail
@@ -39,17 +39,14 @@ MARKETPLACE='gaffer-claude'
 MARKETPLACE_SOURCE='{"source":{"source":"github","repo":"FrankRay78/gaffer-claude"}}'
 PLUGINS=('gaffer@gaffer-claude' 'pr-review-toolkit@claude-plugins-official')
 ASK_RULE='Bash(chmod:*)'
+# The tracker entry point as the commands call it, unquoted, from an installed plugin: any config
+# directory, marketplace and version, so the rule outlives a plugin update. Anchored on the plugin
+# cache rather than on tracker/tracker.sh alone, which a repository's own files could match.
+ALLOW_RULE='Bash(bash */plugins/cache/*/gaffer/*/tracker/tracker.sh *)'
 SCRATCH='.claude/scratch/'
 MEMORY_INDEX='.claude/memory/MEMORY.md'
 MEMORY_HEADER='<!-- Memory index: one line per entry, `- [Title](file.md) — one-line hook`. -->'
-# name|description, in the order getting-started.md lists them.
-LABELS=(
-  'needs answers|A review is posted and awaiting the author'"'"'s answers'
-  'ready|The issue is confirmed and may be built'
-  'parked|An unattended run stopped on this issue; remove to retry'
-)
-
-usage() { echo "usage: bash setup.sh {check|files|labels} [<repo>]" >&2; exit 2; }
+usage() { echo "usage: bash setup.sh {check|files} [<repo>]" >&2; exit 2; }
 fail() { echo "error: $*" >&2; exit 1; }
 
 [ $# -ge 1 ] && [ $# -le 2 ] || usage
@@ -93,17 +90,19 @@ settings_merge() {
   else
     json='{}'
   fi
-  jq --arg m "$MARKETPLACE" --argjson ms "$MARKETPLACE_SOURCE" --arg ask "$ASK_RULE" \
+  jq --arg m "$MARKETPLACE" --argjson ms "$MARKETPLACE_SOURCE" --arg ask "$ASK_RULE" --arg allow "$ALLOW_RULE" \
      --args '
     def ensure(path; v): if (getpath(path) == null) then setpath(path; v) else . end;
+    def rule(kind; r): if ((.permissions[kind] // []) | index(r)) then . else .permissions[kind] = ((.permissions[kind] // []) + [r]) end;
     ensure(["extraKnownMarketplaces", $m]; $ms)
     | reduce $ARGS.positional[] as $p (.; ensure(["enabledPlugins", $p]; true))
-    | if ((.permissions.ask // []) | index($ask)) then . else .permissions.ask = ((.permissions.ask // []) + [$ask]) end
+    | rule("ask"; $ask) | rule("allow"; $allow)
   ' "${PLUGINS[@]}" <<<"$json" > "$out" || fail "could not merge $src"
-  jq -r --arg m "$MARKETPLACE" --arg ask "$ASK_RULE" --args '
+  jq -r --arg m "$MARKETPLACE" --arg ask "$ASK_RULE" --arg allow "$ALLOW_RULE" --args '
     (if .extraKnownMarketplaces[$m] == null then "marketplace \($m)" else empty end),
     ($ARGS.positional[] as $p | if .enabledPlugins[$p] == null then "plugin \($p)" else empty end),
-    (if ((.permissions.ask // []) | index($ask)) then empty else "permission ask \($ask)" end)
+    (if ((.permissions.ask // []) | index($ask)) then empty else "permission ask \($ask)" end),
+    (if ((.permissions.allow // []) | index($allow)) then empty else "permission allow \($allow)" end)
   ' "${PLUGINS[@]}" <<<"$json"
 }
 
@@ -118,7 +117,7 @@ report_settings() {
     rm -f "$tmp"
   fi
   local item
-  for item in "marketplace $MARKETPLACE" "${PLUGINS[@]/#/plugin }" "permission ask $ASK_RULE"; do
+  for item in "marketplace $MARKETPLACE" "${PLUGINS[@]/#/plugin }" "permission ask $ASK_RULE" "permission allow $ALLOW_RULE"; do
     if grep -qxF "$item" <<<"$missing"; then echo "added: .claude/settings.json $item"; else echo "present: .claude/settings.json $item"; fi
   done
 }
@@ -182,27 +181,8 @@ report_ignored() {
   done
 }
 
-# ---------------------------------------------------------------------------------------------
-# labels
-# ---------------------------------------------------------------------------------------------
-do_labels() {
-  local existing entry name desc
-  # GitHub label names are case-insensitive: an existing `Ready` is the `ready` label.
-  existing=$(gh label list --limit 1000 --json name --jq '.[].name' 2>/dev/null) || fail "could not list labels (gh label list failed)"
-  for entry in "${LABELS[@]}"; do
-    name=${entry%%|*}; desc=${entry#*|}
-    if grep -qixF "$name" <<<"$existing"; then
-      echo "present: label $name"
-    else
-      gh label create "$name" --description "$desc" >/dev/null 2>&1 || fail "could not create label '$name'"
-      echo "added: label $name"
-    fi
-  done
-}
-
 case "$MODE" in
   check)  do_check ;;
   files)  do_files ;;
-  labels) do_labels ;;
   *)      usage ;;
 esac

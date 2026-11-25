@@ -58,7 +58,7 @@ No protected public API and no stance on breaking changes by default. A reposito
 
 ## Commit messages
 
-Work on feature branches, named `<prefix>/<N>-<short-slug>` after the issue, with `feature/` as the prefix `/gaffer:build` uses. Messages are clear and concise, in the imperative mood, and reference the issue where applicable as `Refs #<N>: <imperative>` — never a GitHub closing keyword (`Fix`/`Fixes`/`Close`/`Closes`/`Resolve`/`Resolves` `#<N>`), which closes the issue the moment the commit reaches the default branch, before review. The pull request body's `Closes #<N>` is the only place that should close an issue.
+Work on feature branches, named `<prefix>/<N>-<short-slug>` after the issue, with `feature/` as the prefix `/gaffer:build` uses. Messages are clear and concise, in the imperative mood, and reference the issue where applicable as `Refs #<N>: <imperative>` — never a GitHub closing keyword (`Fix`/`Fixes`/`Close`/`Closes`/`Resolve`/`Resolves` `#<N>`), which closes the issue the moment the commit reaches the default branch, before review. The pull request body's `Closes #<N>` is the only place that should close an issue. `<N>` and `#<N>` are the issue's `branch` and `mention` forms from the tracker interface (`tracker.sh ref --forms`): on GitHub, the issue number and `#` with it; on a tracker with keys, the key in both.
 
 ## Documentation
 
@@ -70,7 +70,7 @@ This project keeps none by default, so `/gaffer:build` writes none and `/gaffer:
 
 ## Scratch files
 
-`.claude/scratch/` at the repository root, git-ignored; the `Write` tool creates it when it is missing. The files the commands write there: `/gaffer:raise-pr` the pull request body to `raise-pr-body.md`; `/gaffer:pre-review` a corrected pull request body to `pre-review-body.md`; `/gaffer:draftissue` the issue body to `gh-issue-body-<slug>.md`, where the slug is a short kebab-case form of the title; `/gaffer:reviewissue` the review comment to `reviewissue-body.md`; `/gaffer:confirmissue` the issue body to `confirmissue-body.md` and the patch to `confirmissue-patch.json`; `/gaffer:graft` the review comment with an answer written in to `graft-comment.md`; `/gaffer:review-pr` its review to `review-pr-<N>.json` and a worktree to `review-pr-<N>/`; `/gaffer:audit-codebase` its working files under `audit/`. A repository that keeps scratch files elsewhere, or ignores them differently, says so here.
+`.claude/scratch/` at the repository root, git-ignored; the `Write` tool creates it when it is missing. The files the commands write there: `/gaffer:raise-pr` the pull request body to `raise-pr-body.md`; `/gaffer:pre-review` a corrected pull request body to `pre-review-body.md`; `/gaffer:draftissue` the issue body to `gh-issue-body-<slug>.md`, where the slug is a short kebab-case form of the title; `/gaffer:reviewissue` the review comment to `reviewissue-body.md`; `/gaffer:confirmissue` the issue body, and any overwrite of the review where the tracker cannot delete it, to `confirmissue-body.md`; `/gaffer:graft` the review comment with an answer written in to `graft-comment.md`; `/gaffer:review-pr` its review to `review-pr-<N>.json` and a worktree to `review-pr-<N>/`; `/gaffer:audit-codebase` its working files under `audit/`. A repository that keeps scratch files elsewhere, or ignores them differently, says so here.
 
 ## Pull requests
 
@@ -90,7 +90,7 @@ Nothing beyond `/gaffer:reviewissue`'s generic categories by default. A reposito
 
 ## Audit
 
-By default `/gaffer:audit-codebase` reads every tracked file, takes no evidence beyond the build-and-test command under *Build, test and format*, holds the code to the rules under the headings above and whatever `CLAUDE.md` states as the project's rules, knows nothing about the tree in advance, and raises its issue with no label. A repository that has more says so here: the paths in scope, an evidence table of the tools that already decide a question, the rules each lens audits, what each lens should know about this tree before it starts (a known flaky test, symbols a generator consumes, fixtures that look like traceability markers), and the one label the issue carries.
+By default `/gaffer:audit-codebase` reads every tracked file, takes no evidence beyond the build-and-test command under *Build, test and format*, holds the code to the rules under the headings above and whatever `CLAUDE.md` states as the project's rules, knows nothing about the tree in advance, and raises its issue in the tracker's `audit` state — on GitHub the label `github.labels.audit` names in `.gaffer/chain.json`, `audit` by default. A repository that has more says so here: the paths in scope, an evidence table of the tools that already decide a question, the rules each lens audits, what each lens should know about this tree before it starts (a known flaky test, symbols a generator consumes, fixtures that look like traceability markers).
 
 ## Hooks, scripts and plugins
 

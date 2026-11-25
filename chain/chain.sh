@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# chain.sh — carry one GitHub issue from a clean main to an open pull request, unattended.
+# chain.sh — carry one issue from a clean main to an open pull request, unattended.
 #
 # Runs the plugin's /gaffer:build, /gaffer:verify and /gaffer:raise-pr for the named issue — and,
 # where the settings opt in to the pre-review, /gaffer:raise-pr --draft and then /gaffer:pre-review
@@ -45,6 +45,10 @@
 # <file>` names another. The chain reads two keys of it: `pre_review`, true to add the pre-review
 # stage, and `stages`, each stage's `model` and `effort`, defaulting to the plugin's own choice
 # below where the file or the key is absent.
+# The issue is named however the repository's tracker recognises it (its `tracker` key, read by
+# tracker/tracker.sh beside the stage commands; GitHub by default), and is checked by the tracker
+# before anything else is. Every stage's tracker reads the same settings file this script read,
+# through GAFFER_SETTINGS.
 # Overrides: CHAIN_MODEL replaces every stage's model; the effort stays as configured.
 # CHAIN_STAGE_TIMEOUT (seconds) replaces every stage's time limit.
 
@@ -87,7 +91,7 @@ CONFIG_EXIT=78
 
 usage() {
   echo "usage: chain.sh [--dry-run] [--skip-permissions] [--settings <file>] <issue>" >&2
-  echo "  <issue>: one GitHub issue number, 270 or #270" >&2
+  echo "  <issue>: one issue, as the repository's tracker names it; on GitHub 270 or #270" >&2
   echo "  --dry-run: list the stages that would run, and run nothing" >&2
   echo "  --skip-permissions: run every stage with --dangerously-skip-permissions (see docs/chain.md)" >&2
   echo "  --settings <file>: the settings file to read stage models from (default .gaffer/chain.json, if present)" >&2
@@ -107,8 +111,6 @@ while [ $# -gt 0 ]; do
   esac
 done
 if [ $# -ne 1 ]; then usage; exit 1; fi
-issue=${1#\#}
-case "$issue" in ''|*[!0-9]*) usage; exit 1 ;; esac
 if [ "$settings_named" = 0 ] && [ -f .gaffer/chain.json ]; then settings_file=.gaffer/chain.json; fi
 
 config_refused() {
@@ -132,6 +134,33 @@ if [ -n "$settings_file" ]; then
     config_refused "the settings file $settings_file is not a JSON object" ;;
   esac
 fi
+# The issue, as the tracker the settings name recognises it: `ref` normalises it for the stage
+# prompts, `mention` names it in the dry run. Before report mode, so a dry run refuses what a run
+# would. A reference the tracker does not recognise is a usage error; a tracker that cannot answer
+# at all is the chain's configuration, not the issue.
+if [ -n "$settings_file" ]; then
+  GAFFER_SETTINGS="$(cd "$(dirname "$settings_file")" && pwd)/$(basename "$settings_file")"
+  export GAFFER_SETTINGS
+else
+  unset GAFFER_SETTINGS
+fi
+# The checkout this script sits in must be the plugin, or --plugin-dir would load nothing and the
+# first stage would fail on an unknown command after a session had been spent, blaming the issue.
+# Checked before the tracker, which the same checkout carries.
+[ -f "$PLUGIN_ROOT/.claude-plugin/plugin.json" ] \
+  || config_refused "$PLUGIN_ROOT is not a plugin checkout (no .claude-plugin/plugin.json), so the stages cannot be loaded from it"
+
+command -v jq >/dev/null 2>&1 || { echo "chain: refused — jq is not on PATH; no stage was started."; exit 1; }
+TRACKER="$PLUGIN_ROOT/tracker/tracker.sh"
+[ -f "$TRACKER" ] || config_refused "$PLUGIN_ROOT has no tracker/tracker.sh, so the issue cannot be read"
+forms=$(bash "$TRACKER" ref --forms "$1" 2>&1); rc=$?
+case $rc in
+  0) ;;
+  1) echo "$forms" >&2; usage; exit 1 ;;
+  *) config_refused "the tracker could not read the issue reference: $forms" ;;
+esac
+issue=$(jq -r '.ref' <<<"$forms")
+mention=$(jq -r '.mention' <<<"$forms")
 if [ "$PRE_REVIEW" = true ]; then
   STAGE_COUNT=4
   RAISE_PR_PROMPT="/gaffer:raise-pr --draft $issue"
@@ -142,7 +171,7 @@ fi
 
 # Report mode reaches no git or claude command, so it cannot change anything.
 if [ "$dry_run" = 1 ]; then
-  echo "chain: dry run for issue #$issue — nothing will be run"
+  echo "chain: dry run for issue $mention — nothing will be run"
   echo "  1. build: /gaffer:build $issue"
   echo "  2. verify: /gaffer:verify"
   echo "  3. raise-pr: $RAISE_PR_PROMPT"
@@ -152,11 +181,6 @@ if [ "$dry_run" = 1 ]; then
   if [ "$skip_permissions" = 1 ]; then echo "  permissions: skipped"; else echo "  permissions: the repository's rules"; fi
   exit 0
 fi
-
-# The checkout this script sits in must be the plugin, or --plugin-dir would load nothing and the
-# first stage would fail on an unknown command after a session had been spent, blaming the issue.
-[ -f "$PLUGIN_ROOT/.claude-plugin/plugin.json" ] \
-  || config_refused "$PLUGIN_ROOT is not a plugin checkout (no .claude-plugin/plugin.json), so the stages cannot be loaded from it"
 
 # An override that is not a whole number reaches `timeout` as a bad argument, which would surface
 # as an unhelpful launch failure blamed on the stage. Reject it here, where the cause is obvious.
@@ -499,7 +523,14 @@ run_stage() {
   # detector. --plugin-dir loads this checkout, so the /gaffer: command the prompt names resolves
   # to this checkout's copy whatever else is installed on the machine.
   local -a cmd=(claude -p "$prompt" --plugin-dir "$PLUGIN_ROOT" --model "$model" --effort "$effort" --output-format json)
-  [ "$skip_permissions" = 0 ] || cmd+=(--dangerously-skip-permissions)
+  # Under the repository's own rules a headless stage is silently denied anything they do not allow,
+  # so each stage is allowed the tracker entry point of the checkout it loads, as the commands call
+  # it. Last on the line: the flag takes every word after it.
+  if [ "$skip_permissions" = 0 ]; then
+    cmd+=(--allowedTools "Bash(bash $PLUGIN_ROOT/tracker/tracker.sh *)")
+  else
+    cmd+=(--dangerously-skip-permissions)
+  fi
   started=$SECONDS
   reply=$(CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 timeout --kill-after=60 "$limit" "${cmd[@]}" </dev/null)
   rc=$?

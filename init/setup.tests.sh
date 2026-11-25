@@ -44,6 +44,9 @@ export PATH="$SB/bin:$PATH"
 mkdir -p "$SB/nojq"
 for t in bash git gh grep sed tail mktemp mv rm mkdir cat dirname env; do ln -s "$(command -v "$t")" "$SB/nojq/$t"; done
 BASH_BIN=$(command -v bash)
+# The allow rule setup.sh writes for the tracker entry point, pinned here as the literal so that
+# changing it in one place alone fails here.
+ALLOW_RULE='Bash(bash */plugins/cache/*/gaffer/*/tracker/tracker.sh *)'
 
 PASS=0; FAIL=0
 ok() {
@@ -102,12 +105,13 @@ ok "scratch is git-ignored" 'git -C "$R" check-ignore -q .claude/scratch/anythin
 ok "memory index created" '[ -f "$R/.claude/memory/MEMORY.md" ]'
 ok "CLAUDE.md created importing the memory index" 'grep -qx "@.claude/memory/MEMORY.md" "$R/CLAUDE.md"'
 ok "no CONVENTIONS.md → no import of it, and says so" '! grep -q CONVENTIONS "$R/CLAUDE.md" && grep -q "^skipped: CLAUDE.md import of CONVENTIONS.md" <<<"$OUT"'
-ok "every change reported as added" '[ "$(grep -c "^added:" <<<"$OUT")" = 7 ] && ! grep -q "^present:" <<<"$OUT"'
+ok "tracker allow rule added" 'jq -e ".permissions.allow | index(\"$ALLOW_RULE\")" "$R/.claude/settings.json" >/dev/null && grep -qxF "added: .claude/settings.json permission allow $ALLOW_RULE" <<<"$OUT"'
+ok "every change reported as added" '[ "$(grep -c "^added:" <<<"$OUT")" = 8 ] && ! grep -q "^present:" <<<"$OUT"'
 
 echo "files, run twice:"
 before=$(snapshot); run files "$R"
 ok "second run changes no byte" '[ "$(snapshot)" = "$before" ]'
-ok "second run reports everything present" '! grep -q "^added:" <<<"$OUT" && [ "$(grep -c "^present:" <<<"$OUT")" = 7 ]'
+ok "second run reports everything present" '! grep -q "^added:" <<<"$OUT" && [ "$(grep -c "^present:" <<<"$OUT")" = 8 ]'
 
 echo "files, preserving what is there:"
 fresh; mkdir -p "$R/.claude"
@@ -116,7 +120,8 @@ cat > "$R/.claude/settings.json" <<'JSON'
   "permissions": { "allow": ["Bash(ls:*)"], "ask": ["Bash(rm:*)"] } }
 JSON
 run files "$R"
-ok "unrelated settings kept" 'jq -e ".model == \"opus\" and .enabledPlugins[\"other@x\"] == true and .permissions.allow == [\"Bash(ls:*)\"]" "$R/.claude/settings.json" >/dev/null'
+ok "unrelated settings kept" 'jq -e ".model == \"opus\" and .enabledPlugins[\"other@x\"] == true and .permissions.allow[0] == \"Bash(ls:*)\"" "$R/.claude/settings.json" >/dev/null'
+ok "allow rule appended after existing ones" 'jq -e ".permissions.allow == [\"Bash(ls:*)\", \"$ALLOW_RULE\"]" "$R/.claude/settings.json" >/dev/null'
 ok "a plugin turned off stays off" 'jq -e ".enabledPlugins[\"gaffer@gaffer-claude\"] == false" "$R/.claude/settings.json" >/dev/null && grep -q "^present: .claude/settings.json plugin gaffer@gaffer-claude" <<<"$OUT"'
 ok "ask rule appended after existing ones" 'jq -e ".permissions.ask == [\"Bash(rm:*)\", \"Bash(chmod:*)\"]" "$R/.claude/settings.json" >/dev/null'
 
@@ -154,19 +159,26 @@ ok "imports already present in either form → CLAUDE.md untouched" '[ "$(cat "$
 fresh; mkdir -p "$R/.claude/memory"; echo "- [A](a.md) — b" > "$R/.claude/memory/MEMORY.md"; run files "$R"
 ok "existing memory index kept" '[ "$(cat "$R/.claude/memory/MEMORY.md")" = "- [A](a.md) — b" ]'
 
+echo "the tracker allow rule:"
+# The rule's pattern, as the glob Claude Code matches a Bash command against, must keep matching
+# the tracker call a command makes from an installed plugin when an update changes the version
+# directory, and must not match a tracker.sh the repository itself could carry.
+glob=${ALLOW_RULE#Bash(}; glob=${glob%)}
+matches() { [[ "bash $1/tracker/tracker.sh view 7" == $glob ]]; }
+for root in "/home/a/.claude/plugins/cache/gaffer-claude/gaffer/39d0fcceea30" \
+            "/home/a/.claude/plugins/cache/gaffer-claude/gaffer/5e1f00aa1b2c" \
+            "/Users/b c/.claude/plugins/cache/other-market/gaffer/1.2.0" \
+            "/srv/claude-config/plugins/cache/gaffer-claude/gaffer/abc"; do
+  ok "matches the tracker under $root" 'matches "$root"'
+done
+for root in "." "/home/a/Repos/app" "/home/a/Repos/app/gaffer/x" "/home/a/.claude/plugins/cache/m/other-plugin/1"; do
+  ok "does not match a tracker under $root" '! matches "$root"'
+done
+ok "the rule is a Bash rule" '[[ $ALLOW_RULE == "Bash("*")" ]]'
+
 echo "labels:"
-fresh; printf 'bug\nready\n' > "$STUB_DIR/labels"; run labels "$R"
-ok "creates only the missing labels" '[ $RC = 0 ] && grep -qx "added: label needs answers" <<<"$OUT" && grep -qx "added: label parked" <<<"$OUT" && grep -qx "present: label ready" <<<"$OUT"'
-ok "each created label carries a description" '[ "$(grep -c "^label|create|.*|--description|.\+|$" "$STUB_DIR/gh-log")" = 2 ]'
-ok "labels are listed by name, beyond the default page (--limit, --json, --jq)" 'grep -qxF "label|list|--limit|1000|--json|name|--jq|.[].name|" "$STUB_DIR/gh-log"'
-run labels "$R"
-ok "second run creates nothing" '[ $RC = 0 ] && ! grep -q "^added:" <<<"$OUT" && [ "$(grep -c "^present: label" <<<"$OUT")" = 3 ] && [ "$(grep -c "^label|create" "$STUB_DIR/gh-log")" = 2 ]'
-fresh; printf 'Ready\nNEEDS ANSWERS\n' > "$STUB_DIR/labels"; run labels "$R"
-ok "an existing label in another case counts as present" '[ $RC = 0 ] && grep -qx "present: label ready" <<<"$OUT" && grep -qx "present: label needs answers" <<<"$OUT" && [ "$(grep -c "^label|create" "$STUB_DIR/gh-log")" = 1 ]'
-fresh; touch "$STUB_DIR/label-create-fail"; run labels "$R"
-ok "gh failure → exit 1 naming the label" '[ $RC = 1 ] && grep -qF "could not create label '"'"'needs answers'"'"'" <<<"$OUT"'
-fresh; touch "$STUB_DIR/label-list-fail"; run labels "$R"
-ok "listing failure → exit 1, nothing created" '[ $RC = 1 ] && grep -q "could not list labels" <<<"$OUT" && ! grep -q "^label|create" "$STUB_DIR/gh-log"'
+fresh; run labels "$R"
+ok "the labels mode is gone — the tracker's setup makes the states — so it is a usage error" '[ $RC = 2 ] && [ ! -s "$STUB_DIR/gh-log" ]'
 
 echo
 echo "$PASS passed, $FAIL failed"
