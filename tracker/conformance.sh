@@ -111,6 +111,7 @@ printf 'An ordinary comment.\n' > "$WORK/c0"
 if [ "$(t comment-find "$A" review)" != null ]; then not_met comment-find "an issue with no marker comment found one"; fi
 c1=$(t comment-post "$A" "$WORK/c1" | jq -r '.id // empty')
 t comment-post "$A" "$WORK/c0" >/dev/null
+# Trackers stamp comments to the second, and newest-by-time is what comment-find is checked on.
 sleep 1
 c2=$(t comment-post "$A" "$WORK/c2" | jq -r '.id // empty')
 if [ -n "$c1" ] && [ -n "$c2" ] && [ "$c1" != "$c2" ]; then met comment-post; else not_met comment-post "posting gave no {id, url}, or two posts the same id"; fi
