@@ -118,7 +118,9 @@ case "$1 ${2:-}" in
     case "$method $rest" in
       "GET "*/comments)
         n=$(key "$r" "${rest%/comments}")
-        if [ "$paginate" = 1 ]; then pages='_nwise(2)'; else pages='.[:2]'; fi
+        # Pages of two, one array each, and one empty page for no comments, as gh prints them.
+        # Not jq's _nwise, which was private and is gone from jq 1.8.
+        if [ "$paginate" = 1 ]; then pages='if length == 0 then . else range(0; length; 2) as $i | .[$i:$i + 2] end'; else pages='.[:2]'; fi
         jq -c --arg n "$n" "[.comments[] | select(.issue == \$n)] | $pages" "$S" ;;
       "PATCH comments/"*)
         id=${rest#comments/}; body=$(cat "${field#body=@}"); owned "$id"
