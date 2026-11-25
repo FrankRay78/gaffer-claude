@@ -137,7 +137,7 @@ The comment's numbered gaps are the agenda: each `**N. <title>**` block, through
    bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh comment-edit <ref> <id> <scratch file>
    ```
 
-   If the PATCH fails, stop the session and say so: the answer is in this conversation but not on the issue, and the user can record it on GitHub by hand. Once it succeeds, show the line saved — `Saved → Answer: <answer>` — and go on to the next open gap, or back to the step that sent you here. Do not ask the user to confirm an answer, before it is written or after, whether the words are theirs or graft's: the saved line is how they see it.
+   If the edit fails, stop the session and say so: the answer is in this conversation but not on the issue, and the user can record it on GitHub by hand. Once it succeeds, show the line saved — `Saved → Answer: <answer>` — and go on to the next open gap, or back to the step that sent you here. Do not ask the user to confirm an answer, before it is written or after, whether the words are theirs or graft's: the saved line is how they see it.
 
 **A new concern raised mid-discussion.** Graft never adds a gap — the comment's shape is `/gaffer:reviewissue`'s. Where the concern belongs to a gap, fold it into that gap's answer as a rider. Where it does not, note it, and at the end offer to raise it as its own issue with `/gaffer:graft <idea>` in a new conversation.
 
