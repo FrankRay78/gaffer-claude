@@ -8,9 +8,11 @@ Two scripts under [`chain/`](../chain/) take an issue from a clean `main` to an 
 bash /path/to/gaffer-claude/chain/chain.sh [--dry-run] [--skip-permissions] [--settings <file>] <issue>
 ```
 
-From the root of the repository, on a clean `main`. It runs `/gaffer:build <issue>`, `/gaffer:verify` and `/gaffer:raise-pr <issue>` as three headless `claude -p` sessions — four where the repository opts in to the pre-review (below) — starting each only on the previous one's success verdict, read by position as [`verdict-schema.md`](verdict-schema.md) describes. The first stage that fails — a failure verdict, a verdict it cannot read, an agent error, a non-zero exit or a stall past its time limit — stops the run, and the closing line names the stage, its position and the reason: `chain: FAILED at [2/3] verify — suite red`, followed by the `claude --resume <id>` that reopens that stage. Before that it prints what the branch holds over `main` and whether the tree is dirty, which is the state to read before continuing by hand. A stage the account's Claude usage limit cut off exits 75 and quotes the limit's own reset wording; a settings file or checkout the chain cannot use exits 78, so a runner does not blame the issue for either.
+From the root of the repository, on a clean `main`. `<issue>` is the issue as the repository's tracker names it ([`tracker.md`](tracker.md)) — on GitHub `270` or `#270` — and the tracker checks it before anything else runs: one it does not recognise exits 1 with the usage, and a `tracker` setting with no adapter is refused with 78. It runs `/gaffer:build <issue>`, `/gaffer:verify` and `/gaffer:raise-pr <issue>` as three headless `claude -p` sessions — four where the repository opts in to the pre-review (below) — starting each only on the previous one's success verdict, read by position as [`verdict-schema.md`](verdict-schema.md) describes. The first stage that fails — a failure verdict, a verdict it cannot read, an agent error, a non-zero exit or a stall past its time limit — stops the run, and the closing line names the stage, its position and the reason: `chain: FAILED at [2/3] verify — suite red`, followed by the `claude --resume <id>` that reopens that stage. Before that it prints what the branch holds over `main` and whether the tree is dirty, which is the state to read before continuing by hand. A stage the account's Claude usage limit cut off exits 75 and quotes the limit's own reset wording; a settings file or checkout the chain cannot use exits 78, so a runner does not blame the issue for either.
 
 The chain never resets, cleans, checks out, pushes or writes a file: the branch and tree are exactly as the last stage left them. `--dry-run` lists what would run and touches nothing, git included; it still reads the settings file, and refuses one it cannot read as a real run would. Time limits are 2h for build, verify and pre-review and 30m for raise-pr; `CHAIN_STAGE_TIMEOUT=<seconds>` overrides them all and `CHAIN_MODEL=<model>` overrides every stage's model, for a one-off run.
+
+Every stage reads the tracker from the settings file the chain read, and under the repository's own permissions each is allowed the tracker entry point of the checkout it loads ([`tracker.md`](tracker.md) → *Permissions*).
 
 It needs `git`, `claude`, `gh`, `jq` and `timeout` on the path, with `claude` and `gh` signed in. `timeout` is GNU coreutils; on macOS, install coreutils.
 
@@ -46,10 +48,12 @@ The review runs on `CHAIN_MODEL`, else `opus`, at high effort, within `CHAIN_STA
 
 ## The settings file
 
-`chain.sh` and `chain-next.sh` read one JSON file in the repository they run for, conventionally `.gaffer/chain.json`, committed so a change to it is reviewed. Everything in it has a default except the two things that make the runner safe to leave alone:
+`chain.sh` and `chain-next.sh` read one JSON file in the repository they run for, conventionally `.gaffer/chain.json`, committed so a change to it is reviewed; the tracker interface reads its `tracker` key and the adapter's own, inside a session as well. Everything in it has a default except the two things that make the runner safe to leave alone:
 
 ```json
 {
+  "tracker": "github",
+  "github": { "labels": { "needs-answers": "needs answers", "ready": "ready", "parked": "parked", "audit": "audit" } },
   "clone": "~/Repos/my-repo-runner",
   "writers": ["User:octocat", "Bot:claude"],
   "labels": { "ready": "ready", "parked": "parked" },
@@ -67,6 +71,8 @@ The review runs on `CHAIN_MODEL`, else `opus`, at high effort, within `CHAIN_STA
 
 | Key | Read by | Default | Meaning |
 |---|---|---|---|
+| `tracker` | the tracker interface, and the runner | `github` | The issue tracker the commands and the chain use, by its adapter's name. The runner serves `github` alone and refuses any other. See [`tracker.md`](tracker.md). |
+| `github.labels.<state>` | the GitHub adapter | `needs answers`, `ready`, `parked`, `audit` | The label each state is on GitHub: what `reviewissue`, `confirmissue` and `audit-codebase` apply, and what the tracker's `setup` creates. Separate from the runner's `labels`. |
 | `clone` | runner | none — required | The runner's dedicated clone of the repository, where the destructive reset runs. `~/` is the user's home. |
 | `writers` | runner | none — required | The accounts whose issues may be built, as `<Type>:<login>` the way GitHub's GraphQL names them. An issue raised or commented on by anyone else is skipped. With none named, no issue is ever built, which is what keeps a runner on a public repository from building a stranger's issue. |
 | `labels.ready`, `labels.parked` | runner | `ready`, `parked` | The opt-in label the runner selects on, and the one it applies when a run fails. `ready` is what `/gaffer:confirmissue` applies, so the default queues every confirmed issue; name another to confirm and queue separately. |
@@ -75,7 +81,7 @@ The review runs on `CHAIN_MODEL`, else `opus`, at high effort, within `CHAIN_STA
 | `skip_permissions` | runner | `false` | Whether the runner passes `--skip-permissions` to the chain. See *Permissions*. |
 | `state_dir` | runner | `$XDG_STATE_HOME/gaffer-chain/<clone name>`, or `~/.local/state/…` | Where the runner keeps its lock and `logs/`, outside the clone. Per clone, so two repositories on one machine never share a lock or mix logs. |
 
-`chain.sh` reads only `pre_review` and `stages`, from `.gaffer/chain.json` in the current directory when it exists or from `--settings <file>`; without either it runs on the defaults. `chain-next.sh` is handed the file and refuses it when a required key is missing, a value has the wrong shape, or a key is one it does not know — a misspelt key would otherwise be a silently applied default.
+`chain.sh` reads only `pre_review` and `stages` itself, and hands the file to the tracker for `tracker`, from `.gaffer/chain.json` in the current directory when it exists or from `--settings <file>`; without either it runs on the defaults. `chain-next.sh` is handed the file and refuses it when a required key is missing, a value has the wrong shape, or a key is one it does not know — a misspelt key would otherwise be a silently applied default.
 
 ## `chain-next.sh` — the runner
 
@@ -83,7 +89,7 @@ The review runs on `CHAIN_MODEL`, else `opus`, at high effort, within `CHAIN_STA
 bash /path/to/gaffer-claude/chain/chain-next.sh [--dry-run] <settings-file>
 ```
 
-One firing. It picks the lowest-numbered open issue carrying the ready label that is not parked, has no open pull request linked to it (by `Closes` or by a `feature/<N>-` branch), has no open blocking issue in GitHub's issue dependencies, and has been written on by nobody outside `writers` — a comment counts even after it is deleted. Then it resets the dedicated clone to the latest `origin/main` (`checkout -f`, `clean -fdx`, local branches whose upstream is gone deleted), sets aside any `feature/<N>-*` branch an earlier attempt left as `attempt/<N>-<stamp>`, and runs `chain.sh` there, logging to `logs/<N>-<stamp>.log` in the state directory. On success the issue has an open pull request. On failure the issue is labelled parked with a comment naming the failed stage, the reason, the log, the kept attempt branch, any branch that was pushed without a pull request, and any draft pull request a failed pre-review left open; removing the label has the next firing build it again from scratch, except where a draft is open — then the comment says to finish the draft or close it first. A usage-limit stop is parked too, with a comment saying nothing on the issue needs looking at. `--dry-run` names the issue the next firing would build and changes nothing.
+One firing, for a repository whose tracker is GitHub: a settings file naming another `tracker` is refused. It picks the lowest-numbered open issue carrying the ready label that is not parked, has no open pull request linked to it (by `Closes` or by a `feature/<N>-` branch), has no open blocking issue in GitHub's issue dependencies, and has been written on by nobody outside `writers` — a comment counts even after it is deleted. Then it resets the dedicated clone to the latest `origin/main` (`checkout -f`, `clean -fdx`, local branches whose upstream is gone deleted), sets aside any `feature/<N>-*` branch an earlier attempt left as `attempt/<N>-<stamp>`, and runs `chain.sh` there, logging to `logs/<N>-<stamp>.log` in the state directory. On success the issue has an open pull request. On failure the issue is labelled parked with a comment naming the failed stage, the reason, the log, the kept attempt branch, any branch that was pushed without a pull request, and any draft pull request a failed pre-review left open; removing the label has the next firing build it again from scratch, except where a draft is open — then the comment says to finish the draft or close it first. A usage-limit stop is parked too, with a comment saying nothing on the issue needs looking at. `--dry-run` names the issue the next firing would build and changes nothing.
 
 The runner never merges, never pushes and never deletes anything on GitHub; only the chain's raise-pr stage pushes, and the pre-review stage where the repository opts in. It changes nothing when nothing is eligible, when another firing holds the lock, or when a GitHub query fails — every query fails closed, selecting nothing rather than guessing. A fault in its own setup — the settings, the plugin checkout, the clone, a missing tool — is refused before anything is selected, so no issue is parked for it. The lock is `flock(1)`, from util-linux: Linux has it, macOS needs it installed, and a scheduler that never overlaps its own runs needs nothing from it.
 
@@ -108,11 +114,13 @@ By default every stage runs under the repository's own permission rules, and a h
    git clone https://github.com/FrankRay78/gaffer-claude.git ~/Repos/gaffer-runner
    ```
 
-3. Commit the settings file to the repository, with `clone` and `writers` at least, and bring the runner's clone to the `main` that holds it (`git -C ~/Repos/<repo>-runner fetch origin && git -C ~/Repos/<repo>-runner checkout -f -B main origin/main`) — the runner reads the file from the clone as the previous firing left it, so a change takes effect one firing after it merges, and the first firing needs it there already. Create the labels once; `ready` already exists where the issue stage has run:
+3. Commit the settings file to the repository, with `clone` and `writers` at least, and bring the runner's clone to the `main` that holds it (`git -C ~/Repos/<repo>-runner fetch origin && git -C ~/Repos/<repo>-runner checkout -f -B main origin/main`) — the runner reads the file from the clone as the previous firing left it, so a change takes effect one firing after it merges, and the first firing needs it there already. Create the labels once with the tracker's setup, which creates whichever of `needs answers`, `ready`, `parked` and `audit` are missing; `/gaffer:init` has run it where the repository was set up with it:
 
    ```bash
-   gh label create parked --description "The chain runner stopped on this issue; remove to retry"
+   (cd ~/Repos/<repo>-runner && bash ~/Repos/gaffer-runner/tracker/tracker.sh setup)
    ```
+
+   The runner parks with its own `labels.parked`; name another there and create that label by hand.
 
 4. Check what the first firing would do. This reads GitHub, confirms both clones are where the runner expects, and changes nothing:
 

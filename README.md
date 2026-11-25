@@ -72,7 +72,8 @@ To enable it for every clone of a repository, commit this to its `.claude/settin
 
 - **`git`, `gh` (authenticated) and `jq`** on the path. The hook also needs `awk`.
 - **The `pr-review-toolkit` plugin**: `/gaffer:verify` spawns its reviewers by their `pr-review-toolkit:` names.
-- **`Bash(chmod:*)` on `permissions.ask`** in `.claude/settings.json`, as the backstop for the forms the hook declines to decide; a plugin cannot set permission rules.
+- **`Bash(chmod:*)` on `permissions.ask`** in `.claude/settings.json`, as the backstop for the forms the hook declines to decide; a plugin cannot set permission rules. Beside it, **the allow rule for the tracker interface**, so the issue commands reach the tracker without a prompt.
+- **An issue tracker the plugin has an adapter for**, named by `tracker` in `.gaffer/chain.json` — GitHub issues when it is not named — with its states created by the tracker's setup.
 - **`.claude/scratch/` git-ignored**, for every command's working files.
 - **`main` as the default branch**, `CLAUDE.md` for project context, and `.claude/memory/` for durable learnings, loaded by an `@.claude/memory/MEMORY.md` line in `CLAUDE.md`. Without that line no session sees an entry.
 - **A build-and-test command** under *Build, test and format* in the repository's `CONVENTIONS.md` before the build stage is used. It is the one convention with no default: `build` and `verify` stop rather than invent one.
@@ -85,6 +86,7 @@ To enable it for every clone of a repository, commit this to its `.claude/settin
 - [`docs/workflow.md`](docs/workflow.md) — how the stages fit together, and why they are shaped this way.
 - [`docs/interfaces.md`](docs/interfaces.md) — everything that crosses between the plugin and a repository.
 - [`docs/verdict-schema.md`](docs/verdict-schema.md) — the verdict the build chain ends on, and how to read it.
+- [`docs/tracker.md`](docs/tracker.md) — the tracker interface every issue command uses: the setting, the contract, and how to write an adapter.
 - [`docs/chain.md`](docs/chain.md) — running the build chain unattended: the three scripts, their settings file, the permissions opt-in and a scheduler.
 - [`docs/unattended.md`](docs/unattended.md) — running commands with nobody watching: what each touches, permissions, and the CI pattern.
 - [`docs/troubleshooting.md`](docs/troubleshooting.md) — the common failures.
@@ -99,6 +101,7 @@ commands/         the slash commands
 hooks/            hooks.json, no-chmod.sh and its test matrix
 chain/            chain.sh, chain-next.sh, chain-local.sh and their test matrices — run from a clone, not from the installed plugin
 init/             setup.sh, the mechanical part of /gaffer:init, and its test matrix
+tracker/          tracker.sh, the one way to the issue tracker; its adapters, conformance suite and test matrices
 defaults/         the CONVENTIONS.md and REVIEW.md the commands run on when a repository says nothing
 templates/        copyable starting points for a repository's own two files
 docs/             the guides above
