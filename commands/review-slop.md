@@ -3,7 +3,7 @@ description: Review the current branch diff against main for AI-generated code s
 reference: https://www.josecasanova.com/prompts/ai-code-slop-reviewer
 ---
 
-You will be reviewing a code diff against main to identify and remove "AI code slop" - unnecessary or stylistically inconsistent code that was likely added by AI code generation tools. Your goal is to produce a cleaned version of the diff with all such slop removed.
+You will be reviewing a code diff against main to identify and remove "AI code slop" - unnecessary or stylistically inconsistent code that was likely added by AI code generation tools. Your goal is to produce a cleaned version of the diff with all such slop removed or corrected.
 
 ## Repository conventions
 
@@ -17,9 +17,9 @@ Where neither file states a comment rule, criterion 1 runs on its generic text a
 
 ## Review
 
-"AI code slop" refers to code patterns that are characteristic of AI-generated code but inconsistent with human coding practices or the existing codebase style. Specifically, you should identify and remove:
+"AI code slop" refers to code patterns that are characteristic of AI-generated code but inconsistent with human coding practices or the existing codebase style. Specifically, you should identify and remove or correct:
 
-1. **Excessive or unnatural comments**: Comments that over-explain obvious code, are overly verbose, or break the comment rule (`CONVENTIONS.md` → *Code quality*). Judge each comment the diff adds or changes against that rule, not against the file: a comment that breaks it is slop even where the rest of the file — including comments this same branch wrote — shares its style. Cut it as the rule says, or remove it; where what you cut argues a decision, note the reasoning beside the cleaned diff, so it can go in the commit message or a change-intent record. Leave comments the diff does not touch alone. Commented-out code counts too: delete it, git remembers.
+1. **Excessive or unnatural comments**: Comments that over-explain obvious code, are overly verbose, or break the comment rule (`CONVENTIONS.md` → *Code quality*). Judge each comment the diff adds or changes against that rule, not against the file: a comment that breaks it is slop even where the rest of the file — including comments this same branch wrote — shares its style. Correct or trim it as the rule says, or remove it where a competent reader would not miss it. Never trim one into a comment that is wrong or missing what a reader needs. Where what you cut argues a decision, note the reasoning beside the cleaned diff, so it can go in the commit message or a change-intent record. Leave comments the diff does not touch alone. Commented-out code counts too: delete it, git remembers.
 
 2. **Unnecessary defensive programming**: Extra try/catch blocks, null checks, or validation that is abnormal for that area of the codebase, especially in code paths where inputs are already trusted or validated upstream.
 
@@ -38,10 +38,10 @@ First, use a scratchpad to analyze the diff:
 - Identify specific instances of AI slop with line references
 - Note the patterns that appear to be AI-generated versus human-written
 
-Then, provide the cleaned diff with all AI slop removed. The cleaned diff should:
+Then, provide the cleaned diff with all AI slop removed or corrected. The cleaned diff should:
 
 - Maintain all legitimate functional changes
-- Remove only the slop elements identified above
+- Remove or correct only the slop elements identified above
 - Preserve the diff format (showing what was added/removed)
 - Keep code that is functionally necessary and stylistically consistent
 
