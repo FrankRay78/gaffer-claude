@@ -41,7 +41,8 @@ unset CHAIN_MODEL CHAIN_STAGE_TIMEOUT XDG_STATE_HOME
 # that author, always a User, and the timeline nodes in comments-<n>.json, and a comments-fail-<n>
 # file makes it fail; a comments-<n>.json that is not JSON is passed through as the reply. A gh-fail file makes every
 # call fail, as an outage would; gh-fail-<command> fails only that command (gh-fail-pr, gh-fail-api). Label and comment writes are applied to the stub's own state,
-# so a parked issue stays parked for the next firing.
+# so a parked issue stays parked for the next firing. `gh repo view`, the repository gh resolves the
+# clone to, answers with the gh-repo file, o/r if there is none.
 mkdir -p "$SB/bin"
 cat > "$SB/bin/gh" <<'STUB'
 #!/usr/bin/env bash
@@ -56,6 +57,8 @@ case "$1 $2" in
       map(select(($s == "" or $s == "all" or (.state | ascii_downcase) == $s)
         and ($l == "" or (.labels | index($l)))))
       | map({number, state, labels: (.labels | map({name: .}))})' "$STUB_DIR/issues.json" ;;
+  "repo view")
+    if [ -f "$STUB_DIR/gh-repo" ]; then cat "$STUB_DIR/gh-repo"; else echo o/r; fi ;;
   "pr list")
     if [ -f "$STUB_DIR/prs.json" ]; then cat "$STUB_DIR/prs.json"; else echo '[]'; fi ;;
   "issue edit")
@@ -522,6 +525,21 @@ echo '[{"number":112,"headRefName":"feature/12-work","closingIssuesReferences":[
 touch "$STUB_DIR/gh-fail-pr"
 fire
 ok "a failed pull request lookup selects nothing rather than assuming none is open" '[ "$RC" != 0 ] && [ -z "$(chain_calls)" ]'
+
+echo "A fork clone, where gh would choose another repository than origin:"
+# Report mode alone, which fetches nothing, so origin can be a GitHub URL the sandbox never reaches.
+new_case
+issues '[{"number":5,"state":"OPEN","labels":["ready"]}]'
+git -C "$CLONE" remote set-url origin https://github.com/o/r.git
+echo up/r > "$STUB_DIR/gh-repo"
+fire --dry-run
+ok "gh resolving the clone to upstream is refused, naming the fix, before any issue is listed" '[ "$RC" != 0 ] && grep -qF "gh repo set-default o/r" <<<"$OUTPUT" && ! grep -q "^issue|list" "$STUB_DIR/gh-log"'
+echo O/R > "$STUB_DIR/gh-repo"
+fire --dry-run
+ok "gh resolving it to origin, whatever the case, selects as before" '[ "$RC" = 0 ] && grep -qF "#5" <<<"$OUTPUT"'
+touch "$STUB_DIR/gh-fail-repo"; rm -f "$STUB_DIR/gh-log"
+fire --dry-run
+ok "gh unable to say which repository: refused, never assumed" '[ "$RC" != 0 ] && grep -qF "gh repo set-default o/r" <<<"$OUTPUT" && ! grep -q "^issue|list" "$STUB_DIR/gh-log"'
 
 echo "A machine fault is not blamed on the issue:"
 new_case

@@ -12,8 +12,11 @@
 # REFERENCES. `<N>` or `#<N>` is issue N of this repository, the origin remote's. An issue URL or
 # `<owner>/<repo>#<N>` naming this repository normalises to the bare `N`; naming another, to
 # `<owner>/<repo>#<N>`, GitHub's own cross-repository form. Every operation accepts any of them.
-# Every call names its repository with --repo, never leaving gh to choose one: in a fork clone,
-# gh's own choice (gh repo set-default, an `upstream` remote) is another repository.
+# Every call names its repository — the reference's, else origin's — with --repo or its REST path,
+# never leaving gh to choose one: in a fork clone, gh's own choice (gh repo set-default, an
+# `upstream` remote) is another repository. The calls that take no reference (create,
+# search-title, setup, pr-reference) go to origin too. Only where origin is not a GitHub URL is the
+# choice left to gh.
 
 set -uo pipefail
 
@@ -67,6 +70,8 @@ origin_repo() {
   url=$(git remote get-url origin 2>/dev/null) || return 0
   [[ $url =~ github\.com[:/]([^/]+)/([^/]+)$ ]] && echo "${BASH_REMATCH[1]}/${BASH_REMATCH[2]%.git}"
 }
+# home_args — sets HOME_ARGS to --repo <origin>, for a call that takes no reference.
+home_args() { local here; here=$(origin_repo); if [ -n "$here" ]; then HOME_ARGS=(--repo "$here"); else HOME_ARGS=(); fi; }
 
 # parse_ref <reference> — sets NUM, REPO, REPO_ARGS and API_REPO, or fails. REPO is the display
 # repository: owner/repo, or empty for this repository, so a URL or owner/repo#N naming this
@@ -145,8 +150,8 @@ op_create() {
     esac
   done
   [ -n "$title" ] && [ -f "$body" ] || die "usage: create --title <title> --body-file <file> [--state <state>]…"
-  need_gh
-  url=$(gh issue create --title "$title" --body-file "$body" ${label_args[@]+"${label_args[@]}"}) || die "could not create the issue"
+  need_gh; home_args
+  url=$(gh issue create ${HOME_ARGS[@]+"${HOME_ARGS[@]}"} --title "$title" --body-file "$body" ${label_args[@]+"${label_args[@]}"}) || die "could not create the issue"
   url=$(tail -n 1 <<<"$url")
   [[ $url =~ /issues/([0-9]+)$ ]] || die "gh created an issue but printed no issue URL: $url"
   jq -n -c --arg r "${BASH_REMATCH[1]}" --arg u "$url" '{ref: $r, url: $u}'
@@ -246,7 +251,9 @@ op_pr_reference() {
   none() { jq -n -c --arg r "$1" --arg l "${2:-}" '{outcome: "none", reason: $r, line: (if $l == "" then null else $l end)}'; exit 0; }
   command -v gh >/dev/null 2>&1 || unverified "gh is not on PATH"
   err=$(mktemp) || die "mktemp failed"
-  this=$(gh repo view --json nameWithOwner -q .nameWithOwner 2>"$err") || { out=$(tr '\n' ' ' <"$err"); rm -f "$err"; unverified "${out% }"; }
+  # This repository is origin's, as for every other call; gh is asked only where origin is not on GitHub.
+  this=$(origin_repo)
+  [ -n "$this" ] || this=$(gh repo view --json nameWithOwner -q .nameWithOwner 2>"$err") || { out=$(tr '\n' ' ' <"$err"); rm -f "$err"; unverified "${out% }"; }
   n=$(sed 's/^0*//' <<<"$NUM")
   if [ -z "$n" ]; then rm -f "$err"; none "#$NUM is not an issue number"; fi
   if [ -n "$REPO" ] && [ "$(lower "$REPO")" != "$(lower "$this")" ]; then rm -f "$err"; none "$REPO#$NUM is in another repository, not $this"; fi
@@ -271,24 +278,24 @@ op_pr_reference() {
 
 op_search_title() {
   [ $# -eq 1 ] || die "usage: search-title <text>"
-  need_gh
+  need_gh; home_args
   local out
-  out=$(gh issue list --state all --search "$1 in:title" --json number,title,state,url --limit 100) || die "could not search issue titles"
+  out=$(gh issue list ${HOME_ARGS[@]+"${HOME_ARGS[@]}"} --state all --search "$1 in:title" --json number,title,state,url --limit 100) || die "could not search issue titles"
   jq -c 'map({ref: (.number | tostring), title, state: (.state | ascii_downcase), url})' <<<"$out"
 }
 
 op_setup() {
   [ $# -eq 0 ] || die "usage: setup"
-  need_gh
+  need_gh; home_args
   local existing mapping state name
-  existing=$(gh label list --limit 1000 --json name --jq '.[].name' 2>/dev/null) || die "could not list labels (gh label list failed)"
+  existing=$(gh label list ${HOME_ARGS[@]+"${HOME_ARGS[@]}"} --limit 1000 --json name --jq '.[].name' 2>/dev/null) || die "could not list labels (gh label list failed)"
   mapping=$(labels) || exit 78
   while IFS='|' read -r state name; do
     # GitHub label names are case-insensitive: an existing `Ready` is the `ready` label.
     if grep -qixF -- "$name" <<<"$existing"; then
       echo "present: label $name"
     else
-      gh label create "$name" --description "$(description_of "$state")" >/dev/null 2>&1 || die "could not create label '$name'"
+      gh label create "$name" ${HOME_ARGS[@]+"${HOME_ARGS[@]}"} --description "$(description_of "$state")" >/dev/null 2>&1 || die "could not create label '$name'"
       echo "added: label $name"
     fi
   done <<<"$mapping"

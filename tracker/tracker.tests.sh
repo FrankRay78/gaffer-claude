@@ -28,7 +28,10 @@ unset GAFFER_SETTINGS
 # per page; without it, the first page alone. Comment timestamps follow `clock`, which each new
 # comment advances by one second. The fake's own repository is `repo`, whose issues are keyed by
 # number; an issue of any other repository is keyed `<owner>/<repo>#<N>`, and a call reaches it
-# only through --repo or its repos/<owner>/<repo>/ path. `gh --version` prints the version in the
+# only through --repo or its repos/<owner>/<repo>/ path. A call without --repo goes where gh would
+# choose, the state's `default`: the fake's own repository unless a case sets another, as
+# `gh repo set-default` or an `upstream` remote does in a fork clone. Labels and issues made in
+# another repository are kept apart from the fake's own. `gh --version` prints the version in the
 # file gh-version, 2.80.0 if there is none.
 mkdir -p "$SB/bin"
 cat > "$SB/bin/gh" <<'STUB'
@@ -42,17 +45,17 @@ filter=; args=()
 while [ $# -gt 0 ]; do case $1 in --jq|-q) filter=$2; shift 2 ;; *) args+=("$1"); shift ;; esac; done
 set -- "${args[@]}"
 out() { if [ -n "$filter" ]; then jq -r "$filter"; else cat; fi; }
-repo=$(jq -r .repo "$S")
+repo=$(jq -r .repo "$S"); dflt=$(jq -r '.default // .repo' "$S")
 opt() { local want=$1 i; for ((i = 2; i <= $#; i++)); do [ "${!i}" = "$want" ] && { i=$((i + 1)); printf '%s' "${!i}"; return 0; }; done; return 1; }
 # key <owner/repo> <N> — the issue's key in the state.
 key() { if [ "$1" = "$repo" ]; then echo "$2"; else echo "$1#$2"; fi; }
 # The key of issue $3 in the repository --repo or -R names, else the fake's own.
-k=; [ "${1:-}" = issue ] && [ -n "${3:-}" ] && k=$(key "$(opt --repo "$@" || opt -R "$@" || echo "$repo")" "$3")
+k=; [ "${1:-}" = issue ] && [ -n "${3:-}" ] && k=$(key "$(opt --repo "$@" || opt -R "$@" || echo "$dflt")" "$3")
 missing() { echo "GraphQL: Could not resolve to an issue or pull request with the number of $1. (repository.issue)" >&2; exit 1; }
 exists() { jq -e --arg n "$1" '.issues[$n] != null' "$S" >/dev/null; }
 case "$1 ${2:-}" in
   "--version ") echo "gh version $(cat "$STUB_DIR/gh-version" 2>/dev/null || echo 2.80.0) (2025-06-01)" ;;
-  "repo view") jq -n --arg r "$repo" '{nameWithOwner: $r}' | out ;;
+  "repo view") jq -n --arg r "$dflt" '{nameWithOwner: $r}' | out ;;
   "issue view")
     exists "$k" || missing "$3"
     jq --arg n "$k" '.issues[$n] | {number, title, body, state, url, labels: [.labels[] | {name: .}],
@@ -60,10 +63,10 @@ case "$1 ${2:-}" in
   "issue create")
     title=$(opt --title "$@"); body=$(cat "$(opt --body-file "$@")")
     labels=$(for ((i = 3; i <= $#; i++)); do [ "${!i}" = --label ] && { j=$((i + 1)); printf '%s\n' "${!j}"; }; done | jq -R . | jq -s .)
-    n=$(jq -r '.next' "$S")
-    save --arg n "$n" --arg t "$title" --arg b "$body" --argjson l "$labels" \
-      '.next += 1 | .issues[$n] = {number: ($n | tonumber), title: $t, body: $b, state: "OPEN", labels: $l, closing: [], url: "https://github.com/\(.repo)/issues/\($n)"}'
-    echo "https://github.com/$repo/issues/$n" ;;
+    n=$(jq -r '.next' "$S"); r=$(opt --repo "$@" || echo "$dflt")
+    save --arg k "$(key "$r" "$n")" --arg n "$n" --arg r "$r" --arg t "$title" --arg b "$body" --argjson l "$labels" \
+      '.next += 1 | .issues[$k] = {number: ($n | tonumber), title: $t, body: $b, state: "OPEN", labels: $l, closing: [], url: "https://github.com/\($r)/issues/\($n)"}'
+    echo "https://github.com/$r/issues/$n" ;;
   "issue edit")
     exists "$k" || missing "$3"
     if l=$(opt --add-label "$@"); then
@@ -85,9 +88,14 @@ case "$1 ${2:-}" in
     save --arg n "$k" '.issues[$n].state = "CLOSED"' ;;
   "issue list")
     s=$(opt --search "$@"); s=${s% in:title}
-    jq --arg s "$s" --arg p "https://github.com/$repo/issues/" '[.issues[] | select(.url | startswith($p)) | select(.title | contains($s)) | {number, title, state, url}]' "$S" | out ;;
-  "label list") jq '[.labels[] | {name}]' "$S" | out ;;
-  "label create") save --arg l "$3" --arg d "$(opt --description "$@")" '.labels += [{name: $l, description: $d}]' ;;
+    jq --arg s "$s" --arg p "https://github.com/$(opt --repo "$@" || echo "$dflt")/issues/" '[.issues[] | select(.url | startswith($p)) | select(.title | contains($s)) | {number, title, state, url}]' "$S" | out ;;
+  "label list")
+    if [ "$(opt --repo "$@" || echo "$dflt")" = "$repo" ]; then jq '[.labels[] | {name}]' "$S" | out
+    else jq --arg r "$(opt --repo "$@" || echo "$dflt")" '[(.foreign_labels[$r] // [])[] | {name}]' "$S" | out; fi ;;
+  "label create")
+    r=$(opt --repo "$@" || echo "$dflt")
+    if [ "$r" = "$repo" ]; then save --arg l "$3" --arg d "$(opt --description "$@")" '.labels += [{name: $l, description: $d}]'
+    else save --arg r "$r" --arg l "$3" '.foreign_labels[$r] += [{name: $l}]'; fi ;;
   "api "*)
     method=GET; path=; input=; field=; paginate=0
     shift
@@ -100,7 +108,7 @@ case "$1 ${2:-}" in
         *) path=$1; shift ;;
       esac
     done
-    path=${path#/}; path=${path/\{owner\}\/\{repo\}/$repo}
+    path=${path#/}; path=${path/\{owner\}\/\{repo\}/$dflt}
     [[ $path =~ ^repos/([^/]+/[^/]+)/issues/(.+)$ ]] || { echo "fake gh: unexpected api $method $path" >&2; exit 1; }
     r=${BASH_REMATCH[1]}; rest=${BASH_REMATCH[2]}
     # A comment id is global; it is this repository's only when its issue is.
@@ -328,9 +336,9 @@ printf 'Superseded by #9' > "$R/note"; reset_log
 run close "$n" note
 ok "close closes with the note as its comment" 'logged "issue|close|$n|--repo|o/r|--comment|Superseded by #9|" && [ "$(jq -r --arg n "$n" ".issues[\$n].state" "$STUB_DIR/state.json")" = CLOSED ]'
 reset_log; printf 'An audit.\n' > "$R/ab"; run_out create --title "Codebase audit" --body-file ab --state audit
-ok "create with a state labels the new issue, and returns its reference" 'logged "issue|create|--title|Codebase audit|--body-file|ab|--label|audit|" && [ "$(jq -r .ref <<<"$OUT")" = 2 ]'
+ok "create with a state labels the new issue, and returns its reference" 'logged "issue|create|--repo|o/r|--title|Codebase audit|--body-file|ab|--label|audit|" && [ "$(jq -r .ref <<<"$OUT")" = 2 ]'
 reset_log; run_out search-title "Codebase audit"
-ok "search-title searches every issue's title" 'logged "issue|list|--state|all|--search|Codebase audit in:title|--json|number,title,state,url|--limit|100|" && [ "$(jq -r ".[0].ref" <<<"$OUT")" = 2 ]'
+ok "search-title searches every issue's title" 'logged "issue|list|--repo|o/r|--state|all|--search|Codebase audit in:title|--json|number,title,state,url|--limit|100|" && [ "$(jq -r ".[0].ref" <<<"$OUT")" = 2 ]'
 touch "$STUB_DIR/fail-issue-list"; run search-title "Codebase audit"
 ok "a search that fails: exit 1, never an empty list" '[ $RC = 1 ] && ! grep -q "^\[" <<<"$OUT"'
 rm -f "$STUB_DIR/fail-issue-list"
@@ -338,6 +346,30 @@ reset_log; m=$(issue "Other"); reset_log; run link "$n" "$m"
 ok "link mentions the other issue on this one" '[ $RC = 0 ] && logged "issue|comment|$n|--repo|o/r|--body|Related: #$m|"'
 foreign a/b 5; reset_log; run link a/b#5 "$m"
 ok "on another repository's issue, link names this repository in the mention" '[ $RC = 0 ] && logged "issue|comment|5|--repo|a/b|--body|Related: o/r#$m|"'
+
+echo "A fork clone, where gh's own choice is the upstream repository:"
+fork() { git -C "$R" remote add upstream https://github.com/up/r.git
+  jq '.default = "up/r" | .labels = []' "$STUB_DIR/state.json" > "$STUB_DIR/s" && mv "$STUB_DIR/s" "$STUB_DIR/state.json"; }
+fresh; fork; printf 'A body.\n' > "$R/b"
+run_out create --title "Made here" --body-file b
+ok "create makes the issue in origin's repository, not upstream's" '[ $RC = 0 ] && [ "$(jq -r .ref <<<"$OUT")" = 1 ] && [ "$(jq -r .url <<<"$OUT")" = https://github.com/o/r/issues/1 ] && [ "$(home_state | jq -r ".issues[\"1\"].title")" = "Made here" ]'
+jq '.issues["up/r#1"] = {number: 1, title: "upstream one", body: "", state: "OPEN", labels: [], closing: [], url: "https://github.com/up/r/issues/1"}' \
+  "$STUB_DIR/state.json" > "$STUB_DIR/s" && mv "$STUB_DIR/s" "$STUB_DIR/state.json"
+run_out view 1
+ok "… and view of the reference it returned reads that issue" '[ $RC = 0 ] && [ "$(jq -r .title <<<"$OUT")" = "Made here" ]'
+run_out search-title "Made"
+ok "search-title searches origin's issues" '[ $RC = 0 ] && [ "$(jq -r ".[0].url" <<<"$OUT")" = https://github.com/o/r/issues/1 ]'
+reset_log; run_out pr-reference 1
+ok "pr-reference checks the issue against origin's repository, without asking gh which" '[ "$(jq -r .outcome <<<"$OUT")" = linked ] && [ "$(jq -r .title <<<"$OUT")" = "Made here" ] && ! grep -q "^repo|view" "$STUB_DIR/gh-log"'
+run_out setup
+ok "setup creates the labels in origin's repository" '[ $RC = 0 ] && [ "$(jq -c "[.labels[].name] | sort" "$STUB_DIR/state.json")" = "[\"audit\",\"needs answers\",\"parked\",\"ready\"]" ] && [ "$(jq -c ".foreign_labels // {}" "$STUB_DIR/state.json")" = "{}" ]'
+run state-add 1 ready
+ok "… so state-add on the issue create made finds its label" '[ $RC = 0 ] && [ "$(home_state | jq -c ".issues[\"1\"].labels")" = "[\"ready\"]" ]'
+fresh; git -C "$R" remote remove origin; printf 'A body.\n' > "$R/b"; reset_log
+run_out create --title "No origin" --body-file b
+ok "with no origin on GitHub, create leaves the repository to gh" '[ $RC = 0 ] && logged "issue|create|--title|No origin|--body-file|b|"'
+reset_log; run_out pr-reference 1
+ok "… and pr-reference asks gh which repository this is" '[ "$(jq -r .outcome <<<"$OUT")" = linked ] && grep -q "^repo|view" "$STUB_DIR/gh-log"'
 
 echo "Another repository's issue, over REST:"
 fresh; n=$(issue "Ours"); printf 'ours\n' > "$R/c"; gh issue comment "$n" --body-file "$R/c" >/dev/null
@@ -406,7 +438,7 @@ ok "a closed issue: none, with Refs #N to keep the trace" '[ "$(jq -r .outcome <
 run_out pr-reference 99
 ok "no issue or pull request at that number: none" '[ "$(jq -r .outcome <<<"$OUT")" = none ] && grep -q "no issue or pull request #99" <<<"$(jq -r .reason <<<"$OUT")"'
 reset_log; run_out pr-reference https://github.com/cli/cli/issues/14353
-ok "another repository's issue: none, without looking it up" '[ "$(jq -r .outcome <<<"$OUT")" = none ] && ! grep -q "issue|view" "$STUB_DIR/gh-log"'
+ok "another repository's issue: none, without looking it up" '[ "$(jq -r .outcome <<<"$OUT")" = none ] && ! grep -qs "issue|view" "$STUB_DIR/gh-log"'
 jq --arg n "$open" '.issues[$n].url = "https://github.com/o/r/issues/77"' "$STUB_DIR/state.json" > "$STUB_DIR/s" && mv "$STUB_DIR/s" "$STUB_DIR/state.json"
 run_out pr-reference "$open"
 ok "an issue that resolves elsewhere (transferred): none" '[ "$(jq -r .outcome <<<"$OUT")" = none ]'
@@ -420,8 +452,8 @@ echo "setup (github):"
 fresh; jq '.labels = [{name: "Ready"}]' "$STUB_DIR/state.json" > "$STUB_DIR/s" && mv "$STUB_DIR/s" "$STUB_DIR/state.json"
 run_out setup
 ok "setup creates every state's missing label, and counts Ready as ready" '[ $RC = 0 ] && grep -qxF "present: label ready" <<<"$OUT" && grep -qxF "added: label needs answers" <<<"$OUT" && grep -qxF "added: label parked" <<<"$OUT" && grep -qxF "added: label audit" <<<"$OUT"'
-ok "… with the descriptions the labels have always had" 'logged "label|create|needs answers|--description|A review is posted and awaiting the author'"'"'s answers|" && logged "label|create|parked|--description|An unattended run stopped on this issue; remove to retry|"'
-ok "labels are listed by name, beyond the default page" 'logged "label|list|--limit|1000|--json|name|--jq|.[].name|"'
+ok "… with the descriptions the labels have always had" 'logged "label|create|needs answers|--repo|o/r|--description|A review is posted and awaiting the author'"'"'s answers|" && logged "label|create|parked|--repo|o/r|--description|An unattended run stopped on this issue; remove to retry|"'
+ok "labels are listed by name, beyond the default page" 'logged "label|list|--repo|o/r|--limit|1000|--json|name|--jq|.[].name|"'
 run_out setup
 ok "a second setup adds nothing" '[ $RC = 0 ] && ! grep -q "^added:" <<<"$OUT"'
 fresh; jq '.labels = []' "$STUB_DIR/state.json" > "$STUB_DIR/s" && mv "$STUB_DIR/s" "$STUB_DIR/state.json"

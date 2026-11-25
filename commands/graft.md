@@ -68,7 +68,7 @@ bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh require view comment-find comment-
 bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh ref '<candidate>'
 ```
 
-`<candidate>` is only the part of the argument that could name an issue, never guidance beside it. A non-zero exit from `require` is a stop, passing on what it printed — it names the setting and the operation at fault. From `ref`, exit 1 means the argument is not an issue: go to step 2. Any other non-zero exit from it is a stop, as for `require`. Exit 0 prints the `<ref>` every later call uses; read the issue and its review comment:
+`<candidate>` is only the part of the argument that could name an issue, never guidance beside it. A backlog form — `backlog <number>` or `item <number>` — names a backlog item, not an issue: never pass it, or the number in it, to `ref`, which would read `12` as issue #12; run `require` alone, and once it passes go to step 2. A non-zero exit from `require` is a stop, passing on what it printed — it names the setting and the operation at fault. From `ref`, exit 1 means the argument is not an issue: go to step 2. Any other non-zero exit from it is a stop, as for `require`. Exit 0 prints the `<ref>` every later call uses; read the issue and its review comment:
 
 ```bash
 bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh view <ref>

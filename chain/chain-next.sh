@@ -196,6 +196,23 @@ check_plugin() {
     || die "refused — $PLUGIN_ROOT has local commits its origin's main does not; nothing was run."
 }
 
+# check_repo — gh, asked with no repository named, chooses the one the tracker interface sends every
+# issue call to: origin's. The runner's own gh calls name no repository, so gh chooses; in a fork
+# clone it chooses upstream (gh repo set-default, or an `upstream` remote), and the runner would
+# select and park upstream's #N while the chain builds origin's. Refused rather than guessed at.
+# Where origin is not a GitHub URL the tracker leaves the choice to gh too, so the two agree.
+check_repo() {
+  local url here chosen fix
+  url=$(git remote get-url origin 2>/dev/null) || return 0
+  [[ $url =~ github\.com[:/]([^/]+)/([^/]+)$ ]] || return 0
+  here="${BASH_REMATCH[1]}/${BASH_REMATCH[2]%.git}"
+  fix="Run \`gh repo set-default $here\` in the clone. Nothing was selected."
+  chosen=$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null) \
+    || die "refused — gh could not say which repository $CLONE resolves to, and the issue commands use its origin, $here. $fix"
+  [ "$(tr '[:upper:]' '[:lower:]' <<<"$chosen")" = "$(tr '[:upper:]' '[:lower:]' <<<"$here")" ] \
+    || die "refused — gh resolves $CLONE to $chosen, but the issue commands use its origin, $here. $fix"
+}
+
 # reset_clone — the latest main: no local change, no untracked or ignored file, and no local
 # feature branch whose upstream is gone (merged and deleted on GitHub). attempt/* branches stay,
 # even when a pushed twin they still track has been removed by hand.
@@ -311,6 +328,7 @@ main() {
       || [ "$(git config --get chain-next.dedicated)" != true ]; then
     die "refused — $CLONE is not the runner's dedicated clone (a full clone marked with \`git config chain-next.dedicated true\`); nothing was changed."
   fi
+  check_repo
 
   if [ "$dry_run" = 1 ]; then
     n=$(select_issue) || exit 1
