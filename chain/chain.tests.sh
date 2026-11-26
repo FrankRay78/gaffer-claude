@@ -226,60 +226,68 @@ ok "a model override does not stand in for a broken row" '[ "$RC" = 78 ] && [ "$
 new_case
 chain --settings "$SB/case$cases/no-such.json" 270
 ok "a named settings file that does not exist is refused, where an absent default is not" '[ "$RC" = 78 ] && [ "$(calls)" = 0 ] && grep -qF "no-such.json" <<<"$OUTPUT"'
-new_case
-reply 1 "$(ready)"
-chain "#270"
-ok "an issue written #270 is the same issue" 'prompt_is 1 "/gaffer:build 270"'
-echo "The issue reference is the configured tracker's:"
-# A copy of the plugin with a second adapter, "fake", that recognises keys like PROJ-12 and
-# nothing else, so a case can show the chain taking what the tracker recognises.
-FAKE_PLUGIN="$SB/fake-plugin"
-mkdir -p "$FAKE_PLUGIN/chain" "$FAKE_PLUGIN/.claude-plugin"
-cp -R "$PLUGIN_ROOT/tracker" "$FAKE_PLUGIN/tracker"
-cp "$CHAIN" "$FAKE_PLUGIN/chain/chain.sh"
-cp "$PLUGIN_ROOT/.claude-plugin/plugin.json" "$FAKE_PLUGIN/.claude-plugin/plugin.json"
-cat > "$FAKE_PLUGIN/tracker/adapters/fake.sh" <<'A'
-case $1 in
-  operations) echo ref ;;
-  ref) [ "$2" = --forms ] && { shift; [[ $2 =~ ^[A-Z]+-[0-9]+$ ]] || exit 1; printf '{"ref":"%s","branch":"%s","mention":"%s"}\n' "$2" "$2" "$2"; exit 0; }
-       [[ $2 =~ ^[A-Z]+-[0-9]+$ ]] || exit 1; echo "$2" ;;
-esac
-A
+echo "The issue reference is the tracker's to read, never the chain's:"
 new_case
 reply 1 "$(ready)"; reply 2 "$(verified)"; reply 3 "$(raised)"
-settings '{"tracker": "fake"}'
-CHAIN="$FAKE_PLUGIN/chain/chain.sh" chain PROJ-12
-ok "another tracker's key is accepted and handed to every stage that takes the issue" '[ "$RC" = 0 ] && prompt_is 1 "/gaffer:build PROJ-12" && prompt_is 3 "/gaffer:raise-pr PROJ-12"'
+chain "#270"
+ok "an issue written #270 is handed to the stages as typed" '[ "$RC" = 0 ] && prompt_is 1 "/gaffer:build #270" && prompt_is 3 "/gaffer:raise-pr #270"'
 new_case
-settings '{"tracker": "fake"}'
+reply 1 "$(ready)"; reply 2 "$(verified)"; reply 3 "$(raised)"
+chain PROJ-12
+ok "a reference in another tracker's form is handed on as typed, with no change to the chain" '[ "$RC" = 0 ] && prompt_is 1 "/gaffer:build PROJ-12" && prompt_is 3 "/gaffer:raise-pr PROJ-12"'
+new_case
+reply 1 "$(ready)"; reply 2 "$(verified)"; reply 3 "$(raised)"
+settings '{"pre_review": true}'
+reply 4 '{"schema": 1, "outcome": "pre-reviewed", "pr": "https://github.com/o/r/pull/9"}'
+chain PROJ-12
+ok "… to the draft raise-pr too" 'prompt_is 3 "/gaffer:raise-pr --draft PROJ-12"'
+# The first stage's first read of the issue is what refuses a reference: the stub plays a build
+# that stopped there, having changed nothing.
+new_case
+reply 1 "$(failed "the issue reference was not recognised")"
 before="$(repo_state)"
-CHAIN="$FAKE_PLUGIN/chain/chain.sh" chain 270
-ok "a reference that tracker does not recognise: exits 1 with usage, no stage started" '[ "$RC" = 1 ] && [ "$(calls)" = 0 ] && grep -q usage <<<"$OUTPUT" && [ "$(repo_state)" = "$before" ]'
+chain not-a-reference
+ok "a reference the tracker does not recognise reaches the first stage, which stops the run" '[ "$RC" != 0 ] && [ "$(calls)" = 1 ] && prompt_is 1 "/gaffer:build not-a-reference" && closing | grep -qF "FAILED at [1/3] build — the issue reference was not recognised"'
+ok "… with nothing changed" '[ "$(repo_state)" = "$before" ]'
 new_case
-settings '{"tracker": "fake"}'
-CHAIN="$FAKE_PLUGIN/chain/chain.sh" chain --dry-run PROJ-12
-ok "the dry run names the issue the way its tracker mentions it" '[ "$RC" = 0 ] && grep -qF "dry run for issue PROJ-12" <<<"$OUTPUT"'
+chain --dry-run PROJ-12
+ok "the dry run names the issue as it was typed" '[ "$RC" = 0 ] && grep -qF "dry run for issue PROJ-12" <<<"$OUTPUT" && grep -qF "/gaffer:build PROJ-12" <<<"$OUTPUT"'
 new_case
-chain --dry-run 270
-ok "on GitHub the dry run still names #270" '[ "$RC" = 0 ] && grep -qF "dry run for issue #270" <<<"$OUTPUT"'
+chain ""
+ok "an empty reference is the one the chain refuses itself: usage, no stage started" '[ "$RC" = 1 ] && [ "$(calls)" = 0 ] && grep -q usage <<<"$OUTPUT"'
+# A copy of the plugin whose tracker script records being run: the chain must start every stage
+# without running it, since reading a reference is the interface's job inside a stage.
+LOUD="$SB/loud-plugin"
+mkdir -p "$LOUD/chain" "$LOUD/.claude-plugin" "$LOUD/tracker"
+cp "$CHAIN" "$LOUD/chain/chain.sh"
+cp "$PLUGIN_ROOT/.claude-plugin/plugin.json" "$LOUD/.claude-plugin/plugin.json"
+printf '# an interface file\n' > "$LOUD/tracker/TRACKER.md"
+printf 'echo called >> "$STUB_DIR/tracker-called"\nexit 1\n' > "$LOUD/tracker/tracker.sh"
 new_case
+reply 1 "$(ready)"; reply 2 "$(verified)"; reply 3 "$(raised)"
+CHAIN="$LOUD/chain/chain.sh" chain 270
+ok "the chain runs no tracker script itself" '[ "$RC" = 0 ] && [ "$(calls)" = 3 ] && [ ! -e "$STUB_DIR/tracker-called" ]'
+new_case
+CHAIN="$LOUD/chain/chain.sh" chain --dry-run 270
+ok "… nor does its dry run" '[ "$RC" = 0 ] && [ ! -e "$STUB_DIR/tracker-called" ]'
+ok "the chain takes the issue as its argument, unread, and names no tracker operation" 'grep -qxF "issue=\$1" "$CHAIN" && [ "$(grep -cE "bash \"[$]TRACKER\"|ref --forms|branch-ref" "$CHAIN")" = 0 ]'
+new_case
+reply 1 "$(ready)"; reply 2 "$(verified)"; reply 3 "$(raised)"
 settings '{"tracker": "jira"}'
-before="$(repo_state)"
 chain 270
-ok "a tracker setting with no adapter: the configuration code, naming the setting, no stage started" '[ "$RC" = 78 ] && [ "$(calls)" = 0 ] && grep -qF "\"tracker\"" <<<"$OUTPUT" && grep -qF "jira" <<<"$OUTPUT" && [ "$(repo_state)" = "$before" ]'
+ok "the chain reads no tracker setting: a file that names one runs like any other" '[ "$RC" = 0 ] && [ "$(calls)" = 3 ]'
 new_case
-settings '{"tracker": "jira"}'
-chain --dry-run 270
-ok "… refused by the dry run too" '[ "$RC" = 78 ] && [ "$(calls)" = 0 ]'
-
-new_case
-reply 1 "$(ready)"
-chain https://github.com/other/repo/issues/5
-ok "another repository's issue: exits 1 with usage, no stage started, as no branch name here can carry it" '[ "$RC" = 1 ] && [ "$(calls)" = 0 ] && grep -q usage <<<"$OUTPUT" && grep -qF "another repository" <<<"$OUTPUT"'
+BARE="$SB/case$cases/bare-plugin"
+mkdir -p "$BARE/chain" "$BARE/.claude-plugin"
+cp "$CHAIN" "$BARE/chain/chain.sh"
+cp "$PLUGIN_ROOT/.claude-plugin/plugin.json" "$BARE/.claude-plugin/plugin.json"
+before="$(repo_state)"
+CHAIN="$BARE/chain/chain.sh" chain 270
+ok "a plugin checkout with no interface file: the configuration code, naming the file, no stage started" '[ "$RC" = 78 ] && [ "$(calls)" = 0 ] && grep -qF "tracker/TRACKER.md" <<<"$OUTPUT" && [ "$(repo_state)" = "$before" ]'
 new_case
 SPACED="$SB/case$cases/my plugin"
-mkdir -p "$SPACED/chain" "$SPACED/.claude-plugin"
-cp -R "$PLUGIN_ROOT/tracker" "$SPACED/tracker"
+mkdir -p "$SPACED/chain" "$SPACED/.claude-plugin" "$SPACED/tracker"
+printf '# an interface file\n' > "$SPACED/tracker/TRACKER.md"
 cp "$CHAIN" "$SPACED/chain/chain.sh"
 cp "$PLUGIN_ROOT/.claude-plugin/plugin.json" "$SPACED/.claude-plugin/plugin.json"
 CHAIN="$SPACED/chain/chain.sh" chain 270
@@ -310,7 +318,7 @@ chain --skip-permissions 270
 ok "with permissions skipped no rule is needed, and none is passed" '[ "$RC" = 0 ] && ! grep -qF -- "--allowedTools|" "$STUB_DIR/log"'
 new_case
 reply 1 "$(ready)"; reply 2 "$(verified)"; reply 3 "$(raised)"
-printf '{"tracker": "github"}' > "$SB/case$cases/named.json"
+printf '{"pre_review": false}' > "$SB/case$cases/named.json"
 printf 'printf "%%s" "${GAFFER_SETTINGS-unset}" > "$STUB_DIR/stage-settings"\n' > "$STUB_DIR/act-1"
 chain --settings "$SB/case$cases/named.json" 270
 ok "the stages' tracker reads the settings file the chain read" '[ "$RC" = 0 ] && [ "$(cat "$STUB_DIR/stage-settings")" = "$SB/case$cases/named.json" ]'
@@ -594,8 +602,8 @@ chain
 ok "no issue: exits 1 with usage, no stage started, nothing changed" '[ "$RC" = 1 ] && [ "$(calls)" = 0 ] && grep -q usage <<<"$OUTPUT" && [ "$(repo_state)" = "$before" ]'
 new_case
 before="$(repo_state)"
-chain abc
-ok "an issue that is not a number: exits 1 with usage, no stage started" '[ "$RC" = 1 ] && [ "$(calls)" = 0 ] && grep -q usage <<<"$OUTPUT" && [ "$(repo_state)" = "$before" ]'
+chain 270 271
+ok "more than one issue: exits 1 with usage, no stage started" '[ "$RC" = 1 ] && [ "$(calls)" = 0 ] && grep -q usage <<<"$OUTPUT" && [ "$(repo_state)" = "$before" ]'
 new_case
 touch "$REPO/stray.txt"
 before="$(repo_state)"

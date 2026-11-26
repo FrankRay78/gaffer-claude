@@ -45,10 +45,11 @@
 # <file>` names another. The chain reads two keys of it: `pre_review`, true to add the pre-review
 # stage, and `stages`, each stage's `model` and `effort`, defaulting to the plugin's own choice
 # below where the file or the key is absent.
-# The issue is named however the repository's tracker recognises it (its `tracker` key, read by
-# tracker/tracker.sh beside the stage commands; GitHub by default), and is checked by the tracker
-# before any stage starts. Every stage's tracker reads the same settings file this script read,
-# through GAFFER_SETTINGS.
+# THE ISSUE is named however the repository's tracker names it, and this script never reads the
+# reference: it is handed to the stages as typed. Reading it is an operation of the tracker
+# interface (tracker/TRACKER.md, which every stage command loads), so the build stage's first read
+# of the issue is what stops a reference the tracker does not recognise, before anything changes.
+# Every stage is given the settings file this script read, through GAFFER_SETTINGS.
 # Overrides: CHAIN_MODEL replaces every stage's model; the effort stays as configured.
 # CHAIN_STAGE_TIMEOUT (seconds) replaces every stage's time limit.
 
@@ -91,7 +92,7 @@ CONFIG_EXIT=78
 
 usage() {
   echo "usage: chain.sh [--dry-run] [--skip-permissions] [--settings <file>] <issue>" >&2
-  echo "  <issue>: one issue of this repository, as its tracker names it; on GitHub 270 or #270" >&2
+  echo "  <issue>: one issue, as the repository's tracker names it; it is handed to the stages as typed" >&2
   echo "  --dry-run: list the stages that would run, and run nothing" >&2
   echo "  --skip-permissions: run every stage with --dangerously-skip-permissions (see docs/chain.md)" >&2
   echo "  --settings <file>: the settings file to read stage models from (default .gaffer/chain.json, if present)" >&2
@@ -110,7 +111,8 @@ while [ $# -gt 0 ]; do
     *) break ;;
   esac
 done
-if [ $# -ne 1 ]; then usage; exit 1; fi
+if [ $# -ne 1 ] || [ -z "$1" ]; then usage; exit 1; fi
+issue=$1
 if [ "$settings_named" = 0 ] && [ -f .gaffer/chain.json ]; then settings_file=.gaffer/chain.json; fi
 
 config_refused() {
@@ -142,33 +144,18 @@ else
 fi
 # The checkout this script sits in must be the plugin, or --plugin-dir would load nothing and the
 # first stage would fail on an unknown command after a session had been spent, blaming the issue.
-# Checked before the tracker, which the same checkout carries.
 [ -f "$PLUGIN_ROOT/.claude-plugin/plugin.json" ] \
   || config_refused "$PLUGIN_ROOT is not a plugin checkout (no .claude-plugin/plugin.json), so the stages cannot be loaded from it"
-
-command -v jq >/dev/null 2>&1 || { echo "chain: refused — jq is not on PATH; no stage was started."; exit 1; }
+# Every stage reaches the issue tracker as the checkout's interface file says, so a checkout without
+# one cannot read the issue at all.
+[ -f "$PLUGIN_ROOT/tracker/TRACKER.md" ] \
+  || config_refused "$PLUGIN_ROOT has no tracker/TRACKER.md, the interface file every stage reads the issue tracker through"
+# The script the interface file may run, which each stage is allowed below. A stage writes its path
+# unquoted, the form an allow rule matches, so a path with whitespace splits and every call fails,
+# which would park the issue.
 TRACKER="$PLUGIN_ROOT/tracker/tracker.sh"
-[ -f "$TRACKER" ] || config_refused "$PLUGIN_ROOT has no tracker/tracker.sh, so the issue cannot be read"
-# The commands call the tracker with its path unquoted, the form an allow rule matches, so in a
-# stage a path with whitespace splits and every tracker call fails, which would park the issue.
 [[ $PLUGIN_ROOT != *[[:space:]]* ]] \
   || config_refused "the plugin checkout $PLUGIN_ROOT has whitespace in its path, which breaks the stages' unquoted tracker calls; move it"
-# The issue, as the tracker the settings name recognises it: `ref` normalises it for the stage
-# prompts, `mention` names it in the dry run. Before report mode, so a dry run refuses what a run
-# would. A reference the tracker does not recognise is a usage error; a tracker that cannot answer
-# at all is the chain's configuration, not the issue.
-tracker_err=$(mktemp) || { echo "chain: refused — mktemp failed; no stage was started."; exit 1; }
-forms=$(bash "$TRACKER" ref --forms "$1" 2>"$tracker_err"); rc=$?
-tracker_says=$(cat "$tracker_err"); rm -f "$tracker_err"
-case $rc in
-  0) ;;
-  1) echo "$tracker_says" >&2; usage; exit 1 ;;
-  *) config_refused "the tracker could not read the issue reference: $tracker_says" ;;
-esac
-issue=$(jq -er '.ref | select(type == "string" and length > 0)' <<<"$forms" 2>/dev/null) \
-  || config_refused "the tracker gave no reference for $1: $forms"
-mention=$(jq -er '.mention | select(type == "string" and length > 0)' <<<"$forms" 2>/dev/null) \
-  || config_refused "the tracker gave no mention for $1: $forms"
 if [ "$PRE_REVIEW" = true ]; then
   STAGE_COUNT=4
   RAISE_PR_PROMPT="/gaffer:raise-pr --draft $issue"
@@ -177,10 +164,9 @@ else
   RAISE_PR_PROMPT="/gaffer:raise-pr $issue"
 fi
 
-# Report mode reaches no claude command, and git only read-only (the tracker's `ref` reads the
-# origin remote), so it cannot change anything.
+# Report mode reaches no git or claude command, so it cannot change anything.
 if [ "$dry_run" = 1 ]; then
-  echo "chain: dry run for issue $mention — nothing will be run"
+  echo "chain: dry run for issue $issue — nothing will be run"
   echo "  1. build: /gaffer:build $issue"
   echo "  2. verify: /gaffer:verify"
   echo "  3. raise-pr: $RAISE_PR_PROMPT"
@@ -208,8 +194,8 @@ fi
 
 # Every tool the run depends on, named before an hour of model time is spent. Without this a
 # missing jq reads as a stage with no verdict and a missing git as a clean tree on no branch —
-# each blaming the model for a tool that was never installed. jq is checked above, before the
-# tracker is asked about the issue; it is listed here with the rest.
+# each blaming the model for a tool that was never installed. jq is already checked above when a
+# settings file is given; it is listed here for a run without one.
 for tool in jq git claude gh timeout; do
   if ! command -v "$tool" >/dev/null 2>&1; then
     echo "chain: refused — $tool is not on PATH; no stage was started."
@@ -533,8 +519,9 @@ run_stage() {
   # to this checkout's copy whatever else is installed on the machine.
   local -a cmd=(claude -p "$prompt" --plugin-dir "$PLUGIN_ROOT" --model "$model" --effort "$effort" --output-format json)
   # Under the repository's own rules a headless stage is silently denied anything they do not allow,
-  # so each stage is allowed the tracker entry point of the checkout it loads, as the commands call
-  # it. Last on the line: the flag takes every word after it.
+  # so each stage is allowed the tracker script of the checkout it loads, as that checkout's
+  # interface file has it called. An interface file that reaches its tracker another way needs the
+  # user's own rules to allow that. Last on the line: the flag takes every word after it.
   if [ "$skip_permissions" = 0 ]; then
     cmd+=(--allowedTools "Bash(bash $TRACKER *)")
   else

@@ -199,7 +199,7 @@ new_case; chain_ok; reply 4 "Reviewed."; before_after "$(good)"
 OUTPUT="$(cd "$REPO" && CHAIN_MODEL=m-test PATH="$SB/bin:$PATH" bash "$WRAPPER" --skip-permissions '#270' </dev/null 2>&1)"; RC=$?
 ok "exits 0" '[ "$RC" = 0 ]'
 ok "--skip-permissions reaches every chain stage and the review" '[ "$(grep -cF -- "--dangerously-skip-permissions|" "$STUB_DIR/log")" = 4 ]'
-ok "the issue reaches the chain as given" 'call 1 | grep -qF -- "-p|/gaffer:build 270|"'
+ok "the issue reaches the chain as given" 'call 1 | grep -qF -- "-p|/gaffer:build #270|"'
 ok "CHAIN_MODEL sets the review's model" 'call 4 | grep -qF -- "--model|m-test|"'
 new_case
 reply 1 '{"schema": 1, "outcome": "ready", "branch": "feature/270-x"}'
