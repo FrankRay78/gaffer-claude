@@ -38,12 +38,12 @@ A section under any other heading is read too, and applied where its text says. 
 0. **Preconditions (before the review).** Each is a failure, so each STOPS with the failure verdict.
    - `git rev-parse --abbrev-ref HEAD` is not `main`. Reason: `/gaffer:pre-review was run on main, not a feature branch`.
    - `git status --porcelain` is empty. Reason: `the working tree has uncommitted changes`. A clean tree is what lets step 3 treat everything in it as the fix and nothing else.
-   - `gh pr view --json number,url,state,isDraft,headRefName,headRefOid` names an open pull request for this branch. Reason: `no open pull request for this branch`.
+   - `gh pr view <branch> --repo <R> --json number,url,state,isDraft,headRefName,headRefOid` names an open pull request for this branch, `<branch>` being the name the first check read. `<R>` is origin's repository under its current name, where `/gaffer:raise-pr` opens the pull request: the `owner/repo` of `git remote get-url origin`, resolved with `gh repo view <owner/repo> --json nameWithOwner --jq .nameWithOwner`. Left to choose, `gh` looks on the upstream of a fork clone, which has no pull request for this branch. Reason: `no open pull request for this branch`.
    - `git rev-parse HEAD` equals the pull request's `headRefOid`, so the review reads exactly what is pushed, in this checkout, and the fix lands on top of it. Reason: `the branch and its pull request are at different commits`.
 
    Note whether the pull request is a draft (`isDraft`); step 5 reads it. Note `headRefOid` as the starting HEAD; step 3 reads it.
 
-1. **Review, posting nothing.** Run `/gaffer:review-pr <number> --dry-run` in this session (the Skill tool, `gaffer:review-pr`), with the pull request's number, and follow it to its end. With HEAD at the pull request's head it reviews this checkout in place. `--dry-run` is not optional: the run must post no review, comment, reply or label, and if you see that it posted anything, STOP. Reason: `the dry-run review posted to the pull request`.
+1. **Review, posting nothing.** Run `/gaffer:review-pr <url> --dry-run` in this session (the Skill tool, `gaffer:review-pr`), with the pull request's URL from step 0, so it reviews the pull request on `<R>`, and follow it to its end. With HEAD at the pull request's head it reviews this checkout in place. `--dry-run` is not optional: the run must post no review, comment, reply or label, and if you see that it posted anything, STOP. Reason: `the dry-run review posted to the pull request`.
 
    From what it prints, take every **finding** (Critical or Major, verified) and every **note** (Minor or mechanical, verified), each with its `file:line`, claim and any **Pre-existing** tag. If the review stops before it composes a review, STOP with its reason.
 
@@ -72,9 +72,9 @@ A section under any other heading is read too, and applied where its text says. 
 
    Do not review the commit you just made.
 
-4. **Correct the body**, where step 2 held a corrected body. Write it to `pre-review-body.md` in the scratch directory (`CONVENTIONS.md` → *Scratch files*) with the native `Write` tool, never a shell heredoc, and run `gh pr edit <number> --body-file <scratch file>`. A failure ⇒ STOP; say what was pushed.
+4. **Correct the body**, where step 2 held a corrected body. Write it to `pre-review-body.md` in the scratch directory (`CONVENTIONS.md` → *Scratch files*) with the native `Write` tool, never a shell heredoc, and run `gh pr edit <number> --repo <R> --body-file <scratch file>`. A failure ⇒ STOP; say what was pushed.
 
-5. **Mark it ready**, only if step 0 found a draft: `gh pr ready <number>`. A failure ⇒ STOP, saying the fix is pushed and the pull request is still a draft. A pull request that was already ready is left alone.
+5. **Mark it ready**, only if step 0 found a draft: `gh pr ready <number> --repo <R>`. A failure ⇒ STOP, saying the fix is pushed and the pull request is still a draft. A pull request that was already ready is left alone.
 
 ## Final report
 
