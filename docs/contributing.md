@@ -16,7 +16,7 @@ How this plugin is changed. It has one author and a short list of repositories t
 ## Tests and checks
 
 - `bash hooks/no-chmod.tests.sh` after any edit to the hook. The matrix is the hook's specification: every refused and allowed form, the known limits, and the wiring in `hooks.json`.
-- `bash chain/chain.tests.sh`, `bash chain/chain-next.tests.sh` and `bash chain/chain-local.tests.sh` after any edit to the chain. The first is the specification of how a verdict is read; the second, of what the runner selects and what a failure leaves behind; the third, of when the hand-run wrapper reviews and which reviews count as posted. All three use stubs, so nothing is spent and nothing reaches GitHub.
+- `bash chain/chain.tests.sh` and `bash chain/chain-next.tests.sh` after any edit to the chain. The first is the specification of how a verdict is read; the second, of what the runner selects and what a failure leaves behind. Both use stubs, so nothing is spent and nothing reaches GitHub.
 - `bash init/setup.tests.sh` after any edit to `init/setup.sh`. The matrix is the specification of what `/gaffer:init` sets up and what it leaves alone; it uses a stub `gh`, so nothing reaches GitHub.
 - `bash tracker/tracker.tests.sh` and `bash tracker/boundary.tests.sh` after any edit to the tracker interface or a command's tracker calls. The first is the specification of which adapter a setting selects, what is refused before the tracker is reached, and the calls the GitHub adapter makes, and it runs `tracker/conformance.sh` against that adapter with a fake `gh`; the second fails when a command, default, template or script reaches GitHub issues outside the GitHub adapter and the runner. A new adapter passes `tracker/conformance.sh` against its own tracker before it is merged ([`tracker.md`](tracker.md)).
 - `claude plugin validate .` after any edit to the manifests or the layout.
@@ -39,7 +39,7 @@ To change it, edit the file, apply with `gh api -X PUT repos/FrankRay78/gaffer-c
 .claude-plugin/   plugin.json and marketplace.json
 commands/         the slash commands, one markdown file each
 hooks/            hooks.json, no-chmod.sh and its test matrix
-chain/            chain.sh, chain-next.sh, chain-local.sh and their test matrices
+chain/            chain.sh, chain-next.sh and their test matrices
 tracker/          tracker.sh, the adapters under adapters/, the conformance suite and the test matrices
 init/             setup.sh and its test matrix
 defaults/         the CONVENTIONS.md and REVIEW.md the commands run on when a repository says nothing
