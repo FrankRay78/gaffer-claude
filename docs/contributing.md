@@ -17,7 +17,7 @@ How this plugin is changed. It has one author and a short list of repositories t
 ## Tests and checks
 
 - `bash hooks/no-chmod.tests.sh` after any edit to the hook. The matrix is the hook's specification: every refused and allowed form, the known limits, and the wiring in `hooks.json`.
-- `bash chain/chain.tests.sh` and `bash chain/chain-next.tests.sh` after any edit to the chain. The first is the specification of how a verdict is read; the second, of what the runner selects and what a failure leaves behind. Both use stubs, so nothing is spent and nothing reaches GitHub.
+- `bash chain/chain.tests.sh`, `bash chain/chain-next.tests.sh` and `bash chain/chain-local.tests.sh` after any edit to the chain. The first is the specification of how a verdict is read; the second, of what the runner selects and what a failure leaves behind; the third, of when the hand-run wrapper reviews and which reviews count as posted. All three use stubs, so nothing is spent and nothing reaches GitHub.
 - `bash init/setup.tests.sh` after any edit to `init/setup.sh`. The matrix is the specification of what `/gaffer:init` sets up and what it leaves alone; it uses a stub `gh`, so nothing reaches GitHub.
 - `bash skills/tracker.tests.sh` after any edit to the tracker skill, a command or a script. It reads each call in a `bash` fence of [`skills/tracker/SKILL.md`](../skills/tracker/SKILL.md) and fails when a command, default, template or script makes one, the runner and `.github/` excepted. It names no tracker of its own, so it needs no edit when the skill file is replaced.
 - `bash .github/scripts/link-check.tests.sh` after any edit to `.github/scripts/link-check.sh`, and `bash .github/scripts/link-check.sh` after renaming or deleting a file or heading anything links to. The matrix is the specification of which references are read and how a heading is matched; the check itself reads the checkout and nothing else, so it needs no network.
@@ -56,7 +56,7 @@ These are this repository's own workflows, under [`.github/workflows/`](../.gith
 commands/         the slash commands, one markdown file each
 skills/           tracker/SKILL.md, the one skill: how each tracker operation is carried out, and the matrix that keeps its calls there
 hooks/            hooks.json, no-chmod.sh and its test matrix
-chain/            chain.sh, chain-next.sh and their test matrices
+chain/            chain.sh, chain-next.sh, chain-local.sh and their test matrices
 init/             setup.sh and its test matrix
 defaults/         the CONVENTIONS.md and REVIEW.md the commands run on when a repository says nothing
 templates/        copyable starting points for a repository's own two files
