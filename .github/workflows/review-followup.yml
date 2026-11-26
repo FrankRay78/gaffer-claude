@@ -114,7 +114,7 @@ jobs:
           echo "prior=$prior" >> "$GITHUB_OUTPUT"
           echo "prior_at_head=$(awk '{ s += $2 } END { print s + 0 }' "$RUNNER_TEMP/review-pr-rounds.txt")" >> "$GITHUB_OUTPUT"
           if [ "$prior" -eq 0 ]; then
-            echo "::notice::PR #$PR_NUMBER has had no first review — nothing to follow up. Run the Review PR workflow first."
+            echo "::notice::PR #$PR_NUMBER has had no first review — nothing to follow up. Start a first review: re-run the PR's Review PR run, convert the PR to draft and mark it ready again, or run /gaffer:review-pr by hand."
             echo "skipped=true" >> "$GITHUB_OUTPUT"
           elif [ "$prior" -ge 3 ]; then
             echo "::notice::PR #$PR_NUMBER has had $prior review rounds — the cap is reached, so nothing is posted. Three rounds means the disagreement is about direction, not defects: talk to the author."

@@ -59,7 +59,8 @@
 #   - a relative path that climbs two or more levels above the repository root: GitHub does not
 #     stop at the root, so it reaches a GitHub page or another repository (`../../issues` from the
 #     root README). One that climbs exactly one level lands on `blob/<segment>`, a 404, and is
-#     reported.
+#     reported — as is a full link to `main` whose path does the same, which lands on
+#     `blob/<segment>`, `tree/<segment>` or `raw/<segment>`.
 #   - an anchor on a target that is not a markdown file: a `#L10-L20` line range on a source file
 #     and a fragment on a folder name no heading. An `#L<n>` anchor names no heading on a markdown
 #     file either, and is skipped there too — it is what GitHub's "copy permalink" writes.
@@ -163,7 +164,8 @@ resolve_path() {
 
 # --- main_ref_path URL ------------------------------------------------------------
 # Prints the repository-root-relative path a full link to a file on this repository's `main`
-# branch names, or returns 1 when the URL is not one. The whole shape is matched against a
+# branch names, or returns 1 when the URL is not one — and 2, from resolve_path, when its path
+# climbs exactly one level above the root. The whole shape is matched against a
 # lowercased copy, so the scheme, host, owner, repository and the `blob`/`tree`/`raw` and `main`
 # segments are all read whatever their case; the path is then cut from the original URL by length,
 # so it keeps the case it was written in, because the checkout does. Lowercasing goes through `tr`
@@ -190,10 +192,11 @@ main_ref_path() {
 }
 
 # --- resolve_target DIR TARGET_PATH -----------------------------------------------
-# Prints the repository-root-relative path a link's target (its anchor already cut) names, or
-# returns 1 when it is not a path in this repository: a `mailto:`, a URL that is not a path on
-# `main`, or a relative path that climbs out. An empty target is the linking file itself, which
-# the caller handles.
+# Prints the repository-root-relative path a link's target (its anchor already cut) names. Returns
+# 1 when it is not a path in this repository: a `mailto:`, a URL that is not a path on `main`, or
+# a path that climbs two or more levels out. Returns 2, from resolve_path, when the path climbs
+# exactly one level above the root, which the caller reports. An empty target is the linking file
+# itself, which the caller handles.
 resolve_target() {
   case "$2" in
     mailto:*) return 1 ;;
@@ -420,11 +423,12 @@ if [ -s "$TMP/missing" ] || [ -s "$TMP/above" ] || [ -s "$TMP/noheading" ]; then
     fi
     if [ -s "$TMP/above" ]; then
       [ -s "$TMP/missing" ] && printf '\n'
-      printf 'link-check: FAIL — these relative links climb one level above the repository root:\n'
+      printf 'link-check: FAIL — these links climb one level above the repository root:\n'
       sort -u "$TMP/above" | sed $'s/\t/ → /; s/^/  - /'
       printf '\n'
-      printf 'GitHub resolves them to blob/<segment>, which is not a page. Drop the extra ../, or, to\n'
-      printf 'reach another branch, write the full https://github.com/…/blob/<branch>/… URL.\n'
+      printf 'GitHub resolves each one to blob/<segment> (or tree/ or raw/ for a full link), which\n'
+      printf 'is not a page. Drop the extra ../; to reach another branch, link to it with a full\n'
+      printf 'https://github.com/…/blob/<branch>/… URL instead.\n'
     fi
     if [ -s "$TMP/noheading" ]; then
       { [ -s "$TMP/missing" ] || [ -s "$TMP/above" ]; } && printf '\n'
