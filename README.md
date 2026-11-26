@@ -25,7 +25,7 @@ Commands are typed as `/gaffer:<name>`. Each command's prompt under [`commands/`
 
 | Command | What it does | Unattended? |
 |---|---|---|
-| `init` | Sets a repository up from what it already contains: settings, git-ignore line, `CLAUDE.md` imports, labels, and a `CONVENTIONS.md` and `REVIEW.md` pointing at its own files, as a pull request of recommendations. Re-run, it reports what is missing. | Yes |
+| `init` | Sets a repository up from what it already contains: settings, git-ignore line, `CLAUDE.md` imports, and a `CONVENTIONS.md` and `REVIEW.md` pointing at its own files, as a pull request of recommendations. Re-run, it reports what is missing. | Yes |
 | `draftissue` | Turns an idea, a document, a backlog item or an old issue into a needs-first GitHub issue and raises it. | No — discusses open decisions |
 | `reviewissue` | Reviews an issue before building: posts the gaps and a recommendation for each as an inline-answerable comment, labels it `needs answers`. | Yes, given an issue number |
 | `confirmissue` | Folds the answered review into *Confirmed decisions* on the issue, labels it `ready`, deletes the review comment. | Yes, given an issue number |
@@ -42,7 +42,7 @@ Commands are typed as `/gaffer:<name>`. Each command's prompt under [`commands/`
 | `capture-learnings` | Mines a session and a branch for durable learnings and applies the approved ones. | No — you pick candidates |
 | `context-gardening` | Prunes `CLAUDE.md`, its linked docs and `.claude/memory/`. | No — you pick candidates |
 
-Plus the **`no-chmod` hook**, which refuses a `chmod` that would set the executable bit and names `bash script.sh` instead, so an unattended run is redirected rather than stalled on a permission prompt, and **the chain** under [`chain/`](chain/): `chain.sh` runs the build stages for one issue — with the pre-review after them where a repository opts in — `chain-next.sh` picks the next ready issue from a timer and parks the ones that fail, and `chain-local.sh` runs the chain for one issue by hand and then `review-pr` on its pull request, for a repository with no CI review. All three are run from a clone of this repository, not from the installed plugin ([`docs/chain.md`](docs/chain.md)).
+Plus the **`no-chmod` hook**, which refuses a `chmod` that would set the executable bit and names `bash script.sh` instead, so an unattended run is redirected rather than stalled on a permission prompt, and **the chain** under [`chain/`](chain/): `chain.sh` runs the build stages for one issue — with the pre-review after them where a repository opts in — and `chain-next.sh` picks the next ready issue from a timer and parks the ones that fail. Both are run from a clone of this repository, not from the installed plugin ([`docs/chain.md`](docs/chain.md)).
 
 ## Installing
 
@@ -70,9 +70,10 @@ To enable it for every clone of a repository, commit this to its `.claude/settin
 
 ## What a repository needs
 
-- **`git`, `gh` (authenticated) and `jq`** on the path. The hook also needs `awk`.
+- **`git`, `gh` 2.73.0 or later (authenticated) and `jq`** on the path. An older `gh` cannot read an issue's linked pull requests, so every issue command stops at its first read. The hook also needs `awk`.
 - **The `pr-review-toolkit` plugin**: `/gaffer:verify` spawns its reviewers by their `pr-review-toolkit:` names.
 - **`Bash(chmod:*)` on `permissions.ask`** in `.claude/settings.json`, as the backstop for the forms the hook declines to decide; a plugin cannot set permission rules.
+- **Issues on GitHub**, with the labels `/gaffer:init` lists as needed; it creates none. A repository whose issues live elsewhere runs a clone of the plugin with the one tracker skill file replaced ([`docs/tracker.md`](docs/tracker.md)).
 - **`.claude/scratch/` git-ignored**, for every command's working files.
 - **`main` as the default branch**, `CLAUDE.md` for project context, and `.claude/memory/` for durable learnings, loaded by an `@.claude/memory/MEMORY.md` line in `CLAUDE.md`. Without that line no session sees an entry.
 - **A build-and-test command** under *Build, test and format* in the repository's `CONVENTIONS.md` before the build stage is used. It is the one convention with no default: `build` and `verify` stop rather than invent one.
@@ -85,7 +86,8 @@ To enable it for every clone of a repository, commit this to its `.claude/settin
 - [`docs/workflow.md`](docs/workflow.md) — how the stages fit together, and why they are shaped this way.
 - [`docs/interfaces.md`](docs/interfaces.md) — everything that crosses between the plugin and a repository.
 - [`docs/verdict-schema.md`](docs/verdict-schema.md) — the verdict the build chain ends on, and how to read it.
-- [`docs/chain.md`](docs/chain.md) — running the build chain unattended: the three scripts, their settings file, the permissions opt-in and a scheduler.
+- [`docs/tracker.md`](docs/tracker.md) — the tracker skill every issue command loads: its operations, states and markers, and how to replace it for another tracker.
+- [`docs/chain.md`](docs/chain.md) — running the build chain unattended: the two scripts, their settings file, the permissions opt-in and a scheduler.
 - [`docs/unattended.md`](docs/unattended.md) — running commands with nobody watching: what each touches, permissions, and the CI pattern.
 - [`docs/troubleshooting.md`](docs/troubleshooting.md) — the common failures.
 - [`docs/contributing.md`](docs/contributing.md) — how the plugin itself is changed.
@@ -96,8 +98,9 @@ To enable it for every clone of a repository, commit this to its `.claude/settin
 ```
 .claude-plugin/   plugin.json and marketplace.json
 commands/         the slash commands
+skills/           tracker/SKILL.md, how each tracker operation is carried out — the one file to replace for another tracker — and its test matrix
 hooks/            hooks.json, no-chmod.sh and its test matrix
-chain/            chain.sh, chain-next.sh, chain-local.sh and their test matrices — run from a clone, not from the installed plugin
+chain/            chain.sh, chain-next.sh and their test matrices — run from a clone, not from the installed plugin
 init/             setup.sh, the mechanical part of /gaffer:init, and its test matrix
 defaults/         the CONVENTIONS.md and REVIEW.md the commands run on when a repository says nothing
 templates/        copyable starting points for a repository's own two files

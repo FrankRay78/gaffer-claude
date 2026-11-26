@@ -2,21 +2,19 @@
 #
 # setup.sh — the mechanical part of /gaffer:init.
 #
-# Wires a repository for the plugin: the checks that say it can take a pull request, the files
-# every command assumes, and the labels the issue stage and the chain use. The judgement part of
-# init (reading the repository and filling CONVENTIONS.md and REVIEW.md) is the command's; this
-# script does only what a person would otherwise type from docs/getting-started.md, so it can be
-# tested without a model.
+# Wires a repository for the plugin: the checks that say it can take a pull request, and the files
+# every command assumes. The judgement part of init (reading the repository and filling
+# CONVENTIONS.md and REVIEW.md) is the command's; this script does only what a person would
+# otherwise type from docs/getting-started.md, so it can be tested without a model.
 #
 #   bash setup.sh check  [<repo>]   is the repository ready for init? Changes nothing.
 #   bash setup.sh files  [<repo>]   ensure the settings entries, the git-ignore line, the memory
 #                                   index and the CLAUDE.md imports.
-#   bash setup.sh labels [<repo>]   ensure the issue-stage and chain labels exist on GitHub.
 #
 # <repo> defaults to the current directory and must be the root of a git work tree.
 #
 # OUTPUT. One line per item, `<status>: <item>`, so the command can list the outcome in the pull
-# request body. `files` and `labels` print `added:` for something they put in place and `present:`
+# request body. `files` prints `added:` for something it puts in place and `present:`
 # for something already there; `check` prints `ready: <default branch>` or `not ready: <reason>`.
 # `files` also prints `ignored: <path>` for any file it manages that the repository git-ignores,
 # since a pull request cannot carry it, and `skipped:` for the CONVENTIONS.md import when there is
@@ -30,7 +28,7 @@
 # EXIT. 0 on success (including `ready`); 1 on `not ready`, an unreadable settings file, or a gh
 # failure, with nothing changed by the step that failed; 2 on bad usage.
 #
-# Needs git, jq and, for `check` and `labels`, gh signed in. Run with `bash`; nothing relies on an
+# Needs git, jq and, for `check`, gh signed in. Run with `bash`; nothing relies on an
 # executable bit.
 
 set -uo pipefail
@@ -42,14 +40,7 @@ ASK_RULE='Bash(chmod:*)'
 SCRATCH='.claude/scratch/'
 MEMORY_INDEX='.claude/memory/MEMORY.md'
 MEMORY_HEADER='<!-- Memory index: one line per entry, `- [Title](file.md) — one-line hook`. -->'
-# name|description, in the order getting-started.md lists them.
-LABELS=(
-  'needs answers|A review is posted and awaiting the author'"'"'s answers'
-  'ready|The issue is confirmed and may be built'
-  'parked|An unattended run stopped on this issue; remove to retry'
-)
-
-usage() { echo "usage: bash setup.sh {check|files|labels} [<repo>]" >&2; exit 2; }
+usage() { echo "usage: bash setup.sh {check|files} [<repo>]" >&2; exit 2; }
 fail() { echo "error: $*" >&2; exit 1; }
 
 [ $# -ge 1 ] && [ $# -le 2 ] || usage
@@ -182,27 +173,8 @@ report_ignored() {
   done
 }
 
-# ---------------------------------------------------------------------------------------------
-# labels
-# ---------------------------------------------------------------------------------------------
-do_labels() {
-  local existing entry name desc
-  # GitHub label names are case-insensitive: an existing `Ready` is the `ready` label.
-  existing=$(gh label list --limit 1000 --json name --jq '.[].name' 2>/dev/null) || fail "could not list labels (gh label list failed)"
-  for entry in "${LABELS[@]}"; do
-    name=${entry%%|*}; desc=${entry#*|}
-    if grep -qixF "$name" <<<"$existing"; then
-      echo "present: label $name"
-    else
-      gh label create "$name" --description "$desc" >/dev/null 2>&1 || fail "could not create label '$name'"
-      echo "added: label $name"
-    fi
-  done
-}
-
 case "$MODE" in
   check)  do_check ;;
   files)  do_files ;;
-  labels) do_labels ;;
   *)      usage ;;
 esac

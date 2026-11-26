@@ -5,6 +5,8 @@ argument-hint: ""
 
 Read `CLAUDE.md` for project context, and the conventions as *Repository conventions* below says, before proceeding.
 
+**Load the `gaffer:tracker` skill with the Skill tool before the first tracker operation.** A line written `tracker: <operation> <arguments>` names an operation that skill says how to carry out on this repository's tracker; it is notation, not a command to run. This command's only operations are the two that read the issue off the branch name for the fix commit.
+
 `/gaffer:pre-review` runs the repository's own review over a pull request before that review is posted, and fixes what it finds while fixing is cheapest. It runs `/gaffer:review-pr --dry-run` against the current branch's open pull request, makes **one** fix pass over what that review confirms, pushes the fix once the suite is green, corrects the pull request body where a finding is about the body, and then marks the pull request ready for review if it was a draft. Marking it ready is what starts the repository's usual review, so the posted review then runs on a pull request whose verified findings are already dealt with.
 
 It is the stage the chain runs after `/gaffer:raise-pr --draft` when a repository opts in ([`docs/chain.md`](../docs/chain.md)), and it runs the same way by hand: to pre-review a pull request you raised yourself, or to finish a draft a failed chain run left open. A pull request that is already ready for review stays as it is — only a draft is marked ready.
@@ -36,12 +38,12 @@ A section under any other heading is read too, and applied where its text says. 
 0. **Preconditions (before the review).** Each is a failure, so each STOPS with the failure verdict.
    - `git rev-parse --abbrev-ref HEAD` is not `main`. Reason: `/gaffer:pre-review was run on main, not a feature branch`.
    - `git status --porcelain` is empty. Reason: `the working tree has uncommitted changes`. A clean tree is what lets step 3 treat everything in it as the fix and nothing else.
-   - `gh pr view --json number,url,state,isDraft,headRefName,headRefOid` names an open pull request for this branch. Reason: `no open pull request for this branch`.
+   - `gh pr view <branch> --repo <R> --json number,url,state,isDraft,headRefName,headRefOid` names an open pull request for this branch, `<branch>` being the name the first check read. `<R>` is origin's repository under its current name, where `/gaffer:raise-pr` opens the pull request: the `owner/repo` of `git remote get-url origin`, resolved with `gh repo view <owner/repo> --json nameWithOwner --jq .nameWithOwner`. Left to choose, `gh` looks on the upstream of a fork clone, which has no pull request for this branch. Reason: `no open pull request for this branch`.
    - `git rev-parse HEAD` equals the pull request's `headRefOid`, so the review reads exactly what is pushed, in this checkout, and the fix lands on top of it. Reason: `the branch and its pull request are at different commits`.
 
    Note whether the pull request is a draft (`isDraft`); step 5 reads it. Note `headRefOid` as the starting HEAD; step 3 reads it.
 
-1. **Review, posting nothing.** Run `/gaffer:review-pr <number> --dry-run` in this session (the Skill tool, `gaffer:review-pr`), with the pull request's number, and follow it to its end. With HEAD at the pull request's head it reviews this checkout in place. `--dry-run` is not optional: the run must post no review, comment, reply or label, and if you see that it posted anything, STOP. Reason: `the dry-run review posted to the pull request`.
+1. **Review, posting nothing.** Run `/gaffer:review-pr <url> --dry-run` in this session (the Skill tool, `gaffer:review-pr`), with the pull request's URL from step 0, so it reviews the pull request on `<R>`, and follow it to its end. With HEAD at the pull request's head it reviews this checkout in place. `--dry-run` is not optional: the run must post no review, comment, reply or label, and if you see that it posted anything, STOP. Reason: `the dry-run review posted to the pull request`.
 
    From what it prints, take every **finding** (Critical or Major, verified) and every **note** (Minor or mechanical, verified), each with its `file:line`, claim and any **Pre-existing** tag. If the review stops before it composes a review, STOP with its reason.
 
@@ -65,14 +67,14 @@ A section under any other heading is read too, and applied where its text says. 
 3. **Verify, commit and push the fix.** If the tree is clean and `git rev-parse HEAD` still equals the starting HEAD from step 0, there is no fix commit: go to step 4. Otherwise — the tree is dirty, or something committed during steps 1–2 — every bullet below runs, and the commit bullet commits whatever is uncommitted:
    - **Format** with the project's formatter (`CONVENTIONS.md` → *Build, test and format*); skip where it names none. A non-zero exit ⇒ STOP. Reason: `formatting failed`.
    - **Run** the project's build-and-test command. Not green ⇒ STOP, with the failing suite as the reason, and say that the tree holds the fix uncommitted, that nothing was pushed, and that discarding the edits is the recovery — or, where HEAD has moved, resetting to the starting HEAD. Do not commit a red fix.
-   - **Commit** whatever the tree holds with `git add -A`, immediately (skip where nothing is uncommitted), in the project's form (`CONVENTIONS.md` → *Commit messages*) — e.g. `Refs #<N>: apply pre-review findings`, with the issue number read off the branch name, and no prefix where it carries none. The message names no finding.
+   - **Commit** whatever the tree holds with `git add -A`, immediately (skip where nothing is uncommitted), in the project's form (`CONVENTIONS.md` → *Commit messages*) — e.g. `Refs #<N>: apply pre-review findings`, with `#<N>` the issue read off the branch name: `tracker: branch-ref <branch>` yields the branch's reference, and `tracker: ref <that reference>` its mention form, the `#<N>` here. Where the branch carries no reference (`branch-ref` yields none), write no prefix. If either operation fails, drop the prefix the same way, commit, and quote what it reported in the report. The message names no finding.
    - **Push** with `git push`. A failed push ⇒ STOP, saying that the fix is committed locally and not pushed.
 
    Do not review the commit you just made.
 
-4. **Correct the body**, where step 2 held a corrected body. Write it to `pre-review-body.md` in the scratch directory (`CONVENTIONS.md` → *Scratch files*) with the native `Write` tool, never a shell heredoc, and run `gh pr edit <number> --body-file <scratch file>`. A failure ⇒ STOP; say what was pushed.
+4. **Correct the body**, where step 2 held a corrected body. Write it to `pre-review-body.md` in the scratch directory (`CONVENTIONS.md` → *Scratch files*) with the native `Write` tool, never a shell heredoc, and run `gh pr edit <number> --repo <R> --body-file <scratch file>`. A failure ⇒ STOP; say what was pushed.
 
-5. **Mark it ready**, only if step 0 found a draft: `gh pr ready <number>`. A failure ⇒ STOP, saying the fix is pushed and the pull request is still a draft. A pull request that was already ready is left alone.
+5. **Mark it ready**, only if step 0 found a draft: `gh pr ready <number> --repo <R>`. A failure ⇒ STOP, saying the fix is pushed and the pull request is still a draft. A pull request that was already ready is left alone.
 
 ## Final report
 

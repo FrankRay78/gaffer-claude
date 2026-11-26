@@ -41,7 +41,11 @@ unset CHAIN_MODEL CHAIN_STAGE_TIMEOUT XDG_STATE_HOME
 # that author, always a User, and the timeline nodes in comments-<n>.json, and a comments-fail-<n>
 # file makes it fail; a comments-<n>.json that is not JSON is passed through as the reply. A gh-fail file makes every
 # call fail, as an outage would; gh-fail-<command> fails only that command (gh-fail-pr, gh-fail-api). Label and comment writes are applied to the stub's own state,
-# so a parked issue stays parked for the next firing.
+# so a parked issue stays parked for the next firing. `gh repo view` answers as JSON unless asked
+# for `-q .nameWithOwner`. Named a repository, it gives that repository's current name: the
+# gh-renamed file, or the name it was given if there is none, and gh-fail-repo-lookup makes it fail.
+# Named none, it gives the repository gh resolves the clone to: the gh-repo file, o/r if there is
+# none, and gh-fail-repo-choice makes it fail.
 mkdir -p "$SB/bin"
 cat > "$SB/bin/gh" <<'STUB'
 #!/usr/bin/env bash
@@ -56,6 +60,15 @@ case "$1 $2" in
       map(select(($s == "" or $s == "all" or (.state | ascii_downcase) == $s)
         and ($l == "" or (.labels | index($l)))))
       | map({number, state, labels: (.labels | map({name: .}))})' "$STUB_DIR/issues.json" ;;
+  "repo view")
+    [ "$(opt -q)" = .nameWithOwner ] || { echo '{"nameWithOwner":"o/r"}'; exit 0; }
+    if [ -n "${3:-}" ] && [ "${3#-}" = "$3" ]; then
+      [ ! -f "$STUB_DIR/gh-fail-repo-lookup" ] || { echo "gh: Could not resolve to a Repository" >&2; exit 1; }
+      if [ -f "$STUB_DIR/gh-renamed" ]; then cat "$STUB_DIR/gh-renamed"; else echo "$3"; fi
+    else
+      [ ! -f "$STUB_DIR/gh-fail-repo-choice" ] || { echo "gh: no default repository" >&2; exit 1; }
+      if [ -f "$STUB_DIR/gh-repo" ]; then cat "$STUB_DIR/gh-repo"; else echo o/r; fi
+    fi ;;
   "pr list")
     if [ -f "$STUB_DIR/prs.json" ]; then cat "$STUB_DIR/prs.json"; else echo '[]'; fi ;;
   "issue edit")
@@ -421,6 +434,11 @@ issues '[{"number":8,"state":"OPEN","labels":["ready"]}]'
 settings "{\"clone\": \"$CLONE\", \"writers\": [\"User:maintainer\"], \"state_dir\": \"$STATE\", \"pre_review\": true}"
 fire
 ok "the runner accepts the chain's pre_review key and passes the settings on" '[ "$RC" = 0 ] && [ "$(chain_calls)" = 8 ] && grep -qF -- "--settings|$SETTINGS|" "$STUB_DIR/start-1"'
+new_case
+issues '[{"number":8,"state":"OPEN","labels":["ready"]}]'
+settings "{\"clone\": \"$CLONE\", \"writers\": [\"User:maintainer\"], \"state_dir\": \"$STATE\", \"tracker\": \"jira\"}"
+fire --dry-run
+ok "tracker is no setting: the runner refuses it as a key it does not know" '[ "$RC" != 0 ] && grep -qF "does not know: tracker" <<<"$OUTPUT"'
 
 echo "A chain that stops on its own configuration does not park the issue:"
 new_case
@@ -513,6 +531,38 @@ touch "$STUB_DIR/gh-fail-pr"
 fire
 ok "a failed pull request lookup selects nothing rather than assuming none is open" '[ "$RC" != 0 ] && [ -z "$(chain_calls)" ]'
 
+echo "A fork clone, where gh would choose another repository than origin:"
+# Report mode alone, which fetches nothing, so origin can be a GitHub URL the sandbox never reaches.
+new_case
+issues '[{"number":5,"state":"OPEN","labels":["ready"]}]'
+git -C "$CLONE" remote set-url origin https://github.com/o/r.git
+echo up/r > "$STUB_DIR/gh-repo"
+fire --dry-run
+ok "gh resolving the clone to upstream is refused, naming the fix, before any issue is listed" '[ "$RC" != 0 ] && grep -qF "gh repo set-default o/r" <<<"$OUTPUT" && ! grep -q "^issue|list" "$STUB_DIR/gh-log"'
+echo O/R > "$STUB_DIR/gh-repo"
+fire --dry-run
+ok "gh resolving it to origin, whatever the case, selects as before" '[ "$RC" = 0 ] && grep -qF "#5" <<<"$OUTPUT"'
+touch "$STUB_DIR/gh-fail-repo-choice"; rm -f "$STUB_DIR/gh-log"
+fire --dry-run
+ok "gh unable to say which repository: refused, never assumed" '[ "$RC" != 0 ] && grep -qF "gh repo set-default o/r" <<<"$OUTPUT" && ! grep -q "^issue|list" "$STUB_DIR/gh-log"'
+rm -f "$STUB_DIR/gh-fail-repo-choice" "$STUB_DIR/gh-log"; touch "$STUB_DIR/gh-fail-repo-lookup"
+fire --dry-run
+ok "gh unable to look up origin's repository: refused, never assumed" '[ "$RC" != 0 ] && grep -qF "look up origin" <<<"$OUTPUT" && ! grep -q "^issue|list" "$STUB_DIR/gh-log"'
+rm -f "$STUB_DIR/gh-fail-repo-lookup"
+git -C "$CLONE" remote set-url origin git@github.com:old/name.git
+echo o/r > "$STUB_DIR/gh-renamed"
+fire --dry-run
+ok "an origin URL naming the repository before a rename selects as before" '[ "$RC" = 0 ] && grep -qF "#5" <<<"$OUTPUT"'
+echo up/r > "$STUB_DIR/gh-repo"
+fire --dry-run
+ok "… and the fix it names on a refusal is the current name" '[ "$RC" != 0 ] && grep -qF "gh repo set-default o/r" <<<"$OUTPUT" && ! grep -qF "set-default old/name" <<<"$OUTPUT"'
+rm -f "$STUB_DIR/gh-renamed"
+for url in https://github.com/o/r/ ssh://git@ssh.github.com:443/o/r.git; do
+  git -C "$CLONE" remote set-url origin "$url"
+  fire --dry-run
+  ok "origin $url is compared too" '[ "$RC" != 0 ] && grep -qF "gh resolves" <<<"$OUTPUT"'
+done
+
 echo "A machine fault is not blamed on the issue:"
 new_case
 issues '[{"number":12,"state":"OPEN","labels":["ready"]}]'
@@ -575,6 +625,8 @@ for bad in \
   '{"clone": "CLONE", "writers": ["User:maintainer"], "skip_permissions": "yes"}' \
   '{"clone": "CLONE", "writers": ["User:maintainer"], "pre_review": "yes"}' \
   '{"clone": "CLONE", "writers": ["User:maintainer"], "state_dir": ""}' \
+  '{"clone": "CLONE", "writers": ["User:maintainer"], "tracker": "github"}' \
+  '{"clone": "CLONE", "writers": ["User:maintainer"], "github": {"labels": {"ready": "go"}}}' \
   '["not", "an", "object"]' \
   '{"clone": '
 do

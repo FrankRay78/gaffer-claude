@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# chain.sh — carry one GitHub issue from a clean main to an open pull request, unattended.
+# chain.sh — carry one issue from a clean main to an open pull request, unattended.
 #
 # Runs the plugin's /gaffer:build, /gaffer:verify and /gaffer:raise-pr for the named issue — and,
 # where the settings opt in to the pre-review, /gaffer:raise-pr --draft and then /gaffer:pre-review
@@ -45,6 +45,10 @@
 # <file>` names another. The chain reads two keys of it: `pre_review`, true to add the pre-review
 # stage, and `stages`, each stage's `model` and `effort`, defaulting to the plugin's own choice
 # below where the file or the key is absent.
+# THE ISSUE is named however the repository's tracker names it, and this script never reads the
+# reference: it is handed to the stages as typed. Reading it is an operation of the tracker skill
+# (skills/tracker/SKILL.md, which every stage command loads), so the build stage's first read of
+# the issue is what stops a reference the tracker does not recognise, before anything changes.
 # Overrides: CHAIN_MODEL replaces every stage's model; the effort stays as configured.
 # CHAIN_STAGE_TIMEOUT (seconds) replaces every stage's time limit.
 
@@ -87,7 +91,7 @@ CONFIG_EXIT=78
 
 usage() {
   echo "usage: chain.sh [--dry-run] [--skip-permissions] [--settings <file>] <issue>" >&2
-  echo "  <issue>: one GitHub issue number, 270 or #270" >&2
+  echo "  <issue>: one issue, as the repository's tracker names it; it is handed to the stages as typed" >&2
   echo "  --dry-run: list the stages that would run, and run nothing" >&2
   echo "  --skip-permissions: run every stage with --dangerously-skip-permissions (see docs/chain.md)" >&2
   echo "  --settings <file>: the settings file to read stage models from (default .gaffer/chain.json, if present)" >&2
@@ -106,9 +110,8 @@ while [ $# -gt 0 ]; do
     *) break ;;
   esac
 done
-if [ $# -ne 1 ]; then usage; exit 1; fi
-issue=${1#\#}
-case "$issue" in ''|*[!0-9]*) usage; exit 1 ;; esac
+if [ $# -ne 1 ] || [ -z "$1" ]; then usage; exit 1; fi
+issue=$1
 if [ "$settings_named" = 0 ] && [ -f .gaffer/chain.json ]; then settings_file=.gaffer/chain.json; fi
 
 config_refused() {
@@ -142,7 +145,7 @@ fi
 
 # Report mode reaches no git or claude command, so it cannot change anything.
 if [ "$dry_run" = 1 ]; then
-  echo "chain: dry run for issue #$issue — nothing will be run"
+  echo "chain: dry run for issue $issue — nothing will be run"
   echo "  1. build: /gaffer:build $issue"
   echo "  2. verify: /gaffer:verify"
   echo "  3. raise-pr: $RAISE_PR_PROMPT"

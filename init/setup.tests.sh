@@ -17,12 +17,9 @@ SB="$(mktemp -d)"
 trap 'rm -rf "$SB"' EXIT
 
 # The stub gh. Behaviour is driven by files in $STUB_DIR: auth-fail makes `gh auth status` fail,
-# repo-fail makes `gh repo view` fail, default-branch holds the default branch name (main if
-# absent), labels holds one existing label per line, label-list-fail makes listing fail, and
-# label-create-fail makes creation fail. Created labels are appended to labels, so a second run
-# sees them. Every call is logged, so a case can check the flags a call carried: the stub's replies
-# assume them (a bare branch name, one label per line), and a call that dropped one would get JSON
-# from the real gh.
+# repo-fail makes `gh repo view` fail, and default-branch holds the default branch name (main if
+# absent). Every call is logged, so a case can check the flags a call carried: the stub's replies
+# assume them (a bare branch name), and a call that dropped one would get JSON from the real gh.
 mkdir -p "$SB/bin"
 cat > "$SB/bin/gh" <<'STUB'
 #!/usr/bin/env bash
@@ -31,9 +28,6 @@ case "$1 $2" in
   "auth status") [ -f "$STUB_DIR/auth-fail" ] && exit 1; exit 0 ;;
   "repo view")   [ -f "$STUB_DIR/repo-fail" ] && { echo "no remote" >&2; exit 1; }
                  cat "$STUB_DIR/default-branch" 2>/dev/null || echo main ;;
-  "label list")  [ -f "$STUB_DIR/label-list-fail" ] && exit 1
-                 [ -f "$STUB_DIR/labels" ] && cat "$STUB_DIR/labels"; exit 0 ;;
-  "label create") [ -f "$STUB_DIR/label-create-fail" ] && exit 1; printf '%s\n' "$3" >> "$STUB_DIR/labels" ;;
   *) echo "stub gh: unexpected $*" >&2; exit 1 ;;
 esac
 STUB
@@ -102,6 +96,7 @@ ok "scratch is git-ignored" 'git -C "$R" check-ignore -q .claude/scratch/anythin
 ok "memory index created" '[ -f "$R/.claude/memory/MEMORY.md" ]'
 ok "CLAUDE.md created importing the memory index" 'grep -qx "@.claude/memory/MEMORY.md" "$R/CLAUDE.md"'
 ok "no CONVENTIONS.md → no import of it, and says so" '! grep -q CONVENTIONS "$R/CLAUDE.md" && grep -q "^skipped: CLAUDE.md import of CONVENTIONS.md" <<<"$OUT"'
+ok "no allow rule is written: what the tracker skill's calls need allowed is the repository's or the user's to grant" 'jq -e ".permissions.allow == null" "$R/.claude/settings.json" >/dev/null'
 ok "every change reported as added" '[ "$(grep -c "^added:" <<<"$OUT")" = 7 ] && ! grep -q "^present:" <<<"$OUT"'
 
 echo "files, run twice:"
@@ -155,18 +150,8 @@ fresh; mkdir -p "$R/.claude/memory"; echo "- [A](a.md) — b" > "$R/.claude/memo
 ok "existing memory index kept" '[ "$(cat "$R/.claude/memory/MEMORY.md")" = "- [A](a.md) — b" ]'
 
 echo "labels:"
-fresh; printf 'bug\nready\n' > "$STUB_DIR/labels"; run labels "$R"
-ok "creates only the missing labels" '[ $RC = 0 ] && grep -qx "added: label needs answers" <<<"$OUT" && grep -qx "added: label parked" <<<"$OUT" && grep -qx "present: label ready" <<<"$OUT"'
-ok "each created label carries a description" '[ "$(grep -c "^label|create|.*|--description|.\+|$" "$STUB_DIR/gh-log")" = 2 ]'
-ok "labels are listed by name, beyond the default page (--limit, --json, --jq)" 'grep -qxF "label|list|--limit|1000|--json|name|--jq|.[].name|" "$STUB_DIR/gh-log"'
-run labels "$R"
-ok "second run creates nothing" '[ $RC = 0 ] && ! grep -q "^added:" <<<"$OUT" && [ "$(grep -c "^present: label" <<<"$OUT")" = 3 ] && [ "$(grep -c "^label|create" "$STUB_DIR/gh-log")" = 2 ]'
-fresh; printf 'Ready\nNEEDS ANSWERS\n' > "$STUB_DIR/labels"; run labels "$R"
-ok "an existing label in another case counts as present" '[ $RC = 0 ] && grep -qx "present: label ready" <<<"$OUT" && grep -qx "present: label needs answers" <<<"$OUT" && [ "$(grep -c "^label|create" "$STUB_DIR/gh-log")" = 1 ]'
-fresh; touch "$STUB_DIR/label-create-fail"; run labels "$R"
-ok "gh failure → exit 1 naming the label" '[ $RC = 1 ] && grep -qF "could not create label '"'"'needs answers'"'"'" <<<"$OUT"'
-fresh; touch "$STUB_DIR/label-list-fail"; run labels "$R"
-ok "listing failure → exit 1, nothing created" '[ $RC = 1 ] && grep -q "could not list labels" <<<"$OUT" && ! grep -q "^label|create" "$STUB_DIR/gh-log"'
+fresh; run labels "$R"
+ok "the labels mode is gone — init lists the tracker's states and creates none — so it is a usage error" '[ $RC = 2 ] && [ ! -s "$STUB_DIR/gh-log" ]'
 
 echo
 echo "$PASS passed, $FAIL failed"

@@ -189,6 +189,28 @@ check_plugin() {
     || die "refused — $PLUGIN_ROOT has local commits its origin's main does not; nothing was run."
 }
 
+# check_repo — gh, asked with no repository named, must choose the one the tracker skill sends every
+# issue call to: origin's, under its current name. The runner's own gh calls name no repository, so
+# gh chooses; in a fork clone it chooses upstream (gh repo set-default, or an `upstream` remote), and
+# the runner would select and park upstream's #N while the chain builds origin's. Origin's name is
+# looked up rather than read from its URL, which still works after a rename or transfer but names
+# the old repository. Where origin is not a GitHub URL there is no repository to compare, and the
+# check passes.
+check_repo() {
+  local url named here chosen fix
+  url=$(git remote get-url origin 2>/dev/null) || return 0
+  url=${url%/}
+  [[ $url =~ github\.com(:[0-9]+)?[:/]([^/]+)/([^/]+)$ ]] || return 0
+  named="${BASH_REMATCH[2]}/${BASH_REMATCH[3]%.git}"
+  here=$(gh repo view "$named" --json nameWithOwner -q .nameWithOwner 2>/dev/null) \
+    || die "refused — gh could not look up origin's repository, $named, which the issue commands use. Nothing was selected."
+  fix="Run \`gh repo set-default $here\` in the clone. Nothing was selected."
+  chosen=$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null) \
+    || die "refused — gh could not say which repository $CLONE resolves to, and the issue commands use its origin, $here. $fix"
+  [ "$(tr '[:upper:]' '[:lower:]' <<<"$chosen")" = "$(tr '[:upper:]' '[:lower:]' <<<"$here")" ] \
+    || die "refused — gh resolves $CLONE to $chosen, but the issue commands use its origin, $here. $fix"
+}
+
 # reset_clone — the latest main: no local change, no untracked or ignored file, and no local
 # feature branch whose upstream is gone (merged and deleted on GitHub). attempt/* branches stay,
 # even when a pushed twin they still track has been removed by hand.
@@ -304,6 +326,7 @@ main() {
       || [ "$(git config --get chain-next.dedicated)" != true ]; then
     die "refused — $CLONE is not the runner's dedicated clone (a full clone marked with \`git config chain-next.dedicated true\`); nothing was changed."
   fi
+  check_repo
 
   if [ "$dry_run" = 1 ]; then
     n=$(select_issue) || exit 1

@@ -1,14 +1,16 @@
 ---
-description: Whole-codebase audit across five lenses (conformance to the repository's stated rules, test-suite integrity, docs against code, harness consistency, dead code and duplication). Every finding is challenged by a separate agent before it is reported. Run after a batch of merges or before a release, not per-PR. Records findings only — changes no file, and raises one GitHub issue.
+description: Whole-codebase audit across five lenses (conformance to the repository's stated rules, test-suite integrity, docs against code, harness consistency, dead code and duplication). Every finding is challenged by a separate agent before it is reported. Run after a batch of merges or before a release, not per-PR. Records findings only — changes no file, and raises one issue.
 ---
 
 Read `CLAUDE.md` for project context, and the conventions as *Repository conventions* below says, before proceeding.
+
+**Load the `gaffer:tracker` skill with the Skill tool before the first tracker operation.** A line written `tracker: <operation> <arguments>` names an operation that skill says how to carry out on this repository's tracker; it is notation, not a command to run.
 
 `/gaffer:audit-codebase` is the **whole-codebase** counterpart to the diff-shaped review tools. `/gaffer:verify`, `/gaffer:review-slop`, `/code-review`, `/security-review` and the `pr-review-toolkit` agents all take "changes since main" as input, so on a merged `main` they have nothing to read. This command takes the committed tree itself as input, and is the tool for the moment a run of merges has landed and the question is what they add up to.
 
 **This command records findings only. It changes no tracked file, deletes nothing outside its own working directory, and opens no pull request.** Every fix is separate, individually scoped work. That keeps the audit cheap to re-run and safe to leave running.
 
-**Findings live in one GitHub issue, not in the repo.** A committed checklist goes stale the moment its first item is done, and the work is tracked in the issue tracker anyway. Working files go under `.claude/scratch/audit/`, which is git-ignored.
+**Findings live in one issue, not in the repo.** A committed checklist goes stale the moment its first item is done, and the work is tracked in the issue tracker anyway. Working files go under `.claude/scratch/audit/`, which is git-ignored.
 
 ## Argument
 
@@ -20,12 +22,12 @@ The method in this file is generic. The conventions it runs on — which paths a
 
 | Heading | Supplies |
 |---|---|
-| `Audit` | the scope, the evidence commands, the rules lens 1 audits, what each lens should know about this repository, and the label the issue carries |
+| `Audit` | the scope, the evidence commands, the rules lens 1 audits, and what each lens should know about this repository |
 | `Testing` | the testing guide lens 2 reads first |
 | `Dependencies` | the dependency-controlled library whose dependencies are in scope |
 | `Public API and breaking changes` | the published library whose public surface lens 5 walks |
 
-A section under any other heading is read too, and applied where its text says. Where neither file has a heading, the step concerned runs on its generic rule alone, and the report to the user names each heading found in neither. A step whose convention is the thing itself — the file to write, the label to apply — has no generic rule and no default, so where the repository supplies none the command stops and names the heading rather than invent one. The repository's `CONVENTIONS.md` is read from the root of the repository this command runs in, and trusted as this command file is.
+A section under any other heading is read too, and applied where its text says. Where neither file has a heading, the step concerned runs on its generic rule alone, and the report to the user names each heading found in neither. A step whose convention is the thing itself — the file to write — has no generic rule and no default, so where the repository supplies none the command stops and names the heading rather than invent one. The repository's `CONVENTIONS.md` is read from the root of the repository this command runs in, and trusted as this command file is.
 
 ## Scope
 
@@ -65,7 +67,7 @@ A section under any other heading is read too, and applied where its text says. 
    **Lens 2 — Test-suite integrity.** Read the testing guide `CONVENTIONS.md` → *Testing* names first; it lists the failure modes that pass while verifying nothing. Then:
    - **Outcome, not mechanism** — would this test survive a different reasonable implementation of the same behaviour? Report tests that pin call counts, private structure, or exact internal sequencing without a named regression to justify it.
    - **Snapshots** — a committed snapshot that is empty, that no test reads, or whose test would pass whatever the output said; output asserted by hand-rolled string matching where the repository's rules require a snapshot.
-   - **Traceability, reverse direction** — a `SCENARIO:` marker that names no label in any issue. A repository's traceability check (`CONVENTIONS.md` → *Acceptance criteria* names it, where there is one) checks label → marker for one branch and deliberately leaves marker → label to review; this lens is that review, across the whole suite. A marker carries no issue number, so find its issue from the commit that introduced it: `git log -S'SCENARIO: <name>' --format='%h %s'` gives the commit, whose subject carries `Refs #N` or the pull request number, and `gh issue view` or `gh pr view` gives the issue body. Report only a marker whose issue was identified this way and does not carry the label; a marker whose issue cannot be identified is counted in what the lens could not reach, not reported. Ignore the markers `CONVENTIONS.md` → *Audit* names as fixtures and examples of the convention.
+   - **Traceability, reverse direction** — a `SCENARIO:` marker that names no label in any issue. A repository's traceability check (`CONVENTIONS.md` → *Acceptance criteria* names it, where there is one) checks label → marker for one branch and deliberately leaves marker → label to review; this lens is that review, across the whole suite. A marker carries no issue number, so find its issue from the commit that introduced it: `git log -S'SCENARIO: <name>' --format='%h %s'` gives the commit, whose subject carries `Refs #N` or the pull request number, and `tracker: ref` on the `#N` the subject carries (or on the reference in the body of a pull request, from `gh pr view`), then `tracker: view <ref>`, gives the issue body; the lens loads the `gaffer:tracker` skill itself first, since a subagent does not inherit the one this session loaded. Report only a marker whose issue was identified this way and does not carry the label; a marker whose issue cannot be identified is counted in what the lens could not reach, not reported. Ignore the markers `CONVENTIONS.md` → *Audit* names as fixtures and examples of the convention.
    - **Determinism** — a test that depends on wall-clock time, real network, ordering between tests, or shared files. Where `CONVENTIONS.md` → *Audit* names a seam for measuring time, a wall-clock delay standing in for a duration is a finding rather than a necessity.
    - **Coverage, as a pointer only** — from the coverage evidence, name the public members and whole output paths with no covering test, in the packages `CONVENTIONS.md` → *Audit* says to read. Do not report a percentage as a finding, and count a snapshot test as coverage for the output mode it exercises.
    - **Shell test matrices** — does every committed `*.tests.sh` exercise the script it is named for, and does each script that has a matrix still match the cases the matrix asserts?
@@ -77,7 +79,7 @@ A section under any other heading is read too, and applied where its text says. 
 
    **Lens 4 — Harness consistency.** The slash commands the repository runs — its own under `.claude/commands/` and the plugin's under `${CLAUDE_PLUGIN_ROOT}/commands/` — the skills in `.claude/skills/`, the hooks in `.claude/hooks/`, `.claude/settings.json`, the scripts in `scripts/`, the workflows in `.github/workflows/`, the project memory in `.claude/memory/`, `CONVENTIONS.md`, `REVIEW.md` and the workflow documents `CONVENTIONS.md` → *Audit* names are meant to read as one system. A defect in a plugin command is reported as a question for the maintainer, who raises it on the plugin's repository; nothing in this repository edits the plugin. Read them as a set and report:
    - **Contradictions** — two commands, or a command and a document, that give different rules for the same thing: branch naming, commit message form, labels, when to stop, how many review rounds, what counts as a blocking finding.
-   - **Dangling references** — a command, label, script, hook, file, section heading or step number that something points at and that no longer exists or has been renamed. Check labels against `gh label list`, and the headings a command's *Repository conventions* or *Repository criteria* table names against the repository's `CONVENTIONS.md` and `REVIEW.md` and the plugin's defaults.
+   - **Dangling references** — a command, label, script, hook, file, section heading or step number that something points at and that no longer exists or has been renamed. Check a state a command names against the list `tracker: states` gives, and report a state that list marks missing, since a command that sets it fails; the lens loads the `gaffer:tracker` skill itself first, as lens 2 does. Check too the headings a command's *Repository conventions* or *Repository criteria* table names against the repository's `CONVENTIONS.md` and `REVIEW.md` and the plugin's defaults.
    - **Described versus actual** — a hook or script that a document describes as doing one thing while its source does another; a permission or hook registration in `.claude/settings.json` that a document describes differently.
    - **Hand-offs** — where one command's output is another's input (`/gaffer:draftissue` → `/gaffer:reviewissue` → `/gaffer:confirmissue` → `/gaffer:build` → `/gaffer:verify` → `/gaffer:raise-pr`, and the chain scripts that drive them): does each still produce what the next one reads, in the form it reads it?
    - **Stale memory** — an entry under `.claude/memory/` that the code, a command or a later entry has made false, and an index line in `MEMORY.md` with no file or a file with no index line. Report too a `.claude/memory/` holding entries while nothing imports `@.claude/memory/MEMORY.md`: Claude Code does not read the folder on its own, so without that import no session sees any entry in it. The import counts when it sits in `CLAUDE.md` or `.claude/CLAUDE.md`, directly or in a file either imports with `@`, and does not count inside a code fence or code span.
@@ -90,7 +92,7 @@ A section under any other heading is read too, and applied where its text says. 
    - **Public surface** — the tool does not look at public members. Walk the public API of the published library `CONVENTIONS.md` → *Public API and breaking changes* names and report members nothing in the repository uses, **as a question for the maintainer, not as dead code**: a published library's public member may have external callers.
    - **Files and assets** — tracked files nothing references: source files outside every project, snapshots whose test is gone, scripts no workflow, command or document invokes, resources nothing embeds or packs.
    - **Duplication** — from the clone report, group clones and read each group. Report **semantic drift between near-copies** — two copies that were once the same and now differ in behaviour — ahead of plain duplication; the drift is the danger. Repetition inside test arrangement code is a finding only where the copies have drifted or a helper already exists and is not used.
-   - **Baseline** — look for a previous audit issue (`gh issue list --state all --search "Codebase audit in:title"`). If there is one, report only what is new since it, plus anything it listed that has since become live. If there is none, this run is the baseline: report everything confirmed, and say so in the issue.
+   - **Baseline** — look for a previous audit issue with `tracker: search-title Codebase audit`, which yields the issues, open or closed, whose title matches the text. A failed search is not an empty one: run it once more, and if it fails again treat this run as the baseline and say in the issue that the search failed, quoting what it reported. If there is one, report only what is new since it, plus anything it listed that has since become live. If there is none, this run is the baseline: report everything confirmed, and say so in the issue.
 
 4. **Verify every finding before it is reported.** Reviewer severities are not reliable enough to relay, and a lens is briefed to find things. So no lens output goes into the issue unchallenged.
 
@@ -100,7 +102,13 @@ A section under any other heading is read too, and applied where its text says. 
 
    This step costs one agent per finding and is not to be thinned, sampled or batched several-findings-to-an-agent to save cost. A verifier holding several findings stops being independent of any of them.
 
-5. **Raise one GitHub issue.** Compose the body at `.claude/scratch/audit/issue-body.md`, then create it with `gh issue create --title "Codebase audit: <short HEAD> (<date>)" --label <label> --body-file .claude/scratch/audit/issue-body.md`, with the label `CONVENTIONS.md` → *Audit* names. One issue per run, whatever the run found.
+5. **Raise one issue.** Compose the body at `.claude/scratch/audit/issue-body.md`, then create it:
+
+   - `tracker: create --title "Codebase audit: <short HEAD> (<date>)" --body-file .claude/scratch/audit/issue-body.md`
+
+   It yields the new issue's reference and URL. One issue per run, whatever the run found.
+
+   If it fails, nothing was raised. Keep `.claude/scratch/audit/issue-body.md`, and report its path and what the operation reported, so the run's findings are not lost.
 
    The body, in this order:
 
@@ -112,7 +120,7 @@ A section under any other heading is read too, and applied where its text says. 
    - **Refuted — do not re-raise** — each dropped finding with the verifier's reason, so a later audit does not file it again.
    - **Method and its limits** — per-lens raised, verified and survived counts as a table; every tool from step 2 that did not run and what that lens therefore could not check; anything a lens did not reach; and the standing exclusions with their reasons: **security is out of scope because a dedicated security scanner and CI's advisory and code-scanning gates cover it, and mutation testing is not run.** Writing the exclusions down is what stops a later audit from helpfully raising them as gaps.
 
-   **Labels.** Apply the one label `CONVENTIONS.md` → *Audit* names, and nothing else. Never `ready`, `review`, `confirm` or `parked`: `ready` hands the issue to the unattended chain runner, which builds and raises a pull request with no human deciding, and `review` and `confirm` trigger the automated issue-review workflows, which expect one feature's acceptance criteria and not a backlog.
+   **States.** Put the issue in no state. Never `ready` or `parked`, nor anything a repository's own issue workflows act on: `ready` hands the issue to the unattended chain runner, which builds and raises a pull request with no human deciding, and an automated issue-review workflow expects one feature's acceptance criteria and not a backlog.
 
    Author each paragraph, bullet and table row as a single unwrapped line. Link only to files that exist at the audited commit, by path relative to the repository root. Do **not** commit the body or any working file.
 

@@ -54,7 +54,7 @@ Every stage after the issue stage runs without prompting, so a script can take o
 - **Run each stage as its own headless process** (`claude -p "/gaffer:build <N>"`), reaching the next only through the previous stage's verdict and the state it left on the branch.
 - **Gate on the verdict, read by position.** Start the next stage only on the previous one's success verdict; stop at the first failure, an unreadable verdict, an unknown schema version, an agent error or a timeout. [`verdict-schema.md`](verdict-schema.md) is how to read it.
 - **Load the plugin from a checkout it controls**, so every stage in one run comes from one known commit — the chain loads the checkout it is part of.
-- **Move the human decision to the start.** The chain opens a PR without a pause; the person's decision is starting it against one named issue, or confirming an issue where a runner builds every confirmed one. Run `verify` and `raise-pr` by hand to keep the pause. Where no CI runs the review, `chain-local.sh` runs the chain and then `review-pr` on its pull request, started by hand.
+- **Move the human decision to the start.** The chain opens a PR without a pause; the person's decision is starting it against one named issue, or confirming an issue where a runner builds every confirmed one. Run `verify` and `raise-pr` by hand to keep the pause. Where no CI runs the review, run `/gaffer:review-pr` on the pull request the chain raised.
 - **Expect silent degradation.** A headless run denies `ask`-matched calls without a prompt, so a stage can carry on degraded and still report success ([`unattended.md`](unattended.md)); skipping permissions removes that and everything else, and is an opt-in with conditions ([`chain.md`](chain.md), *Permissions*).
 
 ## The feedback loop

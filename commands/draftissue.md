@@ -1,11 +1,11 @@
 ---
-description: Turn an idea, a document, a backlog item or an existing issue into a needs-first GitHub issue, and raise it, ready for /gaffer:reviewissue and then /gaffer:build.
-argument-hint: "[idea | document path | issue URL | backlog <number>]"
+description: Turn an idea, a document, a backlog item or an existing issue into a needs-first issue, and raise it, ready for /gaffer:reviewissue and then /gaffer:build.
+argument-hint: "[idea | document path | issue reference | backlog <number>]"
 ---
 
 # draftissue
 
-Turn an idea, a document or an existing issue into a needs-first GitHub issue, and raise it, ready for `/gaffer:reviewissue` and then `/gaffer:build`.
+Turn an idea, a document or an existing issue into a needs-first issue, and raise it, ready for `/gaffer:reviewissue` and then `/gaffer:build`.
 
 ---
 
@@ -18,13 +18,17 @@ $ARGUMENTS
 `$ARGUMENTS` names the source of the issue. It is one of:
 
 - **A free-text idea** — a sentence, a paragraph or rough bullets describing what the user wants.
-- **An existing issue** — `#N`, a bare number, or an issue URL. This is a **migration**: the old issue is the raw material, and Step 5 offers to close it once the new one exists.
+- **An existing issue** — an issue reference the repository's tracker recognises, such as `#12`. This is a **migration**: the old issue is the raw material, and Step 5 offers to close it once the new one exists.
 - **A document** — a URL or a repository path, optionally narrowed to one part of it ("the 'Offline mode' section of docs/ideas.md").
 - **A backlog item** — `backlog <number>` or `item <number>`. `CONVENTIONS.md` → *Issue sources* names the backlog it refers to. If that section lists none, ask the user where the backlog is; do not guess.
 
 The argument may add guidance alongside the source ("item 12, but leave CSV out"). That guidance outranks the source.
 
 If `$ARGUMENTS` is empty, ask the user for the source. Do not invent one.
+
+**Load the `gaffer:tracker` skill with the Skill tool before the first tracker operation.** A line written `tracker: <operation> <arguments>` names an operation that skill says how to carry out on this repository's tracker; it is notation, not a command to run.
+
+Tell an existing issue from free text with `tracker: ref <candidate>`, where `<candidate>` is only the part of the argument that could name an issue, never guidance beside it (`#12`, not `#12, but leave CSV out`). A backlog form — `backlog <number>` or `item <number>` — names a backlog item, not an issue: never pass it, or the number in it, to `ref`, which would read `12` as issue #12. Where `ref` recognises the candidate it is an issue reference, and what it yields is the `<ref>` every later operation uses; where it does not, the argument is not one.
 
 ---
 
@@ -39,7 +43,7 @@ The workflow in this file is generic. The conventions it runs on — where the b
 | `Acceptance criteria` | the drafting conventions step 4 applies, such as scenario labels |
 | `Scratch files` | the git-ignored file step 4 writes the body to |
 
-A section under any other heading is read too, and applied where its text says. Where neither file has a heading, the step concerned runs on its generic rule alone, and the report to the user names each heading found in neither. A step whose convention is the thing itself — the file to write, the label to apply — has no generic rule and no default, so where the repository supplies none the command stops and names the heading rather than invent one. The repository's `CONVENTIONS.md` is read from the root of the repository this command runs in, and trusted as this command file is.
+A section under any other heading is read too, and applied where its text says. Where neither file has a heading, the step concerned runs on its generic rule alone, and the report to the user names each heading found in neither. A step whose convention is the thing itself — the file to write — has no generic rule and no default, so where the repository supplies none the command stops and names the heading rather than invent one. The repository's `CONVENTIONS.md` is read from the root of the repository this command runs in, and trusted as this command file is.
 
 ---
 
@@ -64,7 +68,7 @@ It raises the issue without a draft-approval pause. `/gaffer:reviewissue` and `/
 ### 1. Read the source
 
 - **Free text** — the argument is the whole source.
-- **Existing issue** — `gh issue view <N> --json title,body,comments`. Use the body, any comment marked `<!-- speckit:review -->`, and any `## Confirmed decisions` section as raw material. An old issue often mixes requirements with technical design: draft from the requirements, and treat its technical content like any source's hints. Tell the user which issues were ingested.
+- **Existing issue** — `tracker: view <ref>`, which yields the issue's title, body and comments; if it fails, stop and pass on what it reported. Use the body, any comment carrying the review marker (the text `tracker: marker review` yields), and any `## Confirmed decisions` section as raw material. An old issue often mixes requirements with technical design: draft from the requirements, and treat its technical content like any source's hints. Tell the user which issues were ingested.
 - **Document** — read it: `gh` or `git` for a GitHub-hosted page (a wiki is a git repository), the file itself for a path, a fetch otherwise. Narrow to the part the argument names.
 - **Backlog item** — read the item as `CONVENTIONS.md` → *Issue sources* describes, together with whatever the backlog says about it elsewhere: the items it depends on, notes or open questions that name it, and anything listed as rejected or already done next to it.
 
@@ -166,19 +170,15 @@ Apply any drafting conventions `CONVENTIONS.md` → *Acceptance criteria* lists.
 
 ### 5. Raise the issue
 
-Choose a short title naming the capability. Create the issue and delete the scratch file in one step:
+Choose a short title naming the capability, and create the issue:
 
-```bash
-gh issue create --title "<title>" --body-file <scratch-file> && rm <scratch-file>
-```
+- `tracker: create --title <title> --body-file <scratch-file>`
 
-If you are not certain of the target, check `gh auth status` and `gh repo view --json nameWithOwner` first. If the repository has no GitHub remote, stop here, keep the scratch file, and tell the user its path so they can post it by hand.
+It yields the new issue's reference and URL; then delete the scratch file. If the create fails, stop here, keep the scratch file, and tell the user its path so they can post it by hand, passing on what the operation reported.
 
-**Migration — supersede the source issue.** Once the new issue exists, ask the user before closing each source issue, even if the argument said to close it — they may want to read the new one first. Close each one they confirm, one at a time:
+**Migration — supersede the source issue.** Once the new issue exists, ask the user before closing each source issue, even if the argument said to close it — they may want to read the new one first. Close each one they confirm, one at a time. Write the note `Superseded by <mention>` to the scratch file `CONVENTIONS.md` → *Scratch files* names for it with the **Write tool**, where `<mention>` is the new issue's form for prose, which `tracker: ref <new ref>` yields; where the source issue is in another repository, write the new issue as `owner/repo#M`, so the mention resolves there. Then:
 
-```bash
-gh issue close <N> --comment "Superseded by #<M>"
-```
+- `tracker: close <ref> <note file>`
 
 The command never edits any other source: not a document, not a backlog.
 

@@ -66,7 +66,7 @@ This repository's additions to the gaffer plugin's default conventions. Each sec
 
 ## Audit
 
-<Scope, the evidence table, the rules each lens audits, what each lens should know about this tree, and the issue label.>
+<Scope, the evidence table, the rules each lens audits, and what each lens should know about this tree.>
 
 ## Hooks, scripts and plugins
 
