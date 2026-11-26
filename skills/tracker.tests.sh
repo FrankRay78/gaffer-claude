@@ -2,13 +2,11 @@
 #
 # tracker.tests.sh — the tracker skill's calls are made in the skill file and nowhere else.
 #
-# The calls are read from the `bash` fences of tracker/SKILL.md, so this file names no tracker of
-# its own: replace the skill file and the test follows it, and a skill file that makes no shell
-# call leaves nothing to look for. Each call is reduced to a pattern, and a command, default,
-# template or script that matches one fails the run. chain/chain-next.sh and its matrix are exempt:
-# the runner selects and parks issues itself. docs/ is not searched, because the docs name the
-# calls on purpose. Exits non-zero on any failure. Run it after any edit to the skill file, a
-# command or a script.
+# The calls are read from the shell fences of tracker/SKILL.md, so this file names no tracker of
+# its own: replace the skill file and the test follows it. Each call is reduced to a pattern, and a
+# command, default, template or script that matches one fails the run. chain/chain-next.sh and its
+# matrix are exempt: the runner selects and parks issues itself. docs/ is not searched, because the
+# docs name the calls on purpose. Run it after any edit to the skill file, a command or a script.
 #
 # What it does not hold: a label or a closing keyword written in a command, and a call written in
 # another form than the skill file's. Those are held at review (docs/contributing.md).
@@ -27,9 +25,9 @@ trap 'rm -rf "$SB"' EXIT
 # Where a tracker call may not appear, relative to a checkout's root.
 GUARDED="commands defaults templates chain init hooks .github"
 
-# calls <skill file> — every line inside a ```bash fence, one call a line.
+# calls <skill file> — every line inside a bash, sh or shell fence, one call a line.
 calls() {
-  awk '/^[[:space:]]*```bash[[:space:]]*$/ { fenced = 1; next } /^[[:space:]]*```/ { fenced = 0 } fenced' "$1" \
+  awk '/^[[:space:]]*```(bash|sh|shell)([[:space:]].*)?$/ { fenced = 1; next } /^[[:space:]]*```/ { fenced = 0 } fenced' "$1" \
     | sed -e 's/^[[:space:]]*//' -e '/^$/d' -e '/^#/d'
 }
 
@@ -103,6 +101,9 @@ ok "a call with three leading words is known by them" '[ "$(pattern "trk issue v
 ok "a call with fewer is known by its path, a placeholder standing for anything" '[ "$(pattern "trk api --paginate things/<R>/issues/<N>/notes")" = "things/[^[:space:]]+/issues/[^[:space:]]+/notes" ]'
 ok "a call with neither is too generic to look for" '[ -z "$(pattern "jq -n --rawfile b <file> > <patch file>")" ]'
 
+printf '```sh\ntrk issue one <N>\n```\n\n```shell title=x\ntrk issue two <N>\n```\n' > "$SB/fences.md"
+ok "an sh or shell fence, or one with attributes, is read too" '[ "$(calls "$SB/fences.md" | grep -c "")" = 2 ]'
+
 echo "Finding a call outside the skill file:"
 ok "a tree that makes none passes" '[ -z "$(violations "$FIX" "$FIXSKILL")" ]'
 printf 'Read it with `trk issue view 12`.\n' > "$FIX/commands/a.md"
@@ -123,7 +124,7 @@ printf 'trk issue view 12\n' > "$FIX/commands/a.md"
 ok "a skill file that makes no shell call leaves nothing to look for" '[ -z "$(calls "$FIXSKILL")" ] && [ -z "$(violations "$FIX" "$FIXSKILL")" ]'
 
 echo "This checkout:"
-ok "the skill file is there to read" '[ -f "$SKILL" ]'
+ok "the skill file is there to read, and yields calls to look for" '[ -f "$SKILL" ] && [ -n "$(calls "$SKILL")" ]'
 FOUND="$(violations "$ROOT" "$SKILL")"
 ok "no command, default, template or script makes a call the skill file makes" '[ -z "$FOUND" ]'
 [ -z "$FOUND" ] || printf '%s\n' "$FOUND" | sed 's/^/       /'

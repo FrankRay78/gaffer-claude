@@ -273,11 +273,11 @@ echo "The chain passes no permission rule of its own:"
 new_case
 reply 1 "$(ready)"; reply 2 "$(verified)"; reply 3 "$(raised)"
 chain 270
-ok "under the repository's own permissions no stage is passed an allow rule" '[ "$RC" = 0 ] && [ "$(calls)" = 3 ] && ! grep -qF -- "--allowedTools|" "$STUB_DIR/log"'
+ok "under the repository's own permissions no stage is passed an allow rule" '[ "$RC" = 0 ] && [ "$(calls)" = 3 ] && ! grep -qiE -- "--allowed-?tools" "$STUB_DIR/log"'
 new_case
 reply 1 "$(ready)"; reply 2 "$(verified)"; reply 3 "$(raised)"
 chain --skip-permissions 270
-ok "… nor with permissions skipped" '[ "$RC" = 0 ] && [ "$(calls)" = 3 ] && ! grep -qF -- "--allowedTools|" "$STUB_DIR/log"'
+ok "… nor with permissions skipped" '[ "$RC" = 0 ] && [ "$(calls)" = 3 ] && ! grep -qiE -- "--allowed-?tools" "$STUB_DIR/log"'
 
 echo "The chain refuses to run from a checkout that is not a plugin:"
 new_case

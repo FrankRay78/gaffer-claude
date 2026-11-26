@@ -6,12 +6,12 @@ The plugin ships no tracker script, and no setting chooses a tracker: the tracke
 
 ## Replacing the file
 
-Keep a clone of the plugin whose `skills/tracker/SKILL.md` holds instructions for your tracker — an authenticated MCP connector your own Claude Code settings allow, for instance — and change nothing else. Nothing beside that file needs editing for another tracker: no command, default, template, script or test.
+Keep a clone of the plugin whose `skills/tracker/SKILL.md` holds instructions for your tracker — an authenticated MCP connector your own Claude Code settings allow, for instance — and change nothing else. Nothing beside that file needs editing for another tracker — no command, default, template, script or test — save the link rules under *What stays on GitHub*.
 
 - **Run from the clone.** Start sessions with `claude --plugin-dir <clone>`, and run the chain by hand as `bash <clone>/chain/chain.sh <issue>`, which loads its stages from the checkout it sits in ([`chain.md`](chain.md)).
 - **Keep the frontmatter's `name: tracker`, and leave model invocation enabled.** A command loads the skill by that name, and a skill the model may not invoke cannot be loaded by one.
 - **Keep it short.** Every command that reaches the tracker loads the whole file. This plugin's is held to 1,500 words (`wc -w skills/tracker/SKILL.md`).
-- **Put every shell call in a `bash` fence.** [`skills/tracker.tests.sh`](../skills/tracker.tests.sh) reads the fences and fails when a command, default, template or script makes one of those calls itself, so the test follows whatever file is there and needs no edit. A file that makes no shell call leaves it nothing to look for.
+- **Put every shell call in a `bash` fence** (`sh` and `shell` are read too). [`skills/tracker.tests.sh`](../skills/tracker.tests.sh) reads the fences and fails when a command, default, template or script makes one of those calls itself, so the test follows whatever file is there and needs no edit. A file that makes no shell call leaves it nothing to look for.
 - **State every operation below, with its arguments and what it yields.** A command says only `tracker: <operation> <arguments>`; everything else about the tracker is the file's to say.
 
 Claude Code re-attaches a loaded skill after it compacts a conversation. A subagent does not inherit a skill its parent loaded, which is why each command file tells whoever is applying it to load the skill.
@@ -25,7 +25,7 @@ Every operation is required. No command carries a fallback for a missing one: wh
 | `states` | — | Each state, what shows it in this tracker, and whether it exists yet, with how to create one that is missing. Creates nothing. |
 | `ref` | `<reference>` | The reference in its normal form, and its forms for a branch name and for commit subjects and prose. Refuses a reference the tracker does not recognise. |
 | `branch-ref` | `<branch>` | The reference a branch name carries, or none. |
-| `view` | `<ref>` | The issue's title, body and URL, whether it is open or closed, the states it is in, the pull requests that will close it, and every comment with its id, author, time and body. |
+| `view` | `<ref>`, and optionally `no-comments` | The issue's title, body and URL, whether it is open or closed, the states it is in, the pull requests that will close it, and every comment with its id, author, time and body. With `no-comments`, no comment: `build` reads none, since anyone can write one. |
 | `create` | `--title <title> --body-file <file>` | A new issue with that title and body. Its reference and URL. |
 | `body-set` | `<ref> <file>` | The issue body replaced with the file's text. |
 | `state-add`, `state-remove` | `<ref> <state>` | The issue put in, or taken out of, the state. Repeating either is no error. |
@@ -73,16 +73,17 @@ With this plugin's file, those calls are:
 
 | Calls | Operations | Needed by |
 |---|---|---|
-| `git remote get-url origin` | every operation that reaches GitHub | every command below |
-| `gh issue view`, `gh api` reading an issue's comments | `view`, `comment-find`, `pr-reference` | the chain's stages (`build`, `raise-pr`), `review-pr`, and the issue commands |
+| `git remote get-url origin`, `gh repo view` | every operation that reaches GitHub | every command below |
+| `gh issue view` | `view`, `pr-reference` | the chain's stages (`build`, `raise-pr`), `review-pr`, and the issue commands |
+| `gh api` reading an issue's comments | `view`, `comment-find` | `review-pr` and the issue commands |
 | `gh issue create`, `gh issue edit`, `gh issue comment`, `gh issue close`, `gh api` writing an issue or a comment, `jq` | `create`, `state-add`, `state-remove`, `comment-post`, `comment-edit`, `comment-delete`, `body-set`, `link`, `close` | `draftissue`, `reviewissue`, `confirmissue`, `graft`, `audit-codebase` |
 | `gh issue list` | `search-title` | `audit-codebase` |
 | `gh label list` | `states` | `init` |
 
-`verify` and `pre-review` use only `ref` and `branch-ref`, which make no call. Loading the skill needs no rule of its own. A replacement file that reaches its tracker through an MCP connector needs that connector's tools allowed instead.
+`verify` and `pre-review` use only `ref` and `branch-ref`, which make no call. A rule that allows `gh api` by prefix allows every `gh api` call, writes and deletes included; a stage that only reads needs a rule for the comments path alone. Loading the skill needs no rule of its own. A replacement file that reaches its tracker through an MCP connector needs that connector's tools allowed instead.
 
 ## What stays on GitHub
 
 - **Pull requests and their reviews.** `raise-pr`, `pre-review`, `review-pr` and `review-followup` reach them with `gh`, and `init` delivers its recommendations as a pull request.
 - **The unattended runner.** [`chain/chain-next.sh`](../chain/chain-next.sh) selects issues by label and parks them with `gh` itself, under the names its own `labels` setting gives ([`chain.md`](chain.md)). It loads no skill and stays GitHub-only: with another tracker, run `chain.sh` by hand. It refuses a `tracker` setting as a key it does not know.
-- **Links to files.** `reviewissue` and `confirmissue` write links to the repository's files as absolute GitHub URLs, because that is where the code is hosted.
+- **Links to files.** `draftissue` writes links to the repository's files relative to its root, which GitHub resolves in an issue, and `reviewissue` and `confirmissue` write them as absolute GitHub URLs, because that is where the code is hosted. A tracker that renders neither needs those rules changed in the commands.

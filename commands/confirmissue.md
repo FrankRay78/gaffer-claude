@@ -228,7 +228,7 @@ With both confirmed, delete the review using the comment id resolved in step 1:
 - **Never fatal.** If the deletion itself fails, do **not** fail the command — the decisions are saved and the issue is `ready`. Continue to the report and say there that the review is still on the issue, and that re-running `/gaffer:confirmissue #N` will retry it.
 - **Irreversible and silent.** A deleted comment sends no notification and has no undo. That is why every hard-stop in this command (steps 1, 2, 4 and 5) sits upstream of it, and why a step-6 failure to set the state — which does not stop the run — is caught by the read-back above instead. All five paths leave the review exactly where it was, answerable and re-runnable.
 
-**Putting a confirmed issue back into review.** If the scope moves and the decisions no longer hold, take the issue out of the `ready` state (`tracker: state-remove <ref> ready`) and request a review again. With the marker gone and no review comment on the thread, `/gaffer:reviewissue` (and any automation that runs it) treats it as a first run and posts a fresh review. No one has to hand-edit the issue body to make that happen.
+**Putting a confirmed issue back into review.** If the scope moves and the decisions no longer hold, take the issue out of the `ready` state (`/gaffer:tracker state-remove <ref> ready`) and request a review again. With the marker gone and no review comment on the thread, `/gaffer:reviewissue` (and any automation that runs it) treats it as a first run and posts a fresh review. No one has to hand-edit the issue body to make that happen.
 
 ---
 

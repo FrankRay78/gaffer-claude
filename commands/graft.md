@@ -102,7 +102,7 @@ When it returns, re-read the review comment (step 1's `comment-find`). Then:
 
 ### 4. Answer the gaps (inline)
 
-**A comment with no numbered gap** means the review found nothing open. Stop and say so, whichever step brought you here: there is nothing to answer, and graft does not send an empty review to `/gaffer:confirmissue`. Whether the issue is ready is then the user's call, and say plainly what setting the state by hand leaves: `needs-answers` can be swapped for `ready` with `tracker: state-remove <ref> needs-answers` and `tracker: state-add <ref> ready`, but the issue then carries no `## Confirmed decisions` section and keeps the review comment, which the user may delete. There is no graft command to resume here — the review settled it.
+**A comment with no numbered gap** means the review found nothing open. Stop and say so, whichever step brought you here: there is nothing to answer, and graft does not send an empty review to `/gaffer:confirmissue`. Whether the issue is ready is then the user's call, and say plainly what setting the state by hand leaves: `needs-answers` can be swapped for `ready` with `/gaffer:tracker state-remove <ref> needs-answers` and `/gaffer:tracker state-add <ref> ready`, but the issue then carries no `## Confirmed decisions` section and keeps the review comment, which the user may delete. There is no graft command to resume here — the review settled it.
 
 The comment's numbered gaps are the agenda: each `**N. <title>**` block, through its `> _Answer:_` line. Work through them in number order, one at a time. Do not reorder or renumber, and do not touch the comment's table, framing, recommendations or commentary — the comment belongs to `/gaffer:reviewissue`, and graft writes only answer slots.
 
@@ -160,12 +160,12 @@ Read the issue back rather than trusting the subagent's report:
 - `tracker: view <ref>`
 - `tracker: comment-find <ref> review`
 
-From the first, `ready` is whether the issue is in the `ready` state, `waiting` whether it is in `needs-answers`, and `decisions` whether its body contains `## Confirmed decisions`. The review comment is gone when the second yields none, or a comment whose id is not the one step 1 found.
+From the first, `ready` is whether the issue is in the `ready` state, `waiting` whether it is in `needs-answers`, and `decisions` whether its body contains `## Confirmed decisions`. The review comment is gone when the second yields none, or a comment whose id is not the one the latest earlier lookup found: step 3's re-read where step 3 ran, otherwise step 1's.
 
 The issue is done when `ready` and `decisions` are both true, `waiting` is false and the review comment is gone. Where one is not, say which, and what completes it — graft does not repair it itself:
 
 - `ready` missing, `decisions` false, or the comment still there → re-run `/gaffer:confirmissue #N`.
-- Only `needs-answers` left over, with everything else done → remove it by hand: `tracker: state-remove <ref> needs-answers`. Re-running `/gaffer:confirmissue` does not: it finds the issue already confirmed and stops. Say so before anything else in the report: once the issue is `ready`, a later `/gaffer:graft #N` stops at step 1 and never retries.
+- Only `needs-answers` left over, with everything else done → remove it by hand: `/gaffer:tracker state-remove <ref> needs-answers`. Re-running `/gaffer:confirmissue` does not: it finds the issue already confirmed and stops. Say so before anything else in the report: once the issue is `ready`, a later `/gaffer:graft #N` stops at step 1 and never retries.
 
 ---
 

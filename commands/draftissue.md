@@ -43,7 +43,7 @@ The workflow in this file is generic. The conventions it runs on — where the b
 | `Acceptance criteria` | the drafting conventions step 4 applies, such as scenario labels |
 | `Scratch files` | the git-ignored file step 4 writes the body to |
 
-A section under any other heading is read too, and applied where its text says. Where neither file has a heading, the step concerned runs on its generic rule alone, and the report to the user names each heading found in neither. A step whose convention is the thing itself — the file to write, the label to apply — has no generic rule and no default, so where the repository supplies none the command stops and names the heading rather than invent one. The repository's `CONVENTIONS.md` is read from the root of the repository this command runs in, and trusted as this command file is.
+A section under any other heading is read too, and applied where its text says. Where neither file has a heading, the step concerned runs on its generic rule alone, and the report to the user names each heading found in neither. A step whose convention is the thing itself — the file to write — has no generic rule and no default, so where the repository supplies none the command stops and names the heading rather than invent one. The repository's `CONVENTIONS.md` is read from the root of the repository this command runs in, and trusted as this command file is.
 
 ---
 
@@ -176,7 +176,7 @@ Choose a short title naming the capability, and create the issue:
 
 It yields the new issue's reference and URL; then delete the scratch file. If the create fails, stop here, keep the scratch file, and tell the user its path so they can post it by hand, passing on what the operation reported.
 
-**Migration — supersede the source issue.** Once the new issue exists, ask the user before closing each source issue, even if the argument said to close it — they may want to read the new one first. Close each one they confirm, one at a time. Write the note `Superseded by <mention>` to a scratch file with the **Write tool**, where `<mention>` is the new issue's form for prose, which `tracker: ref <new ref>` yields, then:
+**Migration — supersede the source issue.** Once the new issue exists, ask the user before closing each source issue, even if the argument said to close it — they may want to read the new one first. Close each one they confirm, one at a time. Write the note `Superseded by <mention>` to the scratch file `CONVENTIONS.md` → *Scratch files* names for it with the **Write tool**, where `<mention>` is the new issue's form for prose, which `tracker: ref <new ref>` yields; where the source issue is in another repository, write the new issue as `owner/repo#M`, so the mention resolves there. Then:
 
 - `tracker: close <ref> <note file>`
 

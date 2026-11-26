@@ -7,11 +7,11 @@ description: How gaffer's commands reach the issue tracker. Load before carrying
 
 A gaffer command names a tracker operation as `tracker: <operation> <arguments>`. This file says how to carry each one out with `gh`. A person may ask for one directly, as `/gaffer:tracker <operation> <arguments>`.
 
-The calls below are the ones to make, each in a `bash` fence. If `gh` rejects a flag or a field, read its error, adjust the call, and still deliver what the operation yields. Never skip an operation, and never report one done that failed.
+The issue calls below are the ones to make, each in a `bash` fence. If `gh` rejects a flag or a field, read its error, adjust the call, and still deliver what the operation yields. Never skip an operation, and never report one done that failed.
 
 ## Ground rules
 
-- **Name the repository on every call**: `--repo <R>`, or `repos/<R>/…` in a REST path. `<R>` is the `owner/repo` of `git remote get-url origin`, unless the reference names another repository. Never let `gh` choose: in a fork clone it picks the upstream.
+- **Name the repository on every call**: `--repo <R>`, or `repos/<R>/…` in a REST path. Never let `gh` choose: in a fork clone it picks the upstream. `<R>` is the reference's repository where it names one. Otherwise it is origin's repository under its current name: take the `owner/repo` from `git remote get-url origin`, then resolve it once with `gh repo view <owner/repo> --json nameWithOwner --jq .nameWithOwner`, since an origin URL written before a rename or transfer still works but names the old repository.
 - **REST paths have no leading `/`.**
 - **Text goes in from a file** (`--body-file`, `-F body=@<file>`, `--input`), never inline, so quotes, backticks and `$` arrive intact.
 - **A failed call is a failed operation.** Pass on what `gh` printed. Only an empty result means "none".
@@ -65,7 +65,7 @@ Another repository's issue has no branch form. Where a command needs one, the op
 
 ### view
 
-`view <ref>` reads the issue and all its comments.
+`view <ref>` reads the issue and all its comments. `view <ref> no-comments` reads the issue alone: make only the first call.
 
 ```bash
 gh issue view <N> --repo <R> --json number,title,body,state,labels,url,closedByPullRequestsReferences
@@ -91,11 +91,11 @@ It prints the new issue's URL, whose last segment is its reference.
 
 ### body-set
 
-`body-set <ref> <file>` replaces the whole body. Write the file's text as JSON to a scratch file beside it, then send it:
+`body-set <ref> <file>` replaces the whole body. Write the file's text as JSON to `<file>.json`, then send it:
 
 ```bash
-jq -n --rawfile b <file> '{body: $b}' > <patch file>
-gh api --method PATCH repos/<R>/issues/<N> --input <patch file> --jq .html_url
+jq -n --rawfile b <file> '{body: $b}' > <file>.json
+gh api --method PATCH repos/<R>/issues/<N> --input <file>.json --jq .html_url
 ```
 
 ### state-add
@@ -116,7 +116,7 @@ gh issue edit <N> --repo <R> --remove-label "<label>"
 
 ### comment-find
 
-`comment-find <ref> <marker>` yields the newest comment whose body contains the marker's text, or none. List the comments as `view` does, every page, and choose by `created_at`, never by `id`.
+`comment-find <ref> <marker>` yields the newest comment whose body contains the marker's text, or none. List the comments as `view` does, every page, and choose by `created_at`, never by `id`. Choose after the listing, never inside `--jq`: with `--paginate`, `gh` runs the filter once per page.
 
 ### comment-post
 

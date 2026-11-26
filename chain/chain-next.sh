@@ -190,15 +190,20 @@ check_plugin() {
 }
 
 # check_repo — gh, asked with no repository named, must choose the one the tracker skill sends every
-# issue call to: origin's. The runner's own gh calls name no repository, so gh chooses; in a fork
-# clone it chooses upstream (gh repo set-default, or an `upstream` remote), and the runner would
-# select and park upstream's #N while the chain builds origin's. Refused rather than guessed at.
-# Where origin is not a GitHub URL there is no repository to compare, and the check passes.
+# issue call to: origin's, under its current name. The runner's own gh calls name no repository, so
+# gh chooses; in a fork clone it chooses upstream (gh repo set-default, or an `upstream` remote), and
+# the runner would select and park upstream's #N while the chain builds origin's. Origin's name is
+# looked up rather than read from its URL, which still works after a rename or transfer but names
+# the old repository. Where origin is not a GitHub URL there is no repository to compare, and the
+# check passes.
 check_repo() {
-  local url here chosen fix
+  local url named here chosen fix
   url=$(git remote get-url origin 2>/dev/null) || return 0
-  [[ $url =~ github\.com[:/]([^/]+)/([^/]+)$ ]] || return 0
-  here="${BASH_REMATCH[1]}/${BASH_REMATCH[2]%.git}"
+  url=${url%/}
+  [[ $url =~ github\.com(:[0-9]+)?[:/]([^/]+)/([^/]+)$ ]] || return 0
+  named="${BASH_REMATCH[2]}/${BASH_REMATCH[3]%.git}"
+  here=$(gh repo view "$named" --json nameWithOwner -q .nameWithOwner 2>/dev/null) \
+    || die "refused — gh could not look up origin's repository, $named, which the issue commands use. Nothing was selected."
   fix="Run \`gh repo set-default $here\` in the clone. Nothing was selected."
   chosen=$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null) \
     || die "refused — gh could not say which repository $CLONE resolves to, and the issue commands use its origin, $here. $fix"

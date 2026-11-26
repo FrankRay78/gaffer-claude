@@ -48,4 +48,4 @@ templates/        copyable starting points for a repository's own two files
 docs/             the guides
 ```
 
-Commands are kept as `commands/*.md` rather than skills: each is a workflow a person invokes by name, with no supporting files, and the move from a repository's `.claude/commands/` was a move, not a rewrite. The tracker is the one skill, because a command loads it and no person invokes it.
+Commands are kept as `commands/*.md` rather than skills: each is a workflow a person invokes by name, with no supporting files, and the move from a repository's `.claude/commands/` was a move, not a rewrite. The tracker is the one skill, because commands load it; a person may also invoke it, as `/gaffer:tracker <operation>`.
