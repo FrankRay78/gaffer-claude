@@ -75,13 +75,10 @@ read_settings() {
   [ -f "$f" ] || die "refused — the settings file $f does not exist; nothing was run."
   s=$(jq -e 'if type == "object" then . else error("x") end' "$f" 2>/dev/null) \
     || die "refused — the settings file $f is not a JSON object; nothing was run."
-  unknown=$(jq -r 'keys - ["clone", "writers", "labels", "stages", "skip_permissions", "state_dir", "pre_review", "tracker", "github"] | .[]' <<<"$s" | paste -sd' ')
+  unknown=$(jq -r 'keys - ["clone", "writers", "labels", "stages", "skip_permissions", "state_dir", "pre_review", "github"] | .[]' <<<"$s" | paste -sd' ')
   [ -z "$unknown" ] || die "refused — $f names a setting this runner does not know: $unknown. Nothing was run."
-  # The runner selects and parks issues with gh directly, so it serves a repository whose tracker is
-  # GitHub and no other; the adapter's own key, github.labels, is the tracker interface's to check.
-  tracker=$(jq -r 'if .tracker == null then "github" elif (.tracker | type) == "string" then .tracker else error("x") end' <<<"$s" 2>/dev/null) \
-    || die "refused — in $f, tracker is not a string; nothing was run."
-  [ "$tracker" = github ] || die "refused — $f names the tracker \"$tracker\", and this runner selects issues on GitHub only. Nothing was run."
+  # `github` is the GitHub tracker script's own key (tracker/tracker.sh), which checks github.labels
+  # itself; the runner, which selects and parks issues on GitHub alone, only lets it through.
   jq -e '.github == null or (.github | type) == "object"' <<<"$s" >/dev/null \
     || die "refused — in $f, github is not an object; nothing was run."
   CLONE=$(jq -r 'if (.clone | type) == "string" and (.clone | length) > 0 then .clone else error("x") end' <<<"$s" 2>/dev/null) \
