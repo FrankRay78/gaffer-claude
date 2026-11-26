@@ -255,79 +255,29 @@ ok "the dry run names the issue as it was typed" '[ "$RC" = 0 ] && grep -qF "dry
 new_case
 chain ""
 ok "an empty reference is the one the chain refuses itself: usage, no stage started" '[ "$RC" = 1 ] && [ "$(calls)" = 0 ] && grep -q usage <<<"$OUTPUT"'
-# A copy of the plugin whose tracker script records being run: the chain must start every stage
-# without running it, since reading a reference is the interface's job inside a stage.
-LOUD="$SB/loud-plugin"
-mkdir -p "$LOUD/chain" "$LOUD/.claude-plugin" "$LOUD/tracker"
-cp "$CHAIN" "$LOUD/chain/chain.sh"
-cp "$PLUGIN_ROOT/.claude-plugin/plugin.json" "$LOUD/.claude-plugin/plugin.json"
-printf '# an interface file\n' > "$LOUD/tracker/TRACKER.md"
-printf 'echo called >> "$STUB_DIR/tracker-called"\nexit 1\n' > "$LOUD/tracker/tracker.sh"
-new_case
-reply 1 "$(ready)"; reply 2 "$(verified)"; reply 3 "$(raised)"
-CHAIN="$LOUD/chain/chain.sh" chain 270
-ok "the chain runs no tracker script itself" '[ "$RC" = 0 ] && [ "$(calls)" = 3 ] && [ ! -e "$STUB_DIR/tracker-called" ]'
-new_case
-CHAIN="$LOUD/chain/chain.sh" chain --dry-run 270
-ok "… nor does its dry run" '[ "$RC" = 0 ] && [ ! -e "$STUB_DIR/tracker-called" ]'
-ok "the chain takes the issue as its argument, unread, and names no tracker operation" 'grep -qxF "issue=\$1" "$CHAIN" && [ "$(grep -cE "bash \"[$]TRACKER\"|ref --forms|branch-ref" "$CHAIN")" = 0 ]'
 new_case
 reply 1 "$(ready)"; reply 2 "$(verified)"; reply 3 "$(raised)"
 settings '{"tracker": "jira"}'
 chain 270
 ok "the chain reads no tracker setting: a file that names one runs like any other" '[ "$RC" = 0 ] && [ "$(calls)" = 3 ]'
 new_case
-BARE="$SB/case$cases/bare-plugin"
-mkdir -p "$BARE/chain" "$BARE/.claude-plugin"
-cp "$CHAIN" "$BARE/chain/chain.sh"
-cp "$PLUGIN_ROOT/.claude-plugin/plugin.json" "$BARE/.claude-plugin/plugin.json"
-before="$(repo_state)"
-CHAIN="$BARE/chain/chain.sh" chain 270
-ok "a plugin checkout with no interface file: the configuration code, naming the file, no stage started" '[ "$RC" = 78 ] && [ "$(calls)" = 0 ] && grep -qF "tracker/TRACKER.md" <<<"$OUTPUT" && [ "$(repo_state)" = "$before" ]'
-new_case
+reply 1 "$(ready)"; reply 2 "$(verified)"; reply 3 "$(raised)"
 SPACED="$SB/case$cases/my plugin"
-mkdir -p "$SPACED/chain" "$SPACED/.claude-plugin" "$SPACED/tracker"
-printf '# an interface file\n' > "$SPACED/tracker/TRACKER.md"
+mkdir -p "$SPACED/chain" "$SPACED/.claude-plugin"
 cp "$CHAIN" "$SPACED/chain/chain.sh"
 cp "$PLUGIN_ROOT/.claude-plugin/plugin.json" "$SPACED/.claude-plugin/plugin.json"
 CHAIN="$SPACED/chain/chain.sh" chain 270
-ok "a plugin checkout whose path holds whitespace: the configuration code, no stage started" '[ "$RC" = 78 ] && [ "$(calls)" = 0 ] && grep -qF "whitespace" <<<"$OUTPUT"'
+ok "a plugin checkout whose path holds whitespace runs like any other, its path one argument" '[ "$RC" = 0 ] && [ "$(grep -cF -- "--plugin-dir|$SPACED|" "$STUB_DIR/log" 2>/dev/null)" = 3 ]'
 
-echo "Each stage may call the tracker under the repository's own permissions:"
-TRACKER_RULE="Bash(bash $PLUGIN_ROOT/tracker/tracker.sh *)"
+echo "The chain passes no permission rule of its own:"
 new_case
 reply 1 "$(ready)"; reply 2 "$(verified)"; reply 3 "$(raised)"
-# Call 1 plays a stage that calls the tracker as a command file writes the call: it takes the
-# allow rule it was started with, checks the call matches it as the glob it is, and runs it.
-cat > "$STUB_DIR/act-1" <<'ACT'
-args=$(tail -n 1 "$STUB_DIR/log")
-rule=$(tr '|' '\n' <<<"$args" | sed -n '/^--allowedTools$/{n;p;}')
-glob=${rule#Bash(}; glob=${glob%)}
-call="bash $PLUGIN_ROOT/tracker/tracker.sh ref #270"
-[[ $call == $glob ]] && echo matched > "$STUB_DIR/tracker-matched"
-bash "$PLUGIN_ROOT/tracker/tracker.sh" ref '#270' > "$STUB_DIR/tracker-out"
-printf '%s' "${GAFFER_SETTINGS-unset}" > "$STUB_DIR/stage-settings"
-ACT
-GAFFER_SETTINGS="$SB/no-such-settings.json" PLUGIN_ROOT="$PLUGIN_ROOT" chain 270
-ok "every stage is allowed the tracker entry point of the checkout it loads" '[ "$RC" = 0 ] && [ "$(grep -cF -- "--allowedTools|$TRACKER_RULE|" "$STUB_DIR/log")" = 3 ]'
-ok "a stage's tracker call matches that rule, and runs" '[ -f "$STUB_DIR/tracker-matched" ] && [ "$(cat "$STUB_DIR/tracker-out" 2>/dev/null)" = 270 ]'
-ok "with no settings file the stages are given none, whatever the caller's environment held" '[ "$(cat "$STUB_DIR/stage-settings")" = unset ]'
+chain 270
+ok "under the repository's own permissions no stage is passed an allow rule" '[ "$RC" = 0 ] && [ "$(calls)" = 3 ] && ! grep -qF -- "--allowedTools|" "$STUB_DIR/log"'
 new_case
 reply 1 "$(ready)"; reply 2 "$(verified)"; reply 3 "$(raised)"
 chain --skip-permissions 270
-ok "with permissions skipped no rule is needed, and none is passed" '[ "$RC" = 0 ] && ! grep -qF -- "--allowedTools|" "$STUB_DIR/log"'
-new_case
-reply 1 "$(ready)"; reply 2 "$(verified)"; reply 3 "$(raised)"
-printf '{"pre_review": false}' > "$SB/case$cases/named.json"
-printf 'printf "%%s" "${GAFFER_SETTINGS-unset}" > "$STUB_DIR/stage-settings"\n' > "$STUB_DIR/act-1"
-chain --settings "$SB/case$cases/named.json" 270
-ok "the stages' tracker reads the settings file the chain read" '[ "$RC" = 0 ] && [ "$(cat "$STUB_DIR/stage-settings")" = "$SB/case$cases/named.json" ]'
-new_case
-reply 1 "$(ready)"; reply 2 "$(verified)"; reply 3 "$(raised)"
-settings '{"stages": {}}'
-printf 'printf "%%s" "${GAFFER_SETTINGS-unset}" > "$STUB_DIR/stage-settings"\n' > "$STUB_DIR/act-1"
-chain 270
-ok "… and the repository's own, as an absolute path" '[ "$RC" = 0 ] && [ "$(cat "$STUB_DIR/stage-settings")" = "$REPO/.gaffer/chain.json" ]'
+ok "… nor with permissions skipped" '[ "$RC" = 0 ] && [ "$(calls)" = 3 ] && ! grep -qF -- "--allowedTools|" "$STUB_DIR/log"'
 
 echo "The chain refuses to run from a checkout that is not a plugin:"
 new_case

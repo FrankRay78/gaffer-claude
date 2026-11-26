@@ -46,10 +46,9 @@
 # stage, and `stages`, each stage's `model` and `effort`, defaulting to the plugin's own choice
 # below where the file or the key is absent.
 # THE ISSUE is named however the repository's tracker names it, and this script never reads the
-# reference: it is handed to the stages as typed. Reading it is an operation of the tracker
-# interface (tracker/TRACKER.md, which every stage command loads), so the build stage's first read
-# of the issue is what stops a reference the tracker does not recognise, before anything changes.
-# Every stage is given the settings file this script read, through GAFFER_SETTINGS.
+# reference: it is handed to the stages as typed. Reading it is an operation of the tracker skill
+# (skills/tracker/SKILL.md, which every stage command loads), so the build stage's first read of
+# the issue is what stops a reference the tracker does not recognise, before anything changes.
 # Overrides: CHAIN_MODEL replaces every stage's model; the effort stays as configured.
 # CHAIN_STAGE_TIMEOUT (seconds) replaces every stage's time limit.
 
@@ -136,26 +135,6 @@ if [ -n "$settings_file" ]; then
     config_refused "the settings file $settings_file is not a JSON object" ;;
   esac
 fi
-if [ -n "$settings_file" ]; then
-  GAFFER_SETTINGS="$(cd "$(dirname "$settings_file")" && pwd)/$(basename "$settings_file")"
-  export GAFFER_SETTINGS
-else
-  unset GAFFER_SETTINGS
-fi
-# The checkout this script sits in must be the plugin, or --plugin-dir would load nothing and the
-# first stage would fail on an unknown command after a session had been spent, blaming the issue.
-[ -f "$PLUGIN_ROOT/.claude-plugin/plugin.json" ] \
-  || config_refused "$PLUGIN_ROOT is not a plugin checkout (no .claude-plugin/plugin.json), so the stages cannot be loaded from it"
-# Every stage reaches the issue tracker as the checkout's interface file says, so a checkout without
-# one cannot read the issue at all.
-[ -f "$PLUGIN_ROOT/tracker/TRACKER.md" ] \
-  || config_refused "$PLUGIN_ROOT has no tracker/TRACKER.md, the interface file every stage reads the issue tracker through"
-# The script the interface file may run, which each stage is allowed below. A stage writes its path
-# unquoted, the form an allow rule matches, so a path with whitespace splits and every call fails,
-# which would park the issue.
-TRACKER="$PLUGIN_ROOT/tracker/tracker.sh"
-[[ $PLUGIN_ROOT != *[[:space:]]* ]] \
-  || config_refused "the plugin checkout $PLUGIN_ROOT has whitespace in its path, which breaks the stages' unquoted tracker calls; move it"
 if [ "$PRE_REVIEW" = true ]; then
   STAGE_COUNT=4
   RAISE_PR_PROMPT="/gaffer:raise-pr --draft $issue"
@@ -176,6 +155,11 @@ if [ "$dry_run" = 1 ]; then
   if [ "$skip_permissions" = 1 ]; then echo "  permissions: skipped"; else echo "  permissions: the repository's rules"; fi
   exit 0
 fi
+
+# The checkout this script sits in must be the plugin, or --plugin-dir would load nothing and the
+# first stage would fail on an unknown command after a session had been spent, blaming the issue.
+[ -f "$PLUGIN_ROOT/.claude-plugin/plugin.json" ] \
+  || config_refused "$PLUGIN_ROOT is not a plugin checkout (no .claude-plugin/plugin.json), so the stages cannot be loaded from it"
 
 # An override that is not a whole number reaches `timeout` as a bad argument, which would surface
 # as an unhelpful launch failure blamed on the stage. Reject it here, where the cause is obvious.
@@ -518,15 +502,7 @@ run_stage() {
   # detector. --plugin-dir loads this checkout, so the /gaffer: command the prompt names resolves
   # to this checkout's copy whatever else is installed on the machine.
   local -a cmd=(claude -p "$prompt" --plugin-dir "$PLUGIN_ROOT" --model "$model" --effort "$effort" --output-format json)
-  # Under the repository's own rules a headless stage is silently denied anything they do not allow,
-  # so each stage is allowed the tracker script of the checkout it loads, as that checkout's
-  # interface file has it called. An interface file that reaches its tracker another way needs the
-  # user's own rules to allow that. Last on the line: the flag takes every word after it.
-  if [ "$skip_permissions" = 0 ]; then
-    cmd+=(--allowedTools "Bash(bash $TRACKER *)")
-  else
-    cmd+=(--dangerously-skip-permissions)
-  fi
+  [ "$skip_permissions" = 0 ] || cmd+=(--dangerously-skip-permissions)
   started=$SECONDS
   reply=$(CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 timeout --kill-after=60 "$limit" "${cmd[@]}" </dev/null)
   rc=$?
