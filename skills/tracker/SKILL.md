@@ -46,7 +46,7 @@ List the labels with `gh label list --repo <R> --limit 1000 --json name --jq '.[
 
 - Normal form: the bare number `N` for an issue of this repository, however it was written; `owner/repo#N` for another repository's.
 - Branch form: `N`.
-- Mention form, for commit subjects and prose: `#N`.
+- Mention form, for commit subjects and prose: `#N`. A commit message writes `Refs #N` and never `Fixes`, `Closes` or `Resolves`: GitHub closes the issue the moment such a commit reaches the default branch.
 
 Another repository's issue has no branch form. Where a command needs one, the operation fails.
 
@@ -65,6 +65,7 @@ gh api --paginate repos/<R>/issues/<N>/comments
 
 - If `url` does not end `/issues/<N>`, the number is a pull request: the operation fails.
 - `state`: open or closed.
+- `url`: the issue's page.
 - States: each label that the table above maps to a state.
 - Links: each URL in `closedByPullRequestsReferences` is a pull request that will close the issue. That field needs `gh` 2.73.0 or later; on an older `gh`, stop and say so.
 - Comments: read every page. Each has `id`, `user.login`, `created_at`, `body` and `html_url`.
