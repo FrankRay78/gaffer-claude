@@ -10,7 +10,7 @@ The approach is a *harness*: an agent constrained by context, feedback loops and
 
 ## The stages
 
-**Once per repository**, and again whenever you want a report of what is missing: `/gaffer:init` sets the repository up from what it already contains and raises the result as a pull request to edit or discard.
+**Once per repository**, and again whenever you want a report of what is missing: `/gaffer:init` sets the repository up from what it already contains, writing into the checkout as it stands for you to review and commit or discard.
 
 **The issue stage**, on `main`, with a person:
 

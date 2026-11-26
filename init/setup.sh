@@ -2,34 +2,40 @@
 #
 # setup.sh — the mechanical part of /gaffer:init.
 #
-# Wires a repository for the plugin: the checks that say it can take a pull request, and the files
-# every command assumes. The judgement part of init (reading the repository and filling
-# CONVENTIONS.md and REVIEW.md) is the command's; this script does only what a person would
-# otherwise type from docs/getting-started.md, so it can be tested without a model.
+# Wires a repository for the plugin, in the checkout as it stands: the files every command assumes.
+# The judgement part of init (reading the repository and filling CONVENTIONS.md and REVIEW.md) is
+# the command's; this script does only what a person would otherwise type from
+# docs/getting-started.md, so it can be tested without a model.
 #
-#   bash setup.sh check  [<repo>]   is the repository ready for init? Changes nothing.
-#   bash setup.sh files  [<repo>]   ensure the settings entries, the git-ignore line, the memory
-#                                   index and the CLAUDE.md imports.
+#   bash setup.sh check [<repo>]                 can init run here? Changes nothing.
+#   bash setup.sh files [--git-ignore] [<repo>]  ensure the settings entries, the git-ignore line,
+#                                                the memory index and the CLAUDE.md imports.
 #
-# <repo> defaults to the current directory and must be the root of a git work tree.
+# <repo> defaults to the current directory and must be the root of a git work tree. Any branch
+# will do, clean or not, with or without a remote: nothing here commits, pushes, switches branch
+# or reaches a host.
 #
-# OUTPUT. One line per item, `<status>: <item>`, so the command can list the outcome in the pull
-# request body. `files` prints `added:` for something it puts in place and `present:`
-# for something already there; `check` prints `ready: <default branch>` or `not ready: <reason>`.
-# `files` also prints `ignored: <path>` for any file it manages that the repository git-ignores,
-# since a pull request cannot carry it, and `skipped:` for the CONVENTIONS.md import when there is
-# no CONVENTIONS.md.
+# --git-ignore keeps what init writes out of git, for a repository whose owner has not agreed to
+# carry it. Each path init manages is added to .git/info/exclude, the ignore file that belongs to
+# this clone and is never committed, and .gitignore is left alone. A path git already tracks cannot
+# be hidden that way, so it is reported as `tracked:` and a change to it still shows.
+#
+# OUTPUT. One line per item, `<status>: <item>`, for the command's report. `check` prints `ready`
+# or `not ready: <reason>`. `files` prints `added:` for something it puts in place and `present:`
+# for something already there, and `skipped:` for the CONVENTIONS.md import when there is no
+# CONVENTIONS.md. Without --git-ignore it also prints `ignored: <path>` for any file it manages
+# that the repository git-ignores, since a commit will not carry it; with it, `tracked: <path>`
+# as above.
 #
 # IDEMPOTENT. Anything already present is left exactly as it is, including a setting the
 # repository has deliberately turned off: a second run of `files` changes no byte. A file is only
 # rewritten when something in it is missing; .claude/settings.json is then re-serialised by jq, so
 # its entries are kept but its indentation may change.
 #
-# EXIT. 0 on success (including `ready`); 1 on `not ready`, an unreadable settings file, or a gh
-# failure, with nothing changed by the step that failed; 2 on bad usage.
+# EXIT. 0 on success (including `ready`); 1 on `not ready` or an unreadable settings file, with
+# nothing changed by the step that failed; 2 on bad usage.
 #
-# Needs git, jq and, for `check`, gh signed in. Run with `bash`; nothing relies on an
-# executable bit.
+# Needs git and jq. Run with `bash`; nothing relies on an executable bit.
 
 set -uo pipefail
 
@@ -40,12 +46,24 @@ ASK_RULE='Bash(chmod:*)'
 SCRATCH='.claude/scratch/'
 MEMORY_INDEX='.claude/memory/MEMORY.md'
 MEMORY_HEADER='<!-- Memory index: one line per entry, `- [Title](file.md) — one-line hook`. -->'
-usage() { echo "usage: bash setup.sh {check|files} [<repo>]" >&2; exit 2; }
+# What --git-ignore keeps out of git: every path init or a later command writes, as patterns
+# anchored at the repository root.
+LOCAL_ONLY=(/CONVENTIONS.md /REVIEW.md /CLAUDE.md /.claude/settings.json /.claude/memory/ "/$SCRATCH")
+usage() { echo "usage: bash setup.sh check [<repo>] | files [--git-ignore] [<repo>]" >&2; exit 2; }
 fail() { echo "error: $*" >&2; exit 1; }
 
-[ $# -ge 1 ] && [ $# -le 2 ] || usage
-MODE=$1
-REPO=${2:-.}
+[ $# -ge 1 ] || usage
+MODE=$1; shift
+GIT_IGNORE=0
+REPO=''
+for arg in "$@"; do
+  case "$arg" in
+    --git-ignore) [ "$MODE" = files ] || usage; GIT_IGNORE=1 ;;
+    -*)           usage ;;
+    *)            [ -z "$REPO" ] || usage; REPO=$arg ;;
+  esac
+done
+REPO=${REPO:-.}
 cd "$REPO" 2>/dev/null || fail "no such directory: $REPO"
 top=$(git rev-parse --show-toplevel 2>/dev/null) || fail "not a git repository: $REPO"
 [ "$(cd "$top" && pwd -P)" = "$(pwd -P)" ] || fail "not the root of the work tree: $REPO (the root is $top)"
@@ -54,21 +72,8 @@ top=$(git rev-parse --show-toplevel 2>/dev/null) || fail "not a git repository: 
 # check
 # ---------------------------------------------------------------------------------------------
 do_check() {
-  local branch default ahead
   command -v jq >/dev/null || { echo "not ready: jq is not on the path"; exit 1; }
-  gh auth status >/dev/null 2>&1 || { echo "not ready: gh is not signed in (run \`gh auth login\`)"; exit 1; }
-  default=$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name 2>/dev/null) \
-    && [ -n "$default" ] \
-    || { echo "not ready: no GitHub repository found for this remote (gh repo view failed)"; exit 1; }
-  branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
-  [ "$branch" = "$default" ] || { echo "not ready: on branch '$branch', not the default branch '$default'"; exit 1; }
-  # --untracked-files=all: a status.showUntrackedFiles=no setting must not hide untracked files.
-  [ -z "$(git status --porcelain --untracked-files=all)" ] || { echo "not ready: the working tree has uncommitted changes"; exit 1; }
-  git rev-parse --verify -q "refs/remotes/origin/$default" >/dev/null \
-    || { echo "not ready: no origin/$default to compare with (gaffer needs the GitHub remote named origin, fetched)"; exit 1; }
-  ahead=$(git rev-list --count "origin/$default..HEAD")
-  [ "$ahead" = 0 ] || { echo "not ready: '$default' has $ahead commit(s) not on origin/$default; push or drop them first"; exit 1; }
-  echo "ready: $default"
+  echo "ready"
 }
 
 # ---------------------------------------------------------------------------------------------
@@ -114,14 +119,46 @@ report_settings() {
   done
 }
 
+# append_line <file> <line> — the line on a line of its own, whatever the file ends with.
+append_line() {
+  if [ -s "$1" ] && [ -n "$(tail -c1 "$1")" ]; then printf '\n' >> "$1"; fi
+  printf '%s\n' "$2" >> "$1"
+}
+
+# Whether git ignores the path, by any rule. --no-index, so a tracked file answers by the rules
+# too; a directory is asked about through a file inside it.
+is_ignored() {
+  local path=$1
+  case "$path" in */) path="${path}probe" ;; esac
+  git check-ignore -q --no-index "$path" 2>/dev/null
+}
+
 ensure_ignored() {
-  if git check-ignore -q --no-index "${SCRATCH}probe" 2>/dev/null; then
+  if is_ignored "$SCRATCH"; then
     echo "present: $SCRATCH git-ignored"
     return
   fi
-  if [ -s .gitignore ] && [ -n "$(tail -c1 .gitignore)" ]; then printf '\n' >> .gitignore; fi
-  printf '%s\n' "$SCRATCH" >> .gitignore
+  append_line .gitignore "$SCRATCH"
   echo "added: $SCRATCH git-ignored (.gitignore)"
+}
+
+# --git-ignore. git rev-parse finds the exclude file, which a linked work tree shares with its
+# main one.
+ensure_excluded() {
+  local exclude pattern path
+  exclude=$(git rev-parse --git-path info/exclude) || fail "could not find this clone's exclude file"
+  for pattern in "${LOCAL_ONLY[@]}"; do
+    path=${pattern#/}
+    if [ -n "$(git ls-files -- "$path")" ]; then
+      echo "tracked: $path"
+    elif is_ignored "$path"; then
+      echo "present: $path git-ignored"
+    else
+      mkdir -p "$(dirname "$exclude")"
+      append_line "$exclude" "$pattern"
+      echo "added: $path git-ignored (.git/info/exclude)"
+    fi
+  done
 }
 
 ensure_memory_index() {
@@ -155,17 +192,21 @@ ensure_import() {
 do_files() {
   command -v jq >/dev/null || fail "jq is not on the path"
   report_settings
-  ensure_ignored
+  [ "$GIT_IGNORE" = 1 ] || ensure_ignored
   ensure_memory_index
   # CONVENTIONS.md is imported only once it exists: the command writes it before calling this, and
   # leaves it out when the repository gave it nothing to say.
   if [ -f CONVENTIONS.md ]; then ensure_import CONVENTIONS.md; else echo "skipped: CLAUDE.md import of CONVENTIONS.md (no CONVENTIONS.md)"; fi
   ensure_import "$MEMORY_INDEX"
-  report_ignored .claude/settings.json "$MEMORY_INDEX" CLAUDE.md .gitignore CONVENTIONS.md REVIEW.md
+  if [ "$GIT_IGNORE" = 1 ]; then
+    ensure_excluded
+  else
+    report_ignored .claude/settings.json "$MEMORY_INDEX" CLAUDE.md .gitignore CONVENTIONS.md REVIEW.md
+  fi
 }
 
-# A file git ignores never reaches the pull request, even though it is written here. A file git
-# already tracks is not ignored, whatever the patterns say, so no --no-index here.
+# A file git ignores is in no commit, even though it is written here. A file git already tracks
+# is not ignored, whatever the patterns say, so no --no-index here.
 report_ignored() {
   local f
   for f in "$@"; do

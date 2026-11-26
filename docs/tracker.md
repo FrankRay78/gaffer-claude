@@ -84,6 +84,6 @@ With this plugin's file, those calls are:
 
 ## What stays on GitHub
 
-- **Pull requests and their reviews.** `raise-pr`, `pre-review`, `review-pr` and `review-followup` reach them with `gh`, and `init` delivers its recommendations as a pull request.
+- **Pull requests and their reviews.** `raise-pr`, `pre-review`, `review-pr` and `review-followup` reach them with `gh`.
 - **The unattended runner.** [`chain/chain-next.sh`](../chain/chain-next.sh) selects issues by label and parks them with `gh` itself, under the names its own `labels` setting gives ([`chain.md`](chain.md)). It loads no skill and stays GitHub-only: with another tracker, run `chain.sh` by hand. It refuses a `tracker` setting as a key it does not know.
 - **Links to files.** `draftissue` writes links to the repository's files relative to its root, which GitHub resolves in an issue, and `reviewissue` and `confirmissue` write them as absolute GitHub URLs, because that is where the code is hosted. A tracker that renders neither needs those rules changed in the commands.
