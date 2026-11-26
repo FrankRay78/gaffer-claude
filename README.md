@@ -2,7 +2,7 @@
 
 # gaffer
 
-A personal SDLC toolbox for Claude Code, packaged as a plugin so any repository can install it: a setup command that starts a repository's conventions from what it already contains, the issue stage (`draftissue` → `reviewissue` → `confirmissue`), the build chain (`build` → `verify` → `raise-pr`, with an opt-in `pre-review` after it, each ending on a machine-readable verdict), the scripts that run that chain unattended from a timer, a verified pull-request review with follow-up rounds, the periodic audits, and one hook that keeps an unattended run from stalling on `chmod`.
+A personal SDLC toolbox for Claude Code, packaged as a plugin so any repository can install it: a setup command that starts a repository's conventions from what it already contains, the issue stage (`draftissue` → `reviewissue` → `confirmissue`), the build chain (`build` → `verify` → `raise-pr` → `pre-review`, each ending on a machine-readable verdict), the scripts that run that chain unattended from a timer, a verified pull-request review with follow-up rounds, the periodic audits, and one hook that keeps an unattended run from stalling on `chmod`.
 
 > **Personal toolbox — breaking changes at any time.** Any command, heading, default, verdict field or hook may change or disappear in any commit, with no notice beyond the pull request that makes the change, which says what breaks and for whom. A consumer that cannot absorb that pins a commit, as *Installing* describes.
 
@@ -42,7 +42,7 @@ Commands are typed as `/gaffer:<name>`. Each command's prompt under [`commands/`
 | `capture-learnings` | Mines a session and a branch for durable learnings and applies the approved ones. | No — you pick candidates |
 | `context-gardening` | Prunes `CLAUDE.md`, its linked docs and `.claude/memory/`. | No — you pick candidates |
 
-Plus the **`no-chmod` hook**, which refuses a `chmod` that would set the executable bit and names `bash script.sh` instead, so an unattended run is redirected rather than stalled on a permission prompt, and **the chain** under [`chain/`](chain/): `chain.sh` runs the build stages for one issue — with the pre-review after them where a repository opts in — and `chain-next.sh` picks the next ready issue from a timer and parks the ones that fail. Both are run from a clone of this repository, not from the installed plugin ([`docs/chain.md`](docs/chain.md)).
+Plus the **`no-chmod` hook**, which refuses a `chmod` that would set the executable bit and names `bash script.sh` instead, so an unattended run is redirected rather than stalled on a permission prompt, and **the chain** under [`chain/`](chain/): `chain.sh` runs the build stages for one issue, ending in the pre-review, and `chain-next.sh` picks the next ready issue from a timer and parks the ones that fail. Both are run from a clone of this repository, not from the installed plugin ([`docs/chain.md`](docs/chain.md)).
 
 ## Installing
 

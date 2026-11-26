@@ -2,10 +2,9 @@
 #
 # chain.sh — carry one issue from a clean main to an open pull request, unattended.
 #
-# Runs the plugin's /gaffer:build, /gaffer:verify and /gaffer:raise-pr for the named issue — and,
-# where the settings opt in to the pre-review, /gaffer:raise-pr --draft and then /gaffer:pre-review
-# — each as its own headless `claude -p` process, starting a stage only after the previous one reported
-# its own success verdict at the end of its report. The plugin is loaded from this script's own
+# Runs the plugin's /gaffer:build, /gaffer:verify, /gaffer:raise-pr --draft and /gaffer:pre-review
+# for the named issue, each as its own headless `claude -p` process, starting a stage only after
+# the previous one reported its own success verdict at the end of its report. The plugin is loaded from this script's own
 # checkout — the directory above this one, which is the plugin root — never from whatever copy
 # happens to be installed on the machine, so the stage commands always come from the same commit
 # as the script reading their verdicts. Every stage starts a fresh session and inherits no
@@ -24,7 +23,7 @@
 # without reading the prose.
 #
 # WHAT IT COSTS. A full run spends substantial model time — the better part of an hour — and its
-# raise-pr stage opens a real pull request; the pre-review stage, where it runs, pushes a fix to it
+# raise-pr stage opens a real pull request as a draft; the pre-review stage pushes a fix to it
 # and marks it ready. The deliberate human act is starting the chain against
 # one named issue. The chain itself never resets, cleans, stashes, checks out, pushes or writes
 # a file; the branch and working tree are always exactly as the last stage left them, unless a
@@ -42,9 +41,10 @@
 # a missing one names itself. Tests: chain.tests.sh beside this file.
 #
 # SETTINGS. The target repository may carry .gaffer/chain.json (docs/chain.md); `--settings
-# <file>` names another. The chain reads two keys of it: `pre_review`, true to add the pre-review
-# stage, and `stages`, each stage's `model` and `effort`, defaulting to the plugin's own choice
-# below where the file or the key is absent.
+# <file>` names another. The chain reads one key of it, `stages`, each stage's `model` and `effort`,
+# defaulting to the plugin's own choice below where the file or the key is absent. It refuses a
+# file that still names `pre_review`, the opt-in that made the pre-review stage optional: every run
+# now includes it, and a file that says otherwise is one whose author expects something else.
 # THE ISSUE is named however the repository's tracker names it, and this script never reads the
 # reference: it is handed to the stages as typed. Reading it is an operation of the tracker skill
 # (skills/tracker/SKILL.md, which every stage command loads), so the build stage's first read of
@@ -119,29 +119,20 @@ config_refused() {
   exit "$CONFIG_EXIT"
 }
 
-# The pre-review opt-in, read before report mode because it decides which stages report mode
-# lists. Only this key and `stages` are read; a settings file that cannot be read at all is
-# refused here too, before anything else is checked.
-PRE_REVIEW=false
+# A settings file that cannot be read at all, or that names `pre_review`, is refused before report
+# mode, so a dry run refuses what a real run would. `stages` is read further down.
 if [ -n "$settings_file" ]; then
   # jq reads the file; without it the file would be blamed for a tool that is not installed.
   command -v jq >/dev/null 2>&1 || { echo "chain: refused — jq is not on PATH; no stage was started."; exit 1; }
   [ -f "$settings_file" ] || config_refused "the settings file $settings_file does not exist"
-  PRE_REVIEW=$(jq -e -r 'if type != "object" then error("x") elif .pre_review == null then false elif (.pre_review | type) == "boolean" then .pre_review else error("x") end' "$settings_file" 2>/dev/null)
-  case $PRE_REVIEW in true|false) ;; *)
-    if jq -e 'type == "object"' "$settings_file" >/dev/null 2>&1; then
-      config_refused "in $settings_file, pre_review is not true or false"
-    fi
-    config_refused "the settings file $settings_file is not a JSON object" ;;
-  esac
+  jq -e 'type == "object"' "$settings_file" >/dev/null 2>&1 \
+    || config_refused "the settings file $settings_file is not a JSON object"
+  if jq -e 'has("pre_review")' "$settings_file" >/dev/null; then
+    config_refused "in $settings_file, pre_review is a setting that no longer exists: every chain run includes the pre-review, so remove the key"
+  fi
 fi
-if [ "$PRE_REVIEW" = true ]; then
-  STAGE_COUNT=4
-  RAISE_PR_PROMPT="/gaffer:raise-pr --draft $issue"
-else
-  STAGE_COUNT=3
-  RAISE_PR_PROMPT="/gaffer:raise-pr $issue"
-fi
+STAGE_COUNT=4
+RAISE_PR_PROMPT="/gaffer:raise-pr --draft $issue"
 
 # Report mode reaches no git or claude command, so it cannot change anything.
 if [ "$dry_run" = 1 ]; then
@@ -149,7 +140,7 @@ if [ "$dry_run" = 1 ]; then
   echo "  1. build: /gaffer:build $issue"
   echo "  2. verify: /gaffer:verify"
   echo "  3. raise-pr: $RAISE_PR_PROMPT"
-  [ "$PRE_REVIEW" != true ] || echo "  4. pre-review: /gaffer:pre-review"
+  echo "  4. pre-review: /gaffer:pre-review"
   echo "  plugin: $PLUGIN_ROOT"
   if [ -n "$settings_file" ]; then echo "  settings: $settings_file"; else echo "  settings: none found, so the plugin's defaults"; fi
   if [ "$skip_permissions" = 1 ]; then echo "  permissions: skipped"; else echo "  permissions: the repository's rules"; fi
@@ -189,7 +180,7 @@ done
 
 # THE SETTINGS' STAGE ROWS, read before any stage starts, so a stage the file misdescribes stops the run
 # with nothing done and a stage that rewrites the file cannot change a later stage's model. The
-# `pre_review` opt-in was read before report mode; `stages` is read here. The runner reads the rest
+# file's shape was checked before report mode; `stages` is read here. The runner reads the rest
 # of the same file and checks the keys it owns.
 SETTINGS_STAGES='{}'
 if [ -n "$settings_file" ]; then
@@ -220,8 +211,6 @@ stage_model_effort() {
 BUILD_MODEL_EFFORT=$(stage_model_effort build "$DEFAULT_BUILD_MODEL_EFFORT") || exit "$CONFIG_EXIT"
 VERIFY_MODEL_EFFORT=$(stage_model_effort verify "$DEFAULT_VERIFY_MODEL_EFFORT") || exit "$CONFIG_EXIT"
 RAISE_PR_MODEL_EFFORT=$(stage_model_effort raise-pr "$DEFAULT_RAISE_PR_MODEL_EFFORT") || exit "$CONFIG_EXIT"
-# Read whether or not the stage runs, so a broken row is refused on the run that would first use it
-# and on every run before that alike.
 PRE_REVIEW_MODEL_EFFORT=$(stage_model_effort pre-review "$DEFAULT_PRE_REVIEW_MODEL_EFFORT") || exit "$CONFIG_EXIT"
 
 # HOW A STAGE'S VERDICT IS READ: BY POSITION. The verdict is whatever ENDS the report — the final
@@ -596,17 +585,15 @@ fi
 run_stage 1 build "/gaffer:build $issue" ready "$BUILD_LIMIT" "$BUILD_MODEL_EFFORT"
 run_stage 2 verify /gaffer:verify verified "$VERIFY_LIMIT" "$VERIFY_MODEL_EFFORT"
 run_stage 3 raise-pr "$RAISE_PR_PROMPT" raised "$RAISE_PR_LIMIT" "$RAISE_PR_MODEL_EFFORT"
-# Opted in, the pull request raise-pr opened is a draft, and this stage reviews it with the
-# repository's own review, fixes what that review confirms once, and marks it ready. A failure here
-# leaves the draft open — the chain never deletes or closes anything — and the runner says so.
-if [ "$PRE_REVIEW" = true ]; then
-  raised_pr=$STAGE_PAYLOAD
-  run_stage 4 pre-review /gaffer:pre-review pre-reviewed "$PRE_REVIEW_LIMIT" "$PRE_REVIEW_MODEL_EFFORT"
-  # The pre-review works on the pull request raise-pr opened, found from the branch; a verdict
-  # naming another one means it worked on something else.
-  [ "$STAGE_PAYLOAD" = "$raised_pr" ] \
-    || fail 4 pre-review "the pre-review verdict names $STAGE_PAYLOAD, not the pull request raise-pr opened ($raised_pr)"
-fi
+# The pull request raise-pr opened is a draft, and this stage reviews it with the repository's own
+# review, fixes what that review confirms once, and marks it ready. A failure here leaves the draft
+# open — the chain never deletes or closes anything — and the runner says so.
+raised_pr=$STAGE_PAYLOAD
+run_stage 4 pre-review /gaffer:pre-review pre-reviewed "$PRE_REVIEW_LIMIT" "$PRE_REVIEW_MODEL_EFFORT"
+# The pre-review works on the pull request raise-pr opened, found from the branch; a verdict
+# naming another one means it worked on something else.
+[ "$STAGE_PAYLOAD" = "$raised_pr" ] \
+  || fail 4 pre-review "the pre-review verdict names $STAGE_PAYLOAD, not the pull request raise-pr opened ($raised_pr)"
 
 # The payload the last stage's verdict was accepted on, so the URL reported is demonstrably the
 # one this script just checked against the pull request shape.

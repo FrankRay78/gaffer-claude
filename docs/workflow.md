@@ -26,8 +26,8 @@ The confirmed issue **is** the specification. There is no separate spec, plan or
 
 4. `/gaffer:build <N>` — branch, failing tests first, implementation, docs, all committed. Ends on a green, committed branch.
 5. `/gaffer:verify` — format, whole suite (the gate), one clean-context review, fix, re-run, commit. Ends on a green, reviewed branch, save the one carry-on described below; does not push.
-6. `/gaffer:raise-pr` — push and open the PR. A separate stage because it opens the pull request: only it, and the pre-review where a repository opts in to one, act on GitHub; everything before it is safe to re-run.
-7. `/gaffer:pre-review` (where the repository opts in) — `raise-pr` opens a draft; this runs `/gaffer:review-pr --dry-run` on it, fixes once what that review confirms, pushes the fix over a green suite and marks the PR ready, so the posted review reads a PR whose verified findings are already fixed. Minor notes are left for the author, and nothing it found is handed to the posted review.
+6. `/gaffer:raise-pr` — push and open the PR, as a draft in the chain. A separate stage because it opens the pull request: only it and the pre-review after it act on GitHub; everything before it is safe to re-run.
+7. `/gaffer:pre-review` — on every chain run. `raise-pr` opens a draft; this runs `/gaffer:review-pr --dry-run` on it, fixes once what that review confirms, pushes the fix over a green suite and marks the PR ready, so the posted review reads a PR whose verified findings are already fixed. Minor notes are left for the author, and nothing it found is handed to the posted review.
 
 **The review**, asynchronous:
 
@@ -43,7 +43,7 @@ The confirmed issue **is** the specification. There is no separate spec, plan or
 - **Gates attach to actions, not prose.** No hook can see an agent *say* "all tests pass", so enforcement hangs off a test run, a commit, a PR creation. When a gate can only see a proxy for the property you care about, move the gate to where the property is observable — which is why the completion gate is a real suite run at verify, not a turn-end hook.
 - **Format at verify cadence, with the command CI checks.** Once before the suite, once more if the review changed anything. Formatting on every commit taxes every commit to fix what no reviewer would catch.
 - **Review once, in clean context, and keep the fix small.** Reviewers see the diff, not the conversation. A finding is checked before it is acted on; a severity may be raised, never lowered. The review's fix is not re-reviewed by the same stage — looping found as much in each fix as in the branch — so it is held to the smallest change that removes the defect, and the PR review reads it.
-- **Two reviews.** Review A is inside `/gaffer:verify`, synchronous. Review B is `/gaffer:review-pr` on the opened PR, for the person who merges. Nothing waits on B. Where a repository opts in, `/gaffer:pre-review` runs B's own method once as a dry run on the draft and fixes what it confirms before B is posted; it does not replace A, which asks generic questions B does not.
+- **Two reviews.** Review A is inside `/gaffer:verify`, synchronous. Review B is `/gaffer:review-pr` on the opened PR, for the person who merges. Nothing waits on B. In the chain, `/gaffer:pre-review` runs B's own method once as a dry run on the draft and fixes what it confirms before B is posted; it does not replace A, which asks generic questions B does not.
 - **One mission per branch.** When a second mission surfaces mid-flight, ship the first with a known issue and open another branch.
 - **Check results, don't trust reports.** An agent run reports success whenever the model finishes its turn. Every unattended use checks the post-condition that matters — a verdict, a posted review, a label — and fails when it does not hold.
 
