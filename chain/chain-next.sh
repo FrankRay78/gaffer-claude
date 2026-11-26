@@ -75,12 +75,8 @@ read_settings() {
   [ -f "$f" ] || die "refused — the settings file $f does not exist; nothing was run."
   s=$(jq -e 'if type == "object" then . else error("x") end' "$f" 2>/dev/null) \
     || die "refused — the settings file $f is not a JSON object; nothing was run."
-  unknown=$(jq -r 'keys - ["clone", "writers", "labels", "stages", "skip_permissions", "state_dir", "pre_review", "github"] | .[]' <<<"$s" | paste -sd' ')
+  unknown=$(jq -r 'keys - ["clone", "writers", "labels", "stages", "skip_permissions", "state_dir", "pre_review"] | .[]' <<<"$s" | paste -sd' ')
   [ -z "$unknown" ] || die "refused — $f names a setting this runner does not know: $unknown. Nothing was run."
-  # `github` is the GitHub tracker script's own key (tracker/tracker.sh), which checks github.labels
-  # itself; the runner, which selects and parks issues on GitHub alone, only lets it through.
-  jq -e '.github == null or (.github | type) == "object"' <<<"$s" >/dev/null \
-    || die "refused — in $f, github is not an object; nothing was run."
   CLONE=$(jq -r 'if (.clone | type) == "string" and (.clone | length) > 0 then .clone else error("x") end' <<<"$s" 2>/dev/null) \
     || die "refused — $f must name the runner's dedicated clone as \"clone\"; nothing was run."
   CLONE=$(expand_home "$CLONE")
@@ -193,11 +189,11 @@ check_plugin() {
     || die "refused — $PLUGIN_ROOT has local commits its origin's main does not; nothing was run."
 }
 
-# check_repo — gh, asked with no repository named, chooses the one the tracker interface sends every
+# check_repo — gh, asked with no repository named, must choose the one the tracker skill sends every
 # issue call to: origin's. The runner's own gh calls name no repository, so gh chooses; in a fork
 # clone it chooses upstream (gh repo set-default, or an `upstream` remote), and the runner would
 # select and park upstream's #N while the chain builds origin's. Refused rather than guessed at.
-# Where origin is not a GitHub URL the tracker leaves the choice to gh too, so the two agree.
+# Where origin is not a GitHub URL there is no repository to compare, and the check passes.
 check_repo() {
   local url here chosen fix
   url=$(git remote get-url origin 2>/dev/null) || return 0
