@@ -20,7 +20,12 @@ trap 'rm -rf "$SB"' EXIT
 # the config directory's plugins/, since that is how init usually runs. LOCAL_SETUP is this
 # checkout's own copy, as `claude --plugin-dir <checkout>` runs it.
 export CLAUDE_CONFIG_DIR="$SB/config"
-install_copy() { mkdir -p "$1/init" && cp "$HERE/setup.sh" "$1/init/setup.sh"; }
+# install_copy <plugin root> [<marketplace name>] — setup.sh and the marketplace manifest it reads
+# its marketplace from; a name stands in for a distribution published under another marketplace.
+install_copy() {
+  mkdir -p "$1/init" "$1/.claude-plugin" && cp "$HERE/setup.sh" "$1/init/setup.sh"
+  jq --arg n "${2:-gaffer-claude}" '.name = $n' "$HERE/../.claude-plugin/marketplace.json" > "$1/.claude-plugin/marketplace.json"
+}
 install_copy "$CLAUDE_CONFIG_DIR/plugins/cache/gaffer-claude/gaffer/0.0.0"
 SETUP="$CLAUDE_CONFIG_DIR/plugins/cache/gaffer-claude/gaffer/0.0.0/init/setup.sh"
 LOCAL_SETUP="$HERE/setup.sh"
@@ -231,6 +236,30 @@ ok "gaffer entries already there are kept and reported present" 'jq -e ".enabled
 fresh; install_copy "$SB/home/.claude/plugins/cache/gaffer-claude/gaffer/0.0.0"
 OUT=$(env -u CLAUDE_CONFIG_DIR HOME="$SB/home" bash "$SB/home/.claude/plugins/cache/gaffer-claude/gaffer/0.0.0/init/setup.sh" files "$R" 2>&1)
 ok "no CLAUDE_CONFIG_DIR → an install under ~/.claude/plugins writes the gaffer entries" 'jq -e ".enabledPlugins[\"gaffer@gaffer-claude\"] == true" "$R/.claude/settings.json" >/dev/null && ! grep -q "^skipped: .claude/settings.json" <<<"$OUT"'
+
+echo "files, from a distribution published under another marketplace name:"
+JIRA="$CLAUDE_CONFIG_DIR/plugins/cache/gaffer-claude-jira/gaffer/0.0.0"
+install_copy "$JIRA" gaffer-claude-jira
+fresh; OUT=$(bash "$JIRA/init/setup.sh" files "$R" 2>&1); RC=$?
+ok "exits 0" '[ $RC = 0 ]'
+ok "its own marketplace is written, from the repository of that name" 'jq -e ".extraKnownMarketplaces == {\"gaffer-claude-jira\": {source: {source: \"github\", repo: \"FrankRay78/gaffer-claude-jira\"}}}" "$R/.claude/settings.json" >/dev/null'
+ok "its own gaffer is enabled, and the upstream one is not named" 'jq -e ".enabledPlugins[\"gaffer@gaffer-claude-jira\"] == true and (.enabledPlugins | has(\"gaffer@gaffer-claude\") | not)" "$R/.claude/settings.json" >/dev/null'
+ok "both reported as added under that name" 'grep -qx "added: .claude/settings.json marketplace gaffer-claude-jira" <<<"$OUT" && grep -qx "added: .claude/settings.json plugin gaffer@gaffer-claude-jira" <<<"$OUT"'
+before=$(snapshot); OUT=$(bash "$JIRA/init/setup.sh" files "$R" 2>&1)
+ok "second run changes no byte" '[ "$(snapshot)" = "$before" ] && ! grep -q "^added:" <<<"$OUT"'
+
+echo "files, with no usable marketplace manifest:"
+NOMAN="$CLAUDE_CONFIG_DIR/plugins/cache/gaffer-claude/gaffer/0.0.1"
+install_copy "$NOMAN"; rm "$NOMAN/.claude-plugin/marketplace.json"
+fresh; before=$(snapshot); OUT=$(bash "$NOMAN/init/setup.sh" files "$R" 2>&1); RC=$?
+ok "manifest missing → error naming it, nothing changed" '[ $RC = 1 ] && grep -q "cannot read the marketplace name from .*/.claude-plugin/marketplace.json" <<<"$OUT" && [ "$(snapshot)" = "$before" ]'
+echo '{"name":"../x y"}' > "$NOMAN/.claude-plugin/marketplace.json"
+fresh; before=$(snapshot); OUT=$(bash "$NOMAN/init/setup.sh" files "$R" 2>&1); RC=$?
+ok "a name that is no marketplace name → error, nothing changed" '[ $RC = 1 ] && grep -q "cannot read the marketplace name" <<<"$OUT" && [ "$(snapshot)" = "$before" ]'
+fresh; echo "# Conventions" > "$R/CONVENTIONS.md"; OUT=$(bash "$NOMAN/init/setup.sh" files --git-ignore "$R" 2>&1); RC=$?
+ok "--git-ignore → error, but what was already written is hidden" '[ $RC = 1 ] && grep -q "cannot read the marketplace name" <<<"$OUT" && [ -z "$(status)" ]'
+fresh; OUT=$(bash "$NOMAN/init/setup.sh" check "$R" 2>&1); RC=$?
+ok "check does not read the manifest" '[ $RC = 0 ] && [ "$OUT" = "ready" ]'
 
 echo "modes that are gone:"
 fresh; run labels "$R"
