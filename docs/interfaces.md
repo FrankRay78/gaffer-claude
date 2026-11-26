@@ -18,26 +18,26 @@ The commands read conventions and review criteria section by section, from the p
 
 ## 3. The hook
 
-`hooks/hooks.json` runs `no-chmod.sh` on every Bash call. It refuses a `chmod` that sets the executable bit, naming `bash script.sh`, and fails open on a missing tool or bad input. Its test matrix, `hooks/no-chmod.tests.sh`, is the specification, including its known limits. The repository keeps `Bash(chmod:*)` on `permissions.ask` as the backstop. The plugin ships no other hook. Two other scripts run inside a session: the tracker interface (§6), and `init/setup.sh`, called only by `/gaffer:init`, which writes only the setup the README's *What a repository needs* lists — the `.claude/settings.json` entries, the git-ignore line, the memory index and `CLAUDE.md` imports. A repository's own gates stay in the repository, named under `CONVENTIONS.md` → *Hooks, scripts and plugins* so the commands weigh them.
+`hooks/hooks.json` runs `no-chmod.sh` on every Bash call. It refuses a `chmod` that sets the executable bit, naming `bash script.sh`, and fails open on a missing tool or bad input. Its test matrix, `hooks/no-chmod.tests.sh`, is the specification, including its known limits. The repository keeps `Bash(chmod:*)` on `permissions.ask` as the backstop. The plugin ships no other hook. Its one other script run inside a session, `init/setup.sh`, is called only by `/gaffer:init` and writes only the setup the README's *What a repository needs* lists — the `.claude/settings.json` entries, the git-ignore line, the memory index and `CLAUDE.md` imports. A repository's own gates stay in the repository, named under `CONVENTIONS.md` → *Hooks, scripts and plugins* so the commands weigh them.
 
 ## 4. The chain settings file
 
-`.gaffer/chain.json` in the repository: the runner's clone and the accounts whose issues it may build, with defaults for the labels, the pre-review opt-in, each stage's model and effort, the permissions opt-in and where state is kept — read by the chain scripts — and the issue tracker, under `tracker`, with the tracker adapter's own key (`github`) — read by the tracker interface (§6), inside a session as well as by the chain. A missing file or key means GitHub. [`chain.md`](chain.md) → *The settings file* is its one statement; a key the runner does not know is refused.
+`.gaffer/chain.json` in the repository, read by the chain scripts and by nothing inside a session: the runner's clone and the accounts whose issues it may build, with defaults for the runner's labels, the pre-review opt-in, each stage's model and effort, the permissions opt-in and where state is kept. It names no tracker. [`chain.md`](chain.md) → *The settings file* is its one statement; a key the runner does not know is refused.
 
 ## 5. Conventions the commands assume
 
-Not configurable, except the label names below that a setting renames; a repository that differs otherwise changes the command, by an issue here.
+Not configurable; a repository that differs changes the command, by an issue here.
 
 - `CLAUDE.md` at the root is the project context every command reads first.
 - `.claude/memory/` holds durable learnings, one file per fact, indexed in `MEMORY.md`, which `CLAUDE.md` loads into every session with the line `@.claude/memory/MEMORY.md`. Claude Code does not read the folder on its own.
 - `.claude/scratch/`, git-ignored, holds every working file.
 - `main` is the default branch; `build` branches from `origin/main` and names branches `feature/<N>-<slug>`, where `<N>` is the issue reference in the tracker's branch form, which `raise-pr` reads back.
-- The tracker interface speaks one closed list of states (§6): `needs-answers` and `ready` carry the issue stage's state, `parked` the runner's and `audit` the audit's. On GitHub they are the labels `needs answers`, `ready`, `parked` and `audit`, which `github.labels` in the settings file (§4) may rename. `audit-codebase` never applies `ready`, `review`, `confirm` or `parked`, because automation may react to them.
+- The commands speak of four tracker states (§6): `needs-answers` and `ready` carry the issue stage's state, `parked` the runner's and `audit` the audit's. On GitHub they are the labels `needs answers`, `ready`, `parked` and `audit`, which the tracker skill names. `audit-codebase` puts its issue in `audit` alone, never `ready` or `parked`, because automation reacts to them.
 - Markers let the commands find each other's output: the tracker's `review` and `confirmed-decisions` markers on issues (on GitHub `<!-- speckit:review -->` and `<!-- confirmed-decisions -->`), and `<!-- review-pr -->` on pull request reviews.
 
-## 6. The tracker interface
+## 6. The tracker skill
 
-`tracker/tracker.sh`, the one way a command or the chain reaches the issue tracker: it reads the `tracker` setting (§4) and hands each operation to that tracker's adapter under `tracker/adapters/`, of which the plugin ships `github`. The commands name states and markers from closed lists, never labels, and take issue content back as JSON. [`tracker.md`](tracker.md) is its one statement — every operation, its output and exit codes, the permissions it needs, and how to write and check an adapter. Pull requests and reviews are outside it and stay on GitHub, as does the runner, `chain/chain-next.sh`.
+[`skills/tracker/SKILL.md`](../skills/tracker/SKILL.md), loaded as `gaffer:tracker`, is the one way a command reaches the issue tracker. A command names an operation — `tracker: view <ref>` — with states and markers by name, never a label, a `gh` issue call or a closing keyword, and loads the skill before its first one; the skill says how to carry each out, on GitHub with `gh`. A repository whose issues live elsewhere runs a clone of the plugin with that one file replaced, and nothing else changed. [`tracker.md`](tracker.md) is its one statement — every operation and what it must yield, the states and markers, and what a headless stage needs allowed. Pull requests and reviews are outside it and stay on GitHub, as does the runner, `chain/chain-next.sh`. The chain scripts read no issue reference and reach no tracker: `chain.sh` hands its argument to the first stage as typed.
 
 ## What does not cross
 

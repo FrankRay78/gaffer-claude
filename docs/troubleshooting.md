@@ -30,7 +30,7 @@ Run the script as `bash script.sh`, or record the bit on a committed file with `
 
 ## A CI review ran green but posted nothing
 
-The action exits green whenever the model finishes. Add the post-condition step ([`unattended.md`](unattended.md), *In CI*), then read the log for the refused tool call — usually a `gh` subcommand or the `tracker.sh` rule missing from `--allowedTools`, or a scratch path under `.claude/`.
+The action exits green whenever the model finishes. Add the post-condition step ([`unattended.md`](unattended.md), *In CI*), then read the log for the refused tool call — usually a `gh` subcommand missing from `--allowedTools`, or a scratch path under `.claude/`.
 
 ## The runner parked an issue
 
