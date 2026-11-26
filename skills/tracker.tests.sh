@@ -6,7 +6,8 @@
 # its own: replace the skill file and the test follows it. Each call is reduced to a pattern, and a
 # command, default, template or script that matches one fails the run. chain/chain-next.sh and its
 # matrix are exempt: the runner selects and parks issues itself. docs/ is not searched, because the
-# docs name the calls on purpose. Run it after any edit to the skill file, a command or a script.
+# docs name the calls on purpose, and nor is .github/, which is this repository's own CI and ships
+# to no consuming repository. Run it after any edit to the skill file, a command or a script.
 #
 # What it does not hold: a label or a closing keyword written in a command, and a call written in
 # another form than the skill file's. Those are held at review (docs/contributing.md).
@@ -23,7 +24,7 @@ SB="$(mktemp -d)"
 trap 'rm -rf "$SB"' EXIT
 
 # Where a tracker call may not appear, relative to a checkout's root.
-GUARDED="commands defaults templates chain init hooks .github"
+GUARDED="commands defaults templates chain init hooks"
 
 # calls <skill file> — every line inside a bash, sh or shell fence, one call a line.
 calls() {

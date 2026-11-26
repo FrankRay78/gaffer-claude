@@ -1,0 +1,45 @@
+name: Link Check
+
+# Every markdown link in a tracked `*.md` file that points at a file in this repository resolves to
+# a file that is there — whether relative or written as a full link to a path on `main` — as does
+# the `#heading` it names, or the `→ *Heading*` named in prose directly after it. Nothing is
+# fetched: a full link is mapped onto the checkout and read locally, so the verdict depends on this
+# branch's files and not on any third-party site being reachable.
+#
+# Pre-merge, and only here. A branch that renames a doc or a heading leaves its inbound pointers in
+# places nobody opens at the time: a command, CONVENTIONS.md, REVIEW.md, another doc. This job is
+# where that shows up while the change is still a pull request.
+#
+# Deliberately its own workflow rather than a job in shell-tests.yml: the job name becomes the
+# required-status-check context, and keeping it here means a change to the shell-test discovery can
+# never rename it out from under the ruleset.
+#
+# The check's own behaviour is gated separately — .github/scripts/link-check.tests.sh is a
+# committed `*.tests.sh`, so shell-tests.yml discovers and runs it with no entry needed here.
+
+on:
+  pull_request:
+    branches: [ "main" ]
+
+permissions:
+  contents: read
+
+jobs:
+  # Do NOT add a `paths:` filter or an `if:` condition to this job. To GitHub a skipped job is not
+  # a failure, so a required `link-check` context is satisfied by one that never ran — and since
+  # `pull_request` workflows are evaluated from the head ref, the branch adding the filter is the
+  # branch it stops gating. A docs-only `paths` filter would be especially wrong here: a branch
+  # that deletes a linked-to script under `chain/` or `hooks/` is exactly what this catches.
+  link-check:
+    name: link-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Check every repository reference resolves
+      # No token and no network: the check reads the checkout and nothing else. The file list comes
+      # from `git ls-files`, so the default fetch depth is enough — no history is read.
+      run: bash .github/scripts/link-check.sh
