@@ -1,6 +1,6 @@
 ---
 description: Fold author answers from a /gaffer:reviewissue comment into a Confirmed decisions list on the issue body, then delete the review comment.
-argument-hint: "[issue number or URL]"
+argument-hint: "[issue reference]"
 ---
 
 # confirmissue
@@ -15,7 +15,7 @@ Take a `/gaffer:reviewissue` comment that the author has answered inline, fold t
 $ARGUMENTS
 ```
 
-`$ARGUMENTS` is an issue reference the repository's tracker recognises — on GitHub, an issue number (e.g. `25`) or a full issue URL (e.g. `https://github.com/OWNER/REPO/issues/25`).
+`$ARGUMENTS` is an issue reference the repository's tracker recognises, such as `25` or `#25`.
 
 You **MUST** resolve this before proceeding. If empty, ask the user which issue to confirm.
 

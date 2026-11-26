@@ -1,11 +1,11 @@
 ---
-description: Turn an idea, a document, a backlog item or an existing issue into a needs-first GitHub issue, and raise it, ready for /gaffer:reviewissue and then /gaffer:build.
-argument-hint: "[idea | document path | issue URL | backlog <number>]"
+description: Turn an idea, a document, a backlog item or an existing issue into a needs-first issue, and raise it, ready for /gaffer:reviewissue and then /gaffer:build.
+argument-hint: "[idea | document path | issue reference | backlog <number>]"
 ---
 
 # draftissue
 
-Turn an idea, a document or an existing issue into a needs-first GitHub issue, and raise it, ready for `/gaffer:reviewissue` and then `/gaffer:build`.
+Turn an idea, a document or an existing issue into a needs-first issue, and raise it, ready for `/gaffer:reviewissue` and then `/gaffer:build`.
 
 ---
 
@@ -18,7 +18,7 @@ $ARGUMENTS
 `$ARGUMENTS` names the source of the issue. It is one of:
 
 - **A free-text idea** — a sentence, a paragraph or rough bullets describing what the user wants.
-- **An existing issue** — an issue reference the repository's tracker recognises (on GitHub, `#N`, a bare number, or an issue URL). This is a **migration**: the old issue is the raw material, and Step 5 offers to close it once the new one exists.
+- **An existing issue** — an issue reference the repository's tracker recognises, such as `#12`. This is a **migration**: the old issue is the raw material, and Step 5 offers to close it once the new one exists.
 - **A document** — a URL or a repository path, optionally narrowed to one part of it ("the 'Offline mode' section of docs/ideas.md").
 - **A backlog item** — `backlog <number>` or `item <number>`. `CONVENTIONS.md` → *Issue sources* names the backlog it refers to. If that section lists none, ask the user where the backlog is; do not guess.
 

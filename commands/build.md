@@ -1,11 +1,11 @@
 ---
-description: Build one GitHub issue to a green, committed feature branch — reads the issue's acceptance criteria, drives RED-GREEN-REFACTOR, and stops. Runs unattended; hand the result to /gaffer:verify.
-argument-hint: "<issue number or URL>"
+description: Build one issue to a green, committed feature branch — reads the issue's acceptance criteria, drives RED-GREEN-REFACTOR, and stops. Runs unattended; hand the result to /gaffer:verify.
+argument-hint: "<issue reference>"
 ---
 
 Read `CLAUDE.md` for project context, and the conventions as *Repository conventions* below says, before proceeding.
 
-`/gaffer:build` is the first stage in the `/gaffer:build` → `/gaffer:verify` → `/gaffer:raise-pr` chain: it turns **one GitHub issue** into a green, committed feature branch. It does not format, review, push, open a PR, or merge — `/gaffer:verify` and `/gaffer:raise-pr` own all of that, and you run them yourself afterwards.
+`/gaffer:build` is the first stage in the `/gaffer:build` → `/gaffer:verify` → `/gaffer:raise-pr` chain: it turns **one issue** into a green, committed feature branch. It does not format, review, push, open a PR, or merge — `/gaffer:verify` and `/gaffer:raise-pr` own all of that, and you run them yourself afterwards.
 
 `/gaffer:build` is designed to run to completion **without prompting** once it has an issue number, so it can be driven back-to-back as well as invoked directly.
 
@@ -19,7 +19,7 @@ Read `CLAUDE.md` for project context, and the conventions as *Repository convent
 $ARGUMENTS
 ```
 
-An issue reference the repository's tracker recognises — on GitHub bare (`239`), hashed (`#239`), or a full issue URL. **If it is empty, ask for one and wait.** That question is the only interaction `/gaffer:build` may have with the invoker; everything after it runs unattended.
+An issue reference the repository's tracker recognises, such as `239` or `#239`. **If it is empty, ask for one and wait.** That question is the only interaction `/gaffer:build` may have with the invoker; everything after it runs unattended.
 
 **Load the `gaffer:tracker` skill with the Skill tool before the first tracker operation.** A line written `tracker: <operation> <arguments>` names an operation that skill says how to carry out on this repository's tracker; it is notation, not a command to run.
 

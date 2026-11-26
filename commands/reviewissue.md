@@ -1,11 +1,11 @@
 ---
-description: Review a GitHub issue before building, posting gaps and clarifications as an inline-answerable comment; re-runs edit the same comment in place.
-argument-hint: "[issue number or URL]"
+description: Review an issue before building, posting gaps and clarifications as an inline-answerable comment; re-runs edit the same comment in place.
+argument-hint: "[issue reference]"
 ---
 
 # reviewissue
 
-Review a GitHub issue before building it — identify gaps, clarifications, and context the implementer will need, then post the review as a comment on the issue for inline answering. Re-runs of this command **edit the same comment in place** to expand any question where the author asked for more options or said "not sure" — substantive answers are left untouched for `/gaffer:confirmissue` to fold into the issue body, which deletes the comment once they are folded.
+Review an issue before building it — identify gaps, clarifications, and context the implementer will need, then post the review as a comment on the issue for inline answering. Re-runs of this command **edit the same comment in place** to expand any question where the author asked for more options or said "not sure" — substantive answers are left untouched for `/gaffer:confirmissue` to fold into the issue body, which deletes the comment once they are folded.
 
 ---
 
@@ -15,7 +15,7 @@ Review a GitHub issue before building it — identify gaps, clarifications, and 
 $ARGUMENTS
 ```
 
-`$ARGUMENTS` is an issue reference the repository's tracker recognises — on GitHub, an issue number (e.g. `19`) or a full issue URL (e.g. `https://github.com/OWNER/REPO/issues/19`).
+`$ARGUMENTS` is an issue reference the repository's tracker recognises, such as `19` or `#19`.
 
 You **MUST** resolve this before proceeding. If empty, ask the user which issue to review.
 
@@ -40,7 +40,7 @@ A section under any other heading is read too, and applied where its text says. 
 
 This command is a **pre-build gate**. It sits *before* `/gaffer:build`.
 
-Its job is to read an unrefined GitHub issue, cross-reference it against the current codebase (architecture, existing modules, test data, docs), and surface everything that would otherwise block or distort the build:
+Its job is to read an unrefined issue, cross-reference it against the current codebase (architecture, existing modules, test data, docs), and surface everything that would otherwise block or distort the build:
 
 - ambiguities in scope
 - undefined semantics (matching rules, thresholds, field lists)
@@ -49,7 +49,7 @@ Its job is to read an unrefined GitHub issue, cross-reference it against the cur
 - inconsistencies between the issue text and reality on disk
 - missing non-functional requirements (auth, rate limits, performance)
 
-The output is a **single GitHub comment** posted on the issue, structured so the issue author can record answers inline beneath each question.
+The output is a **single comment** posted on the issue, structured so the issue author can record answers inline beneath each question.
 
 ---
 
@@ -330,6 +330,6 @@ Do **not** restate the full review in chat — it lives on the issue.
 - The issue has already been confirmed — it is in the `ready` state and has a `## Confirmed decisions` section. Reopen it deliberately (step 1) if its scope has moved.
 - The issue is already well-specified and needs no clarification.
 - The user wants implementation, not issue refinement — that is `/gaffer:build`.
-- There is no GitHub issue yet — use `/gaffer:draftissue` to raise one first.
+- There is no issue yet — use `/gaffer:draftissue` to raise one first.
 
 ---

@@ -1,5 +1,5 @@
 ---
-description: Whole-codebase audit across five lenses (conformance to the repository's stated rules, test-suite integrity, docs against code, harness consistency, dead code and duplication). Every finding is challenged by a separate agent before it is reported. Run after a batch of merges or before a release, not per-PR. Records findings only — changes no file, and raises one GitHub issue.
+description: Whole-codebase audit across five lenses (conformance to the repository's stated rules, test-suite integrity, docs against code, harness consistency, dead code and duplication). Every finding is challenged by a separate agent before it is reported. Run after a batch of merges or before a release, not per-PR. Records findings only — changes no file, and raises one issue.
 ---
 
 Read `CLAUDE.md` for project context, and the conventions as *Repository conventions* below says, before proceeding.
@@ -10,7 +10,7 @@ Read `CLAUDE.md` for project context, and the conventions as *Repository convent
 
 **This command records findings only. It changes no tracked file, deletes nothing outside its own working directory, and opens no pull request.** Every fix is separate, individually scoped work. That keeps the audit cheap to re-run and safe to leave running.
 
-**Findings live in one GitHub issue, not in the repo.** A committed checklist goes stale the moment its first item is done, and the work is tracked in the issue tracker anyway. Working files go under `.claude/scratch/audit/`, which is git-ignored.
+**Findings live in one issue, not in the repo.** A committed checklist goes stale the moment its first item is done, and the work is tracked in the issue tracker anyway. Working files go under `.claude/scratch/audit/`, which is git-ignored.
 
 ## Argument
 

@@ -1,6 +1,6 @@
 ---
 description: Raise a PR for the current feature branch — composes a PR body sized to the change and pushes. The review-pr workflow reviews the PR once it is opened ready, or marked ready.
-argument-hint: "[--draft] [issue number or URL]"
+argument-hint: "[--draft] [issue reference]"
 ---
 
 Read `CLAUDE.md` for project context, and the conventions as *Repository conventions* below says, before proceeding.
@@ -11,7 +11,7 @@ Read `CLAUDE.md` for project context, and the conventions as *Repository convent
 $ARGUMENTS
 ```
 
-Optionally an issue reference the repository's tracker recognises — on GitHub bare (`248`), hashed (`#248`), or a full issue URL — naming the issue this PR closes. Empty is the normal case and is **not** a prompt: step 4 infers a candidate from the branch instead. `/gaffer:raise-pr` never asks the invoker for anything, so it stays composable by an automated chain with no interactive gate.
+Optionally an issue reference the repository's tracker recognises, such as `248` or `#248`, naming the issue this PR closes. Empty is the normal case and is **not** a prompt: step 4 infers a candidate from the branch instead. `/gaffer:raise-pr` never asks the invoker for anything, so it stays composable by an automated chain with no interactive gate.
 
 **Load the `gaffer:tracker` skill with the Skill tool before the first tracker operation.** A line written `tracker: <operation> <arguments>` names an operation that skill says how to carry out on this repository's tracker; it is notation, not a command to run.
 
