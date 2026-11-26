@@ -7,7 +7,7 @@ description: How gaffer's commands reach the issue tracker. Load before carrying
 
 A gaffer command names a tracker operation as `tracker: <operation> <arguments>`. This file says how to carry each one out with `gh`. A person may ask for one directly, as `/gaffer:tracker <operation> <arguments>`.
 
-The calls below are the ones to make. If `gh` rejects a flag or a field, read its error, adjust the call, and still deliver what the operation yields. Never skip an operation, and never report one done that failed.
+The calls below are the ones to make, each in a `bash` fence. If `gh` rejects a flag or a field, read its error, adjust the call, and still deliver what the operation yields. Never skip an operation, and never report one done that failed.
 
 ## Ground rules
 
@@ -37,9 +37,17 @@ Label names compare without regard to case.
 
 ### states
 
-`states` lists each state, the label that shows it, and whether that label exists. It creates nothing.
+`states` lists each state, the label that shows it, and whether that label exists. It creates nothing. List the labels:
 
-List the labels with `gh label list --repo <R> --limit 1000 --json name --jq '.[].name'`. Report each state with its label, as present or missing. For a missing one, give the command that creates it: `gh label create "<label>" --repo <R> --description "<description>"`.
+```bash
+gh label list --repo <R> --limit 1000 --json name --jq '.[].name'
+```
+
+Report each state with its label, as present or missing. For a missing one, give the command that creates it, without running it:
+
+```bash
+gh label create "<label>" --repo <R> --description "<description>"
+```
 
 ### ref
 
@@ -92,11 +100,19 @@ gh api --method PATCH repos/<R>/issues/<N> --input <patch file> --jq .html_url
 
 ### state-add
 
-`state-add <ref> <state>`: `gh issue edit <N> --repo <R> --add-label "<label>"`. A label the issue already has is no error.
+`state-add <ref> <state>` adds the state's label. A label the issue already has is no error.
+
+```bash
+gh issue edit <N> --repo <R> --add-label "<label>"
+```
 
 ### state-remove
 
-`state-remove <ref> <state>`: `gh issue edit <N> --repo <R> --remove-label "<label>"`. A label the issue lacks is no error.
+`state-remove <ref> <state>` removes the state's label. A label the issue lacks is no error.
+
+```bash
+gh issue edit <N> --repo <R> --remove-label "<label>"
+```
 
 ### comment-find
 
@@ -104,7 +120,11 @@ gh api --method PATCH repos/<R>/issues/<N> --input <patch file> --jq .html_url
 
 ### comment-post
 
-`comment-post <ref> <file>`: `gh issue comment <N> --repo <R> --body-file <file>`. It prints the comment's URL, which ends `#issuecomment-<id>`.
+`comment-post <ref> <file>` posts the file as a comment. It prints the comment's URL, which ends `#issuecomment-<id>`.
+
+```bash
+gh issue comment <N> --repo <R> --body-file <file>
+```
 
 ### comment-edit
 
@@ -116,7 +136,11 @@ gh api -X PATCH repos/<R>/issues/comments/<id> -F body=@<file> --jq '{id, url: .
 
 ### comment-delete
 
-`comment-delete <ref> <id>`: `gh api --method DELETE repos/<R>/issues/comments/<id>`. GitHub offers no undo and sends no notification.
+`comment-delete <ref> <id>` removes the comment. GitHub offers no undo and sends no notification.
+
+```bash
+gh api --method DELETE repos/<R>/issues/comments/<id>
+```
 
 ### link
 
@@ -130,7 +154,11 @@ Write `owner/repo#<M>` where the two issues are in different repositories.
 
 ### close
 
-`close <ref> <file>` closes the issue with the file's text as its closing comment: `gh issue close <N> --repo <R> --comment "$(cat <file>)"`.
+`close <ref> <file>` closes the issue with the file's text as its closing comment:
+
+```bash
+gh issue close <N> --repo <R> --comment "$(cat <file>)"
+```
 
 ### pr-reference
 
