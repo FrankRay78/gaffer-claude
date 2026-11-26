@@ -49,9 +49,13 @@
 
 set -uo pipefail
 
-MARKETPLACE='gaffer-claude'
-MARKETPLACE_SOURCE='{"source":{"source":"github","repo":"FrankRay78/gaffer-claude"}}'
-GAFFER_PLUGIN='gaffer@gaffer-claude'
+# The marketplace this copy of the plugin ships in is named by its own manifest, and its repository
+# is that name under MARKETPLACE_OWNER, so a distribution published under another marketplace name
+# wires itself and not this one. Set by read_marketplace, which needs jq.
+MARKETPLACE_OWNER='FrankRay78'
+MARKETPLACE=''
+MARKETPLACE_SOURCE=''
+GAFFER_PLUGIN=''
 PLUGINS=('pr-review-toolkit@claude-plugins-official')
 ASK_RULE='Bash(chmod:*)'
 SCRATCH='.claude/scratch/'
@@ -105,6 +109,16 @@ do_check() {
 # ---------------------------------------------------------------------------------------------
 # files
 # ---------------------------------------------------------------------------------------------
+
+# read_marketplace — MARKETPLACE, MARKETPLACE_SOURCE and GAFFER_PLUGIN, from the manifest beside
+# this script's plugin.
+read_marketplace() {
+  local manifest="$plugin_root/.claude-plugin/marketplace.json"
+  MARKETPLACE=$(jq -er '.name | select(type == "string" and test("^[A-Za-z0-9._-]+$"))' "$manifest" 2>/dev/null) \
+    || fail "cannot read the marketplace name from $manifest (the settings were not changed)"
+  MARKETPLACE_SOURCE=$(jq -nc --arg repo "$MARKETPLACE_OWNER/$MARKETPLACE" '{source: {source: "github", repo: $repo}}')
+  GAFFER_PLUGIN="gaffer@$MARKETPLACE"
+}
 
 # read_settings <file> — the file's JSON, or {} when there is none; fails on anything but an object.
 read_settings() {
@@ -287,6 +301,7 @@ ensure_import() {
 
 do_files() {
   command -v jq >/dev/null || fail "jq is not on the path"
+  read_marketplace
   if [ "$GIT_IGNORE" = 1 ]; then
     EXCLUDE=$(git rev-parse --git-path info/exclude) || fail "could not find this clone's exclude file"
     resolve_targets

@@ -1,0 +1,15 @@
+{
+  "name": "Keep jira-tracker-skill",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": {
+    "ref_name": {
+      "include": ["refs/heads/jira-tracker-skill"],
+      "exclude": []
+    }
+  },
+  "rules": [
+    { "type": "deletion" }
+  ],
+  "bypass_actors": []
+}

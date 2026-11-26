@@ -1,0 +1,10 @@
+# What `git archive` leaves out: this repository's own development material, which a published
+# distribution of the plugin does not carry. Everything not named here ships.
+# .github/workflows/publish-jira.yml builds from that archive.
+/.github          export-ignore
+/.claude          export-ignore
+/CLAUDE.md        export-ignore
+/CONVENTIONS.md   export-ignore
+/REVIEW.md        export-ignore
+/.gitattributes   export-ignore
+*.tests.sh        export-ignore
