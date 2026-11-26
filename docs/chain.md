@@ -16,8 +16,6 @@ The chain passes its stages no permission rule for the tracker: under the reposi
 
 It needs `git`, `claude`, `gh`, `jq` and `timeout` on the path, with `claude` and `gh` signed in. `timeout` is GNU coreutils; on macOS, install coreutils.
 
-On this repository, `chain.sh` is used and CI does the review: the pull request `raise-pr` opens is reviewed by `/gaffer:review-pr` in [`review-pr.yml`](../.github/workflows/review-pr.yml) once it is ready, so the chain needs no review stage of its own ([`contributing.md`](contributing.md) → *Continuous integration*).
-
 ## The pre-review
 
 Every chain run reviews its own pull request with the repository's own review before anyone is asked to read it. `raise-pr` opens the pull request as a draft (`/gaffer:raise-pr --draft <issue>`), and a fourth stage, `/gaffer:pre-review`, runs `/gaffer:review-pr --dry-run` against it, fixes once what that review confirms, and marks the pull request ready. Marking it ready is what starts the repository's usual review, which then reads a pull request whose verified findings are already dealt with. No setting turns the stage off; a settings file that still names `pre_review`, the opt-in it once had, is refused.

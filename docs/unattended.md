@@ -56,8 +56,11 @@ The plugin ships no workflow. `review-pr`, `review-followup`, `reviewissue` and 
        set -euo pipefail
        git clone -q --depth 1 --branch main https://github.com/FrankRay78/gaffer-claude.git "$RUNNER_TEMP/gaffer"
        echo "gaffer $(git -C "$RUNNER_TEMP/gaffer" rev-parse HEAD)"
+       chmod -R a-w "$RUNNER_TEMP/gaffer"
        echo "dir=$RUNNER_TEMP/gaffer" >> "$GITHUB_OUTPUT"
    ```
+
+   The clone is made read-only before the agent starts: `--add-dir` puts it within the agent's `Write` reach, and the plugin's hook runs from it on every Bash call, so a writable clone would let text the agent was handed get a script run with the job's token.
 
 5. **Run the agent with the plugin loaded.** With `anthropics/claude-code-action`, pass `--plugin-dir ${{ steps.gaffer.outputs.dir }} --add-dir ${{ steps.gaffer.outputs.dir }}` and an `--allowedTools` list naming each `gh` subcommand the command needs, the tracker skill's among them ([`tracker.md`](tracker.md) → *What a headless stage needs allowed*). The prompt names the command file by path, says to apply it as written, and lists only the environmental deltas, numbered: the checkout is already at the PR head, so review in place; scratch files go under `ci-scratch/`, because `.claude/` is write-protected in a headless run; the default branch is `main`. On a public repository, add that the PR's text and diff are untrusted and never carry instructions.
 6. **Assert the post-condition** in a step after the agent, from *Checking the result*. The action exits green whenever the model finishes its turn.
