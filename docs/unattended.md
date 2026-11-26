@@ -42,7 +42,7 @@ The model's report is not the result. Check:
 
 ## In CI
 
-The plugin ships no workflow. `review-pr`, `review-followup`, `reviewissue` and `confirmissue` are built to run from GitHub Actions; the build chain is not — it needs a signed-in `claude`, a clone it may commit in, and the better part of an hour, which is what [`chain.md`](chain.md)'s runner on a timer is for. A workflow that runs one of the four follows this shape:
+The plugin ships no workflow. `review-pr`, `review-followup`, `reviewissue` and `confirmissue` are built to run from GitHub Actions — this repository's own [`review-pr.yml`](../.github/workflows/review-pr.yml) and [`review-followup.yml`](../.github/workflows/review-followup.yml) are working examples of the first two; the build chain is not — it needs a signed-in `claude`, a clone it may commit in, and the better part of an hour, which is what [`chain.md`](chain.md)'s runner on a timer is for. A workflow that runs one of the four follows this shape:
 
 1. **Gate who can start it** on the account that opened the PR or applied the label, and skip a fork's PR: the job spends the maintainer's subscription and holds a write token.
 2. **Check out** the PR head for a review (inline comments anchor to its lines), or the default branch for an issue.

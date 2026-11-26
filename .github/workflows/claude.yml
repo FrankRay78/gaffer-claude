@@ -1,0 +1,42 @@
+name: Claude Code
+
+# Answers an `@claude` mention in a conversation comment on an issue or a pull request, on the same
+# thread. Only FrankRay78's comments are answered: the repository is public, and a run spends the
+# maintainer's Claude subscription. An inline review comment or a review body is not a trigger —
+# `issue_comment` carries only conversation comments, on issues and pull requests alike.
+#
+# It answers and does not change code. The action is handed this run's token, whose `contents:
+# read` cannot push, instead of the Claude app's, which could; and the commit tools are denied as
+# well, so the agent does not spend its turn on a push that would be refused.
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  respond:
+    if: >-
+      github.event.comment.user.login == 'FrankRay78' &&
+      contains(github.event.comment.body, '@claude')
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      actions: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # The model and effort are this stage's, stated here: opus at high effort.
+      - name: Run Claude Code
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ github.token }}
+          claude_args: '--model opus --effort high --disallowedTools "Bash(git commit:*),Bash(git push:*),mcp__github_file_ops__commit_files,mcp__github_file_ops__delete_files"'
+          additional_permissions: |
+            actions: read

@@ -4,7 +4,7 @@ This repository's additions to the gaffer plugin's default conventions. Each sec
 
 ## Build, test and format
 
-- **Build-and-test command** — `bash hooks/no-chmod.tests.sh && bash chain/chain.tests.sh && bash chain/chain-next.tests.sh && bash init/setup.tests.sh && bash skills/tracker.tests.sh`, run from the repository root — the test matrices listed under *Tests and checks* in [`docs/contributing.md`](docs/contributing.md), in that file's order. CI runs every committed `*.tests.sh`, discovered by name — [`.github/workflows/shell-tests.yml`](.github/workflows/shell-tests.yml).
+- **Build-and-test command** — `bash hooks/no-chmod.tests.sh && bash chain/chain.tests.sh && bash chain/chain-next.tests.sh && bash init/setup.tests.sh && bash skills/tracker.tests.sh && bash .github/scripts/link-check.tests.sh && bash .github/scripts/link-check.sh`, run from the repository root — the test matrices listed under *Tests and checks* in [`docs/contributing.md`](docs/contributing.md), in that file's order, then the link check itself. CI runs every committed `*.tests.sh`, discovered by name — [`.github/workflows/shell-tests.yml`](.github/workflows/shell-tests.yml) — and the link check in [`.github/workflows/link-check.yml`](.github/workflows/link-check.yml).
 - **Manifest check** — `claude plugin validate .`, after any edit to the manifests or the layout — [`docs/contributing.md`](docs/contributing.md); CI runs it in the `manifests` job of [`.github/workflows/shell-tests.yml`](.github/workflows/shell-tests.yml).
 
 ## Testing
