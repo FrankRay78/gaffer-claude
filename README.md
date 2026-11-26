@@ -25,7 +25,7 @@ Commands are typed as `/gaffer:<name>`. Each command's prompt under [`commands/`
 
 | Command | What it does | Unattended? |
 |---|---|---|
-| `init` | Sets a repository up from what it already contains: settings, git-ignore line, `CLAUDE.md` imports, and a `CONVENTIONS.md` and `REVIEW.md` pointing at its own files, as a pull request of recommendations. Re-run, it reports what is missing. | Yes |
+| `init` | Sets a repository up from what it already contains: settings, git-ignore line, `CLAUDE.md` imports, and a `CONVENTIONS.md` and `REVIEW.md` pointing at its own files, written into the checkout as it stands for you to commit or discard. With `--git-ignore`, kept out of git in that clone. Re-run, it reports what is missing. | Yes |
 | `draftissue` | Turns an idea, a document, a backlog item or an old issue into a needs-first GitHub issue and raises it. | No — discusses open decisions |
 | `reviewissue` | Reviews an issue before building: posts the gaps and a recommendation for each as an inline-answerable comment, labels it `needs answers`. | Yes, given an issue number |
 | `confirmissue` | Folds the answered review into *Confirmed decisions* on the issue, labels it `ready`, deletes the review comment. | Yes, given an issue number |

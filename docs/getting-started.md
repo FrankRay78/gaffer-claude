@@ -19,24 +19,26 @@ claude plugin install pr-review-toolkit@claude-plugins-official
 
 ## 2. Set up the repository
 
-In a session at the repository root, on a clean default branch:
+In a session at the repository root, on whatever branch you like:
 
 ```
 /gaffer:init
 ```
 
-It asks nothing. It checks the repository can take a pull request — no uncommitted or untracked files, on the default branch with nothing unpushed, a GitHub repository behind the remote, `gh` signed in, `jq` on the path — and stops before changing anything if not. Otherwise it raises a pull request titled *Set up gaffer* carrying:
+It asks nothing, and needs only `jq` on the path. It writes into the checkout as it stands and commits nothing, so it does not matter which branch is checked out or what else is uncommitted there. What it writes:
 
 - **`.claude/settings.json` entries** that enable gaffer and `pr-review-toolkit` for every clone, and put `Bash(chmod:*)` on `permissions.ask`. The `ask` rule is the backstop behind the plugin's `no-chmod` hook: the hook refuses the executable-bit forms with a message naming `bash script.sh`, and the rule catches the forms the hook declines to decide.
 - **`.claude/scratch/` git-ignored**, since every command writes its working files there.
 - **`.claude/memory/MEMORY.md`**, and **`CLAUDE.md` importing it** and `CONVENTIONS.md` (once there is one), so the memory entries `/gaffer:capture-learnings` writes and the conventions are in every session's context.
 - **A `CONVENTIONS.md` and a `REVIEW.md`** with a section for each template heading the repository already answers: pointers to its CI workflows, scripts and guides, and the build, test and format commands copied word for word from the file that runs them. It writes no principle or decision; a heading with nothing to point at is left out, so the plugin's default applies.
 
-The pull request body lists every template heading as *filled from* the files it cites, *already present*, or *nothing found, default applies*. It also lists the states the issue stage and the chain need the tracker to have, as the tracker skill gives them, and says which are missing. It creates none: make the missing ones yourself before the first `/gaffer:reviewissue`, which fails at its last step without them. Read the pull request, check the copied build-and-test command above all, edit anything on its branch, and merge it — or close it to discard it.
+Its report names each file it wrote and the headings it filled, with the files each was filled from. It also lists the states the issue stage and the chain need the tracker to have, as the tracker skill gives them, and says which are missing. It creates none: make the missing ones yourself before the first `/gaffer:reviewissue`, which fails at its last step without them. Read what it wrote with `git status` and `git diff`, check the copied build-and-test command above all, edit anything, and commit it by whatever route the repository takes changes — or discard it.
 
-Committing the settings does not install the plugin: when the project is opened and trusted, Claude Code fetches the marketplace it names, but each collaborator still runs step 1 once on their machine, and a session before that offers no `/gaffer:` commands.
+**To keep it out of git**, run `/gaffer:init --git-ignore`. It writes the same files, and adds each to `.git/info/exclude`, the ignore file that belongs to your clone and is never committed, leaving `.gitignore` alone. `git status` then shows nothing, and nobody else's clone is touched: this is the way to use gaffer in a repository whose owners have not agreed to carry its files. A file git already tracks cannot be hidden that way, so it changes none: where `CLAUDE.md` is tracked the imports go in `CLAUDE.local.md`, and where `.claude/settings.json` is tracked the entries go in `.claude/settings.local.json`, the files Claude Code reads beside them for one clone. A tracked `CONVENTIONS.md` or `REVIEW.md` is not changed either; the report gives the headings it would have gained. Your working tree stays as clean as it was, which matters because `/gaffer:build`, `/gaffer:verify` and the chain refuse a dirty one.
 
-Run `/gaffer:init` again whenever you like. On a repository already set up it touches nothing that is there, and its pull request is a report of what is missing — or it raises none and says so.
+Committing the settings does not install the plugin for anyone: when the project is opened and trusted, Claude Code fetches the marketplace it names, but each collaborator still runs step 1 once on their machine, and a session before that offers no `/gaffer:` commands.
+
+Run `/gaffer:init` again whenever you like. On a repository already set up it touches nothing that is there, adds what is missing, and says so when nothing is.
 
 ### By hand
 
@@ -84,7 +86,7 @@ The issue now carries a *Confirmed decisions* section and the `ready` label, and
 
 ## 4. Check the build stage knows how to build
 
-This is the one convention with no default. If the *Set up gaffer* pull request marked *Build, test and format* as *nothing found*, add the section to `CONVENTIONS.md` at the repository root yourself:
+This is the one convention with no default. If init's report does not list *Build, test and format* as filled, add the section to `CONVENTIONS.md` at the repository root yourself:
 
 ```markdown
 # Conventions
@@ -132,7 +134,7 @@ A triage map, specialist passes in parallel, every candidate verified before it 
 
 ## 7. Fill in what init could not
 
-The headings the *Set up gaffer* pull request marked *nothing found* run on the plugin's defaults. Once the defaults have run and you know what you want to add, copy a heading's section from [`templates/CONVENTIONS.md`](../templates/CONVENTIONS.md) or [`templates/REVIEW.md`](../templates/REVIEW.md) into your file and fill it in. Each section is read together with the plugin's default section of the same heading and wins where they conflict; a section whose first line is `Replaces the default.` is read instead of it. [`interfaces.md`](interfaces.md) lists the headings and which command reads each.
+The headings init's report left to the plugin's default run on it. Once the defaults have run and you know what you want to add, copy a heading's section from [`templates/CONVENTIONS.md`](../templates/CONVENTIONS.md) or [`templates/REVIEW.md`](../templates/REVIEW.md) into your file and fill it in. Each section is read together with the plugin's default section of the same heading and wins where they conflict; a section whose first line is `Replaces the default.` is read instead of it. [`interfaces.md`](interfaces.md) lists the headings and which command reads each.
 
 Two sections pay for themselves first: *Testing* (your test projects, naming scheme and what not to test) and *Documentation* (what a kind of change owes — a user guide for a changed option, API docs for a public member — so `/gaffer:build` discharges it without being asked).
 
