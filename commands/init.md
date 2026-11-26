@@ -14,7 +14,7 @@ $ARGUMENTS
 
 One option, and nothing else:
 
-- `--git-ignore` — keep what this command writes out of git, for a repository whose owner has not agreed to carry it. Each file it manages is added to `.git/info/exclude`, the ignore file that belongs to this clone and is never committed, and `.gitignore` is left alone.
+- `--git-ignore` — keep what this command writes out of git, for a repository whose owner has not agreed to carry it. Each file it manages is added to `.git/info/exclude`, the ignore file that belongs to this clone and is never committed, and `.gitignore` is left alone. A file git already tracks cannot be hidden that way, so none is changed: the imports a tracked `CLAUDE.md` would gain go in `CLAUDE.local.md`, and the entries a tracked `.claude/settings.json` would gain go in `.claude/settings.local.json` — the files Claude Code reads beside them for one clone. A tracked `CONVENTIONS.md` or `REVIEW.md` gains nothing either. The tree is left as clean as it was, so the later commands, which refuse a dirty tree, still run.
 
 `/gaffer:init` asks the invoker nothing: it runs from start to finish, and what it wrote is in the checkout for the user to review, edit, commit or discard.
 
@@ -72,7 +72,7 @@ The plugin's own files are read from `${CLAUDE_PLUGIN_ROOT}`: the setup script `
 
 4. **Write the files.**
    - **A file that does not exist yet** starts with the template's title and opening paragraph, copied from `${CLAUDE_PLUGIN_ROOT}/templates/`, then the filled headings in template order. Write the file only if at least one heading was filled.
-   - **A file that exists** gains the filled headings appended at its end, in template order, after a blank line.
+   - **A file that exists** gains the filled headings appended at its end, in template order, after a blank line. With `--git-ignore`, a file git tracks (`git ls-files`) is not changed at all: the headings it would have gained are given in the report instead, with what each would have said.
    - Under each heading, one bullet per thing found: what it is, then the file as a relative markdown link — e.g. ``- **Testing guide** — [`docs/testing.md`](docs/testing.md).`` A copied command keeps its own code span and is followed by its source.
    - Then run the setup, which must come after `CONVENTIONS.md` is written, since it imports that file into `CLAUDE.md` only once it exists:
 
@@ -82,7 +82,7 @@ The plugin's own files are read from `${CLAUDE_PLUGIN_ROOT}`: the setup script `
 
      With `--git-ignore`, pass it on: `bash "${CLAUDE_PLUGIN_ROOT}/init/setup.sh" files --git-ignore`.
 
-     It prints one `added:` or `present:` line per item, and `skipped:` for the `CONVENTIONS.md` import when there is no such file. Without `--git-ignore` it also prints `ignored:` for each file it manages that the repository git-ignores: that file is written here, but no commit will carry it. With `--git-ignore` it prints, for each path it manages, that the path is now git-ignored or already was, or `tracked:` for one git already tracks: an exclude line cannot hide a tracked file, so a change this run made to it still shows in `git status`. Keep the output for the report. A non-zero exit is a stop: report its error, and leave the files as they are for the user to inspect.
+     It prints one `added:` or `present:` line per item, and `skipped:` for the `CONVENTIONS.md` import when there is no such file. Without `--git-ignore` it also prints `ignored:` for each file it manages that the repository git-ignores: that file is written here, but no commit will carry it. With `--git-ignore` it prints, for each path it manages, that the path is now git-ignored or already was; `tracked:` for one git already tracks, which it leaves as it is, naming the local file it wrote to instead where there is one; and `shows:` for a path `git status` still shows, with why — a `.gitignore` with a change this run did not make, such as the line an earlier run without the option wrote, or a path a `.gitignore` negation un-ignores. Keep the output for the report. A non-zero exit is a stop: report its error, and leave the files as they are for the user to inspect.
    - Then list the states the commands need the repository's tracker to have: `tracker: states`. It yields each state, what shows it in this tracker, and whether it exists yet, with how to create one that is missing. It creates nothing, and neither does this command: making a state exist is the user's to do. Keep the list for the report. If the operation fails, say so there, quoting what it reported, and carry on: nothing else here depends on it.
 
 5. **Stop there.** Stage nothing and commit nothing. Report as below.
@@ -93,11 +93,11 @@ Keep it short:
 
 - that nothing was missing, when no heading was filled and `files` printed no `added:` line — or the `not ready` reason and what to do
 - each file this run created or changed
-- per file, the headings filled and the files each was filled from, and how many were already present and how many left to the plugin's default
+- per file, the headings filled and the files each was filled from, how many were already present, and the name of each heading left to the plugin's default, since the user fills those in later
 - the setup items added
 - where that leaves git:
   - without `--git-ignore`: nothing is staged or committed, so `git status` and `git diff` show what was written, to commit or discard; name each `ignored:` file as one no commit will carry until it is un-ignored
-  - with `--git-ignore`: what was written is excluded in this clone by `.git/info/exclude`, shows in no `git status`, and reaches nobody else; name each `tracked:` file this run changed as one whose change does show
+  - with `--git-ignore`: what was written is excluded in this clone by `.git/info/exclude`, shows in no `git status`, and reaches nobody else; name each `tracked:` file as left unchanged, with the local file that took its additions, and any tracked `CONVENTIONS.md` or `REVIEW.md` with the headings it would have gained; name each `shows:` path with its reason — a `.gitignore` change this run did not make can be discarded, since nothing now relies on it
 - every tracker state the commands need, each marked present or missing, and that the missing ones must be created before the issue commands are used — or that the states could not be checked, quoting what the operation reported
 - a reminder to check the copied build-and-test command in particular, since `/gaffer:build` will run it as written
 

@@ -6,7 +6,7 @@ For whoever wires a gaffer command into a chain script, a scheduled runner or a 
 
 | Command | Outward-facing acts, and when |
 |---|---|
-| `init` | None. It writes the setup files into the checkout as it stands, on whatever branch that is, and stages, commits and pushes nothing. With `--git-ignore` it adds lines to the clone's `.git/info/exclude`. It lists the states the commands need the tracker to have and says which are missing; it creates none. |
+| `init` | None. It writes the setup files into the checkout as it stands, on whatever branch that is, and stages, commits and pushes nothing. With `--git-ignore` it adds lines to the clone's `.git/info/exclude` and changes no tracked file. It lists the states the commands need the tracker to have and says which are missing; it creates none. |
 | `build` | Creates `feature/<N>-<slug>` from `origin/main` and commits to it — only from a clean `main` with no unpushed commits, for an open issue with no linked PR. Recreates a leftover branch of that name only if it holds nothing uninspected. |
 | `verify` | Commits formatting, then the review's fixes after a green re-run, or after a failure that did not reproduce in a test file the branch left untouched, or whose file the output did not show, which the report names. A fix it cannot land is left uncommitted and named in the report. |
 | `raise-pr` | Pushes the branch and opens the PR — as a draft when passed `--draft` — adding the line that closes the issue (on GitHub `Closes #<N>`) only when the tracker's `pr-reference` confirms that open issue in this repository. |

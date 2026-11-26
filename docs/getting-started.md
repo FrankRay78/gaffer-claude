@@ -34,7 +34,7 @@ It asks nothing, and needs only `jq` on the path. It writes into the checkout as
 
 Its report names each file it wrote and the headings it filled, with the files each was filled from. It also lists the states the issue stage and the chain need the tracker to have, as the tracker skill gives them, and says which are missing. It creates none: make the missing ones yourself before the first `/gaffer:reviewissue`, which fails at its last step without them. Read what it wrote with `git status` and `git diff`, check the copied build-and-test command above all, edit anything, and commit it by whatever route the repository takes changes — or discard it.
 
-**To keep it out of git**, run `/gaffer:init --git-ignore`. It writes the same files, and adds each to `.git/info/exclude`, the ignore file that belongs to your clone and is never committed, leaving `.gitignore` alone. `git status` then shows nothing, and nobody else's clone is touched: this is the way to use gaffer in a repository whose owners have not agreed to carry its files. A file git already tracks cannot be hidden that way, so a change to a tracked `CLAUDE.md` or `.claude/settings.json` still shows, and the report says so.
+**To keep it out of git**, run `/gaffer:init --git-ignore`. It writes the same files, and adds each to `.git/info/exclude`, the ignore file that belongs to your clone and is never committed, leaving `.gitignore` alone. `git status` then shows nothing, and nobody else's clone is touched: this is the way to use gaffer in a repository whose owners have not agreed to carry its files. A file git already tracks cannot be hidden that way, so it changes none: where `CLAUDE.md` is tracked the imports go in `CLAUDE.local.md`, and where `.claude/settings.json` is tracked the entries go in `.claude/settings.local.json`, the files Claude Code reads beside them for one clone. A tracked `CONVENTIONS.md` or `REVIEW.md` is not changed either; the report gives the headings it would have gained. Your working tree stays as clean as it was, which matters because `/gaffer:build`, `/gaffer:verify` and the chain refuse a dirty one.
 
 Committing the settings does not install the plugin for anyone: when the project is opened and trusted, Claude Code fetches the marketplace it names, but each collaborator still runs step 1 once on their machine, and a session before that offers no `/gaffer:` commands.
 
@@ -86,7 +86,7 @@ The issue now carries a *Confirmed decisions* section and the `ready` label, and
 
 ## 4. Check the build stage knows how to build
 
-This is the one convention with no default. If the *Set up gaffer* pull request marked *Build, test and format* as *nothing found*, add the section to `CONVENTIONS.md` at the repository root yourself:
+This is the one convention with no default. If init's report does not list *Build, test and format* as filled, add the section to `CONVENTIONS.md` at the repository root yourself:
 
 ```markdown
 # Conventions
@@ -134,7 +134,7 @@ A triage map, specialist passes in parallel, every candidate verified before it 
 
 ## 7. Fill in what init could not
 
-The headings the *Set up gaffer* pull request marked *nothing found* run on the plugin's defaults. Once the defaults have run and you know what you want to add, copy a heading's section from [`templates/CONVENTIONS.md`](../templates/CONVENTIONS.md) or [`templates/REVIEW.md`](../templates/REVIEW.md) into your file and fill it in. Each section is read together with the plugin's default section of the same heading and wins where they conflict; a section whose first line is `Replaces the default.` is read instead of it. [`interfaces.md`](interfaces.md) lists the headings and which command reads each.
+The headings init's report left to the plugin's default run on it. Once the defaults have run and you know what you want to add, copy a heading's section from [`templates/CONVENTIONS.md`](../templates/CONVENTIONS.md) or [`templates/REVIEW.md`](../templates/REVIEW.md) into your file and fill it in. Each section is read together with the plugin's default section of the same heading and wins where they conflict; a section whose first line is `Replaces the default.` is read instead of it. [`interfaces.md`](interfaces.md) lists the headings and which command reads each.
 
 Two sections pay for themselves first: *Testing* (your test projects, naming scheme and what not to test) and *Documentation* (what a kind of change owes — a user guide for a changed option, API docs for a public member — so `/gaffer:build` discharges it without being asked).
 

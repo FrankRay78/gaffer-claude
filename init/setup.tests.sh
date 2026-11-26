@@ -17,7 +17,7 @@ SETUP="$HERE/setup.sh"
 SB="$(mktemp -d)"
 trap 'rm -rf "$SB"' EXIT
 
-# A gh that records every call and fails it.
+# The heredoc is unquoted, so $SB is fixed when the stub is written; the escaped \$@ stays for gh.
 mkdir -p "$SB/bin"
 cat > "$SB/bin/gh" <<STUB
 #!/usr/bin/env bash
@@ -26,6 +26,9 @@ exit 1
 STUB
 chmod +x "$SB/bin/gh"
 export PATH="$SB/bin:$PATH"
+# No global or system git config, and no global excludes file, so the runner's own ignore rules
+# cannot decide a case.
+export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 XDG_CONFIG_HOME="$SB/xdg"
 
 # A PATH with everything setup.sh needs except jq, for the cases that check jq is required.
 mkdir -p "$SB/nojq"
@@ -154,13 +157,24 @@ ok "second run changes no byte, the exclude file included" '[ "$(snapshot)" = "$
 ok "second run reports the six paths present" '[ "$(grep -c "^present: .* git-ignored$" <<<"$OUT")" = 6 ]'
 fresh; run files "$R" --git-ignore
 ok "the option may follow the repository" '[ $RC = 0 ] && [ -z "$(status)" ]'
+fresh; OUT=$(cd "$R" && bash "$SETUP" files --git-ignore 2>&1); RC=$?
+ok "the form the command runs, from the root with no repository named" '[ $RC = 0 ] && [ -f "$R/.claude/settings.json" ] && [ -z "$(status)" ] && [ "$(excluded | wc -l)" = 6 ]'
 
 echo "files --git-ignore, when git already tracks a file:"
-fresh; echo "# Project" > "$R/CLAUDE.md"; mkdir -p "$R/.claude"; echo '{"model":"opus"}' > "$R/.claude/settings.json"
-git -C "$R" add -A && git -C "$R" commit -qm tracked; run files --git-ignore "$R"
-ok "a tracked file is reported as tracked and gets no exclude line" 'grep -qx "tracked: CLAUDE.md" <<<"$OUT" && grep -qx "tracked: .claude/settings.json" <<<"$OUT" && ! excluded | grep -q "CLAUDE.md\|settings.json"'
-ok "its change still shows, and nothing else does" '[ "$(status)" = "$(printf " M .claude/settings.json\n M CLAUDE.md")" ]'
-ok "the paths git does not track are excluded" '[ "$(excluded)" = "$(printf "/CONVENTIONS.md\n/REVIEW.md\n/.claude/memory/\n/.claude/scratch/")" ]'
+fresh; echo "# Project" > "$R/CLAUDE.md"; echo "# Conventions" > "$R/CONVENTIONS.md"; mkdir -p "$R/.claude"
+echo '{"model":"opus","enabledPlugins":{"gaffer@gaffer-claude":false}}' > "$R/.claude/settings.json"
+git -C "$R" add CLAUDE.md .claude && git -C "$R" commit -qm tracked; claude_before=$(cat "$R/CLAUDE.md"); settings_before=$(cat "$R/.claude/settings.json"); run files --git-ignore "$R"
+ok "a tracked CLAUDE.md and settings.json are reported, and left byte for byte" 'grep -qx "tracked: CLAUDE.md left as it is; its imports go in CLAUDE.local.md" <<<"$OUT" && grep -qx "tracked: .claude/settings.json left as it is; its entries go in .claude/settings.local.json" <<<"$OUT" && [ "$(cat "$R/CLAUDE.md")" = "$claude_before" ] && [ "$(cat "$R/.claude/settings.json")" = "$settings_before" ]'
+ok "the imports go in CLAUDE.local.md" '[ "$(cat "$R/CLAUDE.local.md")" = "$(printf "@CONVENTIONS.md\n\n@.claude/memory/MEMORY.md")" ]'
+ok "the missing entries go in settings.local.json, and a plugin the tracked file turned off is not turned back on" 'jq -e ".enabledPlugins == {\"pr-review-toolkit@claude-plugins-official\": true} and .permissions.ask == [\"Bash(chmod:*)\"] and .extraKnownMarketplaces[\"gaffer-claude\"] != null" "$R/.claude/settings.local.json" >/dev/null && grep -qx "present: .claude/settings.local.json plugin gaffer@gaffer-claude" <<<"$OUT"'
+ok "git sees no change at all, so the next build is not refused" '[ -z "$(status)" ]'
+ok "the local files are excluded, the tracked ones are not" '[ "$(excluded)" = "$(printf "/CONVENTIONS.md\n/REVIEW.md\n/CLAUDE.local.md\n/.claude/settings.local.json\n/.claude/memory/\n/.claude/scratch/")" ]'
+before=$(snapshot); run files --git-ignore "$R"
+ok "second run changes no byte, and finds the imports and entries present" '[ "$(snapshot)" = "$before" ] && ! grep -q "^added:" <<<"$OUT"'
+fresh; printf '.claude/\n' > "$R/.gitignore"; mkdir -p "$R/.claude/memory"; echo '{}' > "$R/.claude/settings.json"; echo "- [A](a.md) — b" > "$R/.claude/memory/MEMORY.md"
+git -C "$R" add .gitignore && git -C "$R" add -f .claude/settings.json .claude/memory/MEMORY.md && git -C "$R" commit -qm tracked; run files --git-ignore "$R"
+ok "a tracked settings.json that an ignore rule also matches is tracked, not present" 'grep -q "^tracked: .claude/settings.json " <<<"$OUT" && ! grep -q "^present: .claude/settings.json" <<<"$OUT" && [ "$(cat "$R/.claude/settings.json")" = "{}" ] && [ -f "$R/.claude/settings.local.json" ] && [ -z "$(status)" ]'
+ok "so is a tracked memory folder an ignore rule also matches" 'grep -qx "tracked: .claude/memory/" <<<"$OUT" && ! grep -q "^present: .claude/memory/ git-ignored" <<<"$OUT"'
 fresh; mkdir -p "$R/.claude/memory"; echo "- [A](a.md) — b" > "$R/.claude/memory/MEMORY.md"; git -C "$R" add -A && git -C "$R" commit -qm memory; run files --git-ignore "$R"
 ok "a directory with a tracked file in it is tracked" 'grep -qx "tracked: .claude/memory/" <<<"$OUT" && ! excluded | grep -q memory'
 
@@ -168,14 +182,28 @@ echo "files --git-ignore, beside ignore rules already there:"
 fresh; printf '.claude/\n' > "$R/.gitignore"; git -C "$R" add -A && git -C "$R" commit -qm ignore; before=$(cat "$R/.gitignore"); run files --git-ignore "$R"
 ok "a path a .gitignore rule already covers is present, and gets no exclude line" 'grep -qx "present: .claude/settings.json git-ignored" <<<"$OUT" && grep -qx "present: .claude/scratch/ git-ignored" <<<"$OUT" && [ "$(excluded)" = "$(printf "/CONVENTIONS.md\n/REVIEW.md\n/CLAUDE.md")" ]'
 ok ".gitignore is left as it was, and git sees no change" '[ "$(cat "$R/.gitignore")" = "$before" ] && [ -z "$(status)" ]'
+fresh; printf '.claude/*\n!.claude/settings.json\n' > "$R/.gitignore"; git -C "$R" add -A && git -C "$R" commit -qm negation; run files --git-ignore "$R"
+ok "a path a .gitignore negation un-ignores is reported as still showing" 'grep -q "^shows: .claude/settings.json " <<<"$OUT" && ! grep -q "^added: .claude/settings.json git-ignored" <<<"$OUT" && [ "$(status)" = "?? .claude/settings.json" ]'
 fresh; printf '# mine\n*.log' > "$R/.git/info/exclude"; run files --git-ignore "$R"
 ok "an exclude file without a final newline gets one before the new lines, and keeps what it had" '[ "$(sed -n 1,3p "$R/.git/info/exclude")" = "$(printf "# mine\n*.log\n/CONVENTIONS.md")" ]'
 fresh; rm -rf "$R/.git/info"; run files --git-ignore "$R"
 ok "no exclude file or directory yet → created" '[ $RC = 0 ] && [ -z "$(status)" ] && [ "$(excluded | wc -l)" = 6 ]'
 fresh; git -C "$R" worktree add -q "$SB/wt$N" -b side; OUT=$(bash "$SETUP" files --git-ignore "$SB/wt$N" 2>&1); RC=$?
-ok "in a linked work tree, the excludes land in the clone's one exclude file and hide the files there" '[ $RC = 0 ] && [ -z "$(git -C "$SB/wt$N" status --porcelain --untracked-files=all)" ] && [ "$(excluded | wc -l)" = 6 ]'
+ok "in a linked work tree, the files are written there, and the excludes land in the clone's one exclude file and hide them" '[ $RC = 0 ] && [ -f "$SB/wt$N/.claude/settings.json" ] && [ -f "$SB/wt$N/CLAUDE.md" ] && [ ! -e "$R/CLAUDE.md" ] && [ -z "$(git -C "$SB/wt$N" status --porcelain --untracked-files=all)" ] && [ "$(excluded | wc -l)" = 6 ]'
 fresh; before=$(snapshot); OUT=$(PATH="$SB/nojq" "$BASH_BIN" "$SETUP" files --git-ignore "$R" 2>&1); RC=$?
 ok "jq missing → refuses, nothing changed, nothing excluded" '[ $RC = 1 ] && [ "$(snapshot)" = "$before" ] && [ -z "$(excluded)" ]'
+fresh; echo "# Conventions" > "$R/CONVENTIONS.md"; mkdir -p "$R/.claude"; echo '[1,2' > "$R/.claude/settings.json"; run files --git-ignore "$R"
+ok "unreadable settings → error, but what was already written is hidden" '[ $RC = 1 ] && grep -q "not a JSON object" <<<"$OUT" && [ -z "$(status)" ]'
+
+echo "files, switching between the two modes:"
+fresh; run files "$R"; run files --git-ignore "$R"
+ok "plain, then --git-ignore: scratch is excluded too, not left to the uncommitted .gitignore line" 'excluded | grep -qx "/.claude/scratch/" && grep -qxF "added: .claude/scratch/ git-ignored (.git/info/exclude)" <<<"$OUT"'
+ok "and the .gitignore the first run wrote is reported as still showing" 'grep -q "^shows: .gitignore " <<<"$OUT" && [ "$(status)" = "?? .gitignore" ]'
+ok "discarding that .gitignore un-hides nothing" 'rm "$R/.gitignore" && mkdir -p "$R/.claude/scratch" && echo s > "$R/.claude/scratch/s" && [ -z "$(status)" ]'
+fresh; run files --git-ignore "$R"; run files "$R"
+ok "--git-ignore, then plain: the .gitignore line is written all the same, for the clones a commit reaches" 'grep -qx ".claude/scratch/" "$R/.gitignore" && grep -qxF "added: .claude/scratch/ git-ignored (.gitignore)" <<<"$OUT"'
+fresh; printf '.claude/scratch/\n' > "$R/.gitignore"; git -C "$R" add -A && git -C "$R" commit -qm ignore; run files --git-ignore "$R"
+ok "--git-ignore beside a committed, unchanged .gitignore rule relies on it, and reports no .gitignore change" 'grep -qx "present: .claude/scratch/ git-ignored" <<<"$OUT" && ! grep -q "^shows:" <<<"$OUT"'
 
 echo "modes that are gone:"
 fresh; run labels "$R"

@@ -17,15 +17,23 @@
 #
 # --git-ignore keeps what init writes out of git, for a repository whose owner has not agreed to
 # carry it. Each path init manages is added to .git/info/exclude, the ignore file that belongs to
-# this clone and is never committed, and .gitignore is left alone. A path git already tracks cannot
-# be hidden that way, so it is reported as `tracked:` and a change to it still shows.
+# this clone and is never committed, and .gitignore is left alone. A tracked file cannot be hidden
+# that way, so none is changed: where git tracks CLAUDE.md, the imports go in CLAUDE.local.md, and
+# where it tracks .claude/settings.json, the entries go in .claude/settings.local.json — the files
+# Claude Code reads beside them for one clone. Each is reported as `tracked: <path> ...`.
+#
+# Which ignore rule counts depends on the mode. Without --git-ignore, only a .gitignore rule
+# counts, since the setup is meant to be committed and must ignore scratch in every clone. With it,
+# only a rule in this clone's exclude file or in a committed, unchanged .gitignore counts, so that
+# discarding a .gitignore change cannot un-hide anything.
 #
 # OUTPUT. One line per item, `<status>: <item>`, for the command's report. `check` prints `ready`
 # or `not ready: <reason>`. `files` prints `added:` for something it puts in place and `present:`
 # for something already there, and `skipped:` for the CONVENTIONS.md import when there is no
 # CONVENTIONS.md. Without --git-ignore it also prints `ignored: <path>` for any file it manages
-# that the repository git-ignores, since a commit will not carry it; with it, `tracked: <path>`
-# as above.
+# that the repository git-ignores, since a commit will not carry it. With it, `tracked:` as above,
+# and `shows: <path> <why>` for a path git status still shows: a .gitignore with a change this run
+# did not make, or a path a .gitignore negation un-ignores, which outranks the exclude file.
 #
 # IDEMPOTENT. Anything already present is left exactly as it is, including a setting the
 # repository has deliberately turned off: a second run of `files` changes no byte. A file is only
@@ -46,9 +54,10 @@ ASK_RULE='Bash(chmod:*)'
 SCRATCH='.claude/scratch/'
 MEMORY_INDEX='.claude/memory/MEMORY.md'
 MEMORY_HEADER='<!-- Memory index: one line per entry, `- [Title](file.md) — one-line hook`. -->'
-# What --git-ignore keeps out of git: every path init or a later command writes, as patterns
-# anchored at the repository root.
-LOCAL_ONLY=(/CONVENTIONS.md /REVIEW.md /CLAUDE.md /.claude/settings.json /.claude/memory/ "/$SCRATCH")
+# Where the settings entries and the imports go. --git-ignore moves either to its local file when
+# git tracks it; see resolve_targets.
+SETTINGS='.claude/settings.json'
+IMPORTS='CLAUDE.md'
 usage() { echo "usage: bash setup.sh check [<repo>] | files [--git-ignore] [<repo>]" >&2; exit 2; }
 fail() { echo "error: $*" >&2; exit 1; }
 
@@ -80,26 +89,34 @@ do_check() {
 # files
 # ---------------------------------------------------------------------------------------------
 
-# Prints what the settings file is missing, one item per line, and writes the merged file to $1.
-settings_merge() {
-  local out=$1 src='.claude/settings.json' json
-  if [ -f "$src" ]; then
-    json=$(cat "$src")
-    jq -e 'type == "object"' >/dev/null 2>&1 <<<"$json" || fail "$src is not a JSON object; fix it and re-run (nothing was changed)"
-  else
-    json='{}'
+# read_settings <file> — the file's JSON, or {} when there is none; fails on anything but an object.
+read_settings() {
+  local json='{}'
+  if [ -f "$1" ]; then
+    json=$(cat "$1")
+    jq -e 'type == "object"' >/dev/null 2>&1 <<<"$json" || fail "$1 is not a JSON object; fix it and re-run (the settings were not changed)"
   fi
-  jq --arg m "$MARKETPLACE" --argjson ms "$MARKETPLACE_SOURCE" --arg ask "$ASK_RULE" \
+  printf '%s\n' "$json"
+}
+
+# Prints what the settings are missing, one item per line, and writes the merged $SETTINGS to $1.
+# Where $SETTINGS is the local file, an entry the tracked settings.json already has counts as
+# present, so a plugin the repository turned off there is not turned back on here.
+settings_merge() {
+  local out=$1 json other='{}'
+  json=$(read_settings "$SETTINGS") || exit 1
+  if [ "$SETTINGS" != .claude/settings.json ]; then other=$(read_settings .claude/settings.json) || exit 1; fi
+  jq --arg m "$MARKETPLACE" --argjson ms "$MARKETPLACE_SOURCE" --arg ask "$ASK_RULE" --argjson o "$other" \
      --args '
-    def ensure(path; v): if (getpath(path) == null) then setpath(path; v) else . end;
+    def ensure(path; v): if (getpath(path) == null and ($o | getpath(path)) == null) then setpath(path; v) else . end;
     ensure(["extraKnownMarketplaces", $m]; $ms)
     | reduce $ARGS.positional[] as $p (.; ensure(["enabledPlugins", $p]; true))
-    | if ((.permissions.ask // []) | index($ask)) then . else .permissions.ask = ((.permissions.ask // []) + [$ask]) end
-  ' "${PLUGINS[@]}" <<<"$json" > "$out" || fail "could not merge $src"
-  jq -r --arg m "$MARKETPLACE" --arg ask "$ASK_RULE" --args '
-    (if .extraKnownMarketplaces[$m] == null then "marketplace \($m)" else empty end),
-    ($ARGS.positional[] as $p | if .enabledPlugins[$p] == null then "plugin \($p)" else empty end),
-    (if ((.permissions.ask // []) | index($ask)) then empty else "permission ask \($ask)" end)
+    | if ((.permissions.ask // []) + ($o.permissions.ask // []) | index($ask)) then . else .permissions.ask = ((.permissions.ask // []) + [$ask]) end
+  ' "${PLUGINS[@]}" <<<"$json" > "$out" || fail "could not merge $SETTINGS"
+  jq -r --arg m "$MARKETPLACE" --arg ask "$ASK_RULE" --argjson o "$other" --args '
+    (if .extraKnownMarketplaces[$m] == null and $o.extraKnownMarketplaces[$m] == null then "marketplace \($m)" else empty end),
+    ($ARGS.positional[] as $p | if .enabledPlugins[$p] == null and $o.enabledPlugins[$p] == null then "plugin \($p)" else empty end),
+    (if ((.permissions.ask // []) + ($o.permissions.ask // []) | index($ask)) then empty else "permission ask \($ask)" end)
   ' "${PLUGINS[@]}" <<<"$json"
 }
 
@@ -109,13 +126,13 @@ report_settings() {
   missing=$(settings_merge "$tmp") || { rm -f "$tmp"; exit 1; }
   if [ -n "$missing" ]; then
     mkdir -p .claude
-    mv "$tmp" .claude/settings.json
+    mv "$tmp" "$SETTINGS"
   else
     rm -f "$tmp"
   fi
   local item
   for item in "marketplace $MARKETPLACE" "${PLUGINS[@]/#/plugin }" "permission ask $ASK_RULE"; do
-    if grep -qxF "$item" <<<"$missing"; then echo "added: .claude/settings.json $item"; else echo "present: .claude/settings.json $item"; fi
+    if grep -qxF "$item" <<<"$missing"; then echo "added: $SETTINGS $item"; else echo "present: $SETTINGS $item"; fi
   done
 }
 
@@ -125,16 +142,41 @@ append_line() {
   printf '%s\n' "$2" >> "$1"
 }
 
-# Whether git ignores the path, by any rule. --no-index, so a tracked file answers by the rules
-# too; a directory is asked about through a file inside it.
-is_ignored() {
-  local path=$1
+# ignore_source <path> — the file holding the rule that makes git ignore the path, or nothing
+# when no rule does or the deciding rule is a negation. --no-index, so a tracked file answers by
+# the rules too; a directory is asked about through a file inside it.
+ignore_source() {
+  local path=$1 line pattern
   case "$path" in */) path="${path}probe" ;; esac
-  git check-ignore -q --no-index "$path" 2>/dev/null
+  line=$(git check-ignore -v --no-index "$path" 2>/dev/null) || return 0
+  pattern=${line#*:*:}
+  case "$pattern" in '!'*) return 0 ;; esac
+  printf '%s\n' "${line%%:*}"
+}
+
+# A .gitignore in this work tree, as opposed to the exclude file or a global excludes file, which
+# git names by an absolute path.
+is_gitignore() { case "$1" in /*|'~'*) return 1 ;; .gitignore|*/.gitignore) return 0 ;; *) return 1 ;; esac; }
+
+# Plain mode: ignored by a .gitignore, which a commit carries to every clone.
+ignored_for_all() {
+  local src
+  src=$(ignore_source "$1")
+  [ -n "$src" ] && is_gitignore "$src"
+}
+
+# --git-ignore: ignored by this clone's exclude file, or by a .gitignore that is committed and
+# unchanged, so that discarding an uncommitted .gitignore line cannot un-hide the path.
+ignored_here() {
+  local src
+  src=$(ignore_source "$1")
+  [ -n "$src" ] || return 1
+  [ "$src" = "$EXCLUDE" ] && return 0
+  is_gitignore "$src" && [ -n "$(git ls-files -- "$src")" ] && [ -z "$(git status --porcelain -- "$src")" ]
 }
 
 ensure_ignored() {
-  if is_ignored "$SCRATCH"; then
+  if ignored_for_all "$SCRATCH"; then
     echo "present: $SCRATCH git-ignored"
     return
   fi
@@ -142,23 +184,47 @@ ensure_ignored() {
   echo "added: $SCRATCH git-ignored (.gitignore)"
 }
 
-# --git-ignore. git rev-parse finds the exclude file, which a linked work tree shares with its
-# main one.
+# --git-ignore: a tracked CLAUDE.md or .claude/settings.json is left alone, and what init would add
+# to it goes in the local file Claude Code reads beside it.
+resolve_targets() {
+  if [ -n "$(git ls-files -- CLAUDE.md)" ]; then
+    IMPORTS='CLAUDE.local.md'
+    echo "tracked: CLAUDE.md left as it is; its imports go in $IMPORTS"
+  fi
+  if [ -n "$(git ls-files -- .claude/settings.json)" ]; then
+    SETTINGS='.claude/settings.local.json'
+    echo "tracked: .claude/settings.json left as it is; its entries go in $SETTINGS"
+  fi
+}
+
+# --git-ignore. Excludes every path init writes, as a pattern anchored at the repository root. It
+# needs none of them to exist, so it runs first, and a later failure leaves nothing showing. git
+# rev-parse finds the exclude file, which a linked work tree shares with its main one.
 ensure_excluded() {
-  local exclude pattern path
-  exclude=$(git rev-parse --git-path info/exclude) || fail "could not find this clone's exclude file"
-  for pattern in "${LOCAL_ONLY[@]}"; do
-    path=${pattern#/}
+  local path
+  for path in CONVENTIONS.md REVIEW.md "$IMPORTS" "$SETTINGS" .claude/memory/ "$SCRATCH"; do
     if [ -n "$(git ls-files -- "$path")" ]; then
       echo "tracked: $path"
-    elif is_ignored "$path"; then
+    elif ignored_here "$path"; then
       echo "present: $path git-ignored"
     else
-      mkdir -p "$(dirname "$exclude")"
-      append_line "$exclude" "$pattern"
-      echo "added: $path git-ignored (.git/info/exclude)"
+      mkdir -p "$(dirname "$EXCLUDE")"
+      append_line "$EXCLUDE" "/$path"
+      if ignore_source "$path" | grep -q .; then
+        echo "added: $path git-ignored (.git/info/exclude)"
+      else
+        echo "shows: $path a .gitignore negation un-ignores it, and outranks .git/info/exclude"
+      fi
     fi
   done
+}
+
+# --git-ignore leaves .gitignore alone, so a change to it was made by someone else, such as an
+# earlier run without the option, and it still shows.
+report_gitignore_change() {
+  if [ -n "$(git status --porcelain -- .gitignore)" ]; then
+    echo "shows: .gitignore a change this run did not make"
+  fi
 }
 
 ensure_memory_index() {
@@ -171,35 +237,41 @@ ensure_memory_index() {
   echo "added: $MEMORY_INDEX"
 }
 
-# An import counts as present when a line of CLAUDE.md is exactly `@<path>` or `@./<path>`.
-has_import() { grep -qE "^@(\./)?$(sed 's/[.]/\\./g' <<<"$1")[[:space:]]*$" CLAUDE.md 2>/dev/null; }
+# An import counts as present when a line of CLAUDE.md, or of $IMPORTS, is exactly `@<path>` or
+# `@./<path>`.
+has_import() { grep -sqE "^@(\./)?$(sed 's/[.]/\\./g' <<<"$1")[[:space:]]*$" CLAUDE.md "$IMPORTS"; }
 
 ensure_import() {
   local path=$1
   if has_import "$path"; then
-    echo "present: CLAUDE.md imports $path"
+    echo "present: $IMPORTS imports $path"
     return
   fi
-  if [ -s CLAUDE.md ]; then
-    [ -n "$(tail -c1 CLAUDE.md)" ] && printf '\n' >> CLAUDE.md
-    printf '\n@%s\n' "$path" >> CLAUDE.md
+  if [ -s "$IMPORTS" ]; then
+    [ -n "$(tail -c1 "$IMPORTS")" ] && printf '\n' >> "$IMPORTS"
+    printf '\n@%s\n' "$path" >> "$IMPORTS"
   else
-    printf '@%s\n' "$path" >> CLAUDE.md
+    printf '@%s\n' "$path" >> "$IMPORTS"
   fi
-  echo "added: CLAUDE.md imports $path"
+  echo "added: $IMPORTS imports $path"
 }
 
 do_files() {
   command -v jq >/dev/null || fail "jq is not on the path"
+  if [ "$GIT_IGNORE" = 1 ]; then
+    EXCLUDE=$(git rev-parse --git-path info/exclude) || fail "could not find this clone's exclude file"
+    resolve_targets
+    ensure_excluded
+  fi
   report_settings
   [ "$GIT_IGNORE" = 1 ] || ensure_ignored
   ensure_memory_index
   # CONVENTIONS.md is imported only once it exists: the command writes it before calling this, and
   # leaves it out when the repository gave it nothing to say.
-  if [ -f CONVENTIONS.md ]; then ensure_import CONVENTIONS.md; else echo "skipped: CLAUDE.md import of CONVENTIONS.md (no CONVENTIONS.md)"; fi
+  if [ -f CONVENTIONS.md ]; then ensure_import CONVENTIONS.md; else echo "skipped: $IMPORTS import of CONVENTIONS.md (no CONVENTIONS.md)"; fi
   ensure_import "$MEMORY_INDEX"
   if [ "$GIT_IGNORE" = 1 ]; then
-    ensure_excluded
+    report_gitignore_change
   else
     report_ignored .claude/settings.json "$MEMORY_INDEX" CLAUDE.md .gitignore CONVENTIONS.md REVIEW.md
   fi
