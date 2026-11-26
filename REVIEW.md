@@ -4,7 +4,7 @@ This repository's additions to the gaffer plugin's default review criteria. Each
 
 ## Where it runs
 
-- **`/gaffer:review-pr`** — [`.github/workflows/review-pr.yml`](.github/workflows/review-pr.yml), on a pull request the maintainer opens from a branch of this repository, once it is opened ready or marked ready; a draft waits. It re-runs by hand from the workflow's *Run workflow* button, given a PR number.
+- **`/gaffer:review-pr`** — [`.github/workflows/review-pr.yml`](.github/workflows/review-pr.yml), on a pull request the maintainer opens from a branch of this repository, once it is opened ready or marked ready; a draft waits. It re-runs by re-running that pull request's *Review PR* run from the Actions tab; the workflow has no *Run workflow* button, because a dispatched run would execute the checkout's own `.claude/` hooks.
 - **`/gaffer:review-followup`** — [`.github/workflows/review-followup.yml`](.github/workflows/review-followup.yml), when the maintainer adds the `review-followup` label to such a pull request; the label comes off when the run ends.
 - **Both** — post as `github-actions[bot]`, run on `main`'s copy of this file and `CONVENTIONS.md`, put in place over the checkout's before the agent starts, and on gaffer's commands loaded from a clone of `main`, never the pull request's — [`docs/contributing.md`](docs/contributing.md) → *Continuous integration*.
 

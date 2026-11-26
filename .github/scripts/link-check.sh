@@ -56,8 +56,10 @@
 #     those against the checkout would fail on a perfectly good link. A scheme carrying no `://`,
 #     such as `tel:`, is not recognised and is read as a path; the result is a loud FAIL rather
 #     than a quiet pass.
-#   - a relative path that climbs above the repository root, which is outside this repository's
-#     reach.
+#   - a relative path that climbs two or more levels above the repository root: GitHub does not
+#     stop at the root, so it reaches a GitHub page or another repository (`../../issues` from the
+#     root README). One that climbs exactly one level lands on `blob/<segment>`, a 404, and is
+#     reported.
 #   - an anchor on a target that is not a markdown file: a `#L10-L20` line range on a source file
 #     and a fragment on a folder name no heading. An `#L<n>` anchor names no heading on a markdown
 #     file either, and is skipped there too — it is what GitHub's "copy permalink" writes.
@@ -106,19 +108,30 @@ trap 'rm -rf "$TMP"' EXIT
 MAIN_URL_PREFIX="https://github.com/frankray78/gaffer-claude/"
 
 # --- resolve BASE_DIR TARGET ------------------------------------------------------
-# Prints the repository-root-relative path a link target names, or returns 1 when it climbs above
-# the root. Done in the shell rather than with `realpath`, which resolves against the real
-# filesystem and would follow a symlink out of the tree and succeed on a path that GitHub, which
-# resolves textually, would render as broken.
+# Prints the repository-root-relative path a link target names. Returns 1 when the target is
+# outside this repository's reach, and 2 when it climbs exactly one level above the root. Done in
+# the shell rather than with `realpath`, which resolves against the real filesystem and would
+# follow a symlink out of the tree and succeed on a path that GitHub, which resolves textually,
+# would render as broken.
+#
+# GitHub resolves a relative link against the page's URL, `/<owner>/<repo>/blob/<ref>/<dir>/`, and
+# does not stop at the root, so the path is resolved below those four segments here too. Ending
+# under all four is a path in this repository. Ending at `blob/<segment>`, one level above, is a
+# 404 unless the segment happens to name a branch: that is the rename mistake this check is for,
+# so it returns 2 for the caller to report. Climbing two or more levels reaches a GitHub page or
+# another repository (`../../issues` from the root README), which returns 1 and is skipped. The
+# four segments hold a newline, which a link target read a line at a time cannot.
 resolve_path() {
-  local base="$1" target="$2" joined seg out=""
+  local base="$1" target="$2" joined seg out="" i
   local -a segs=() parts=()
+  local -a prefix=($'\nowner' $'\nrepo' $'\nblob' $'\nref')
 
   case "$target" in
     /*) joined="${target#/}" ;;                      # root-relative, resolved from the repo root
     *)  if [ "$base" = "." ]; then joined="$target"; else joined="$base/$target"; fi ;;
   esac
 
+  parts=("${prefix[@]}")
   # A non-whitespace IFS does not collapse runs of the delimiter, so `a//b` splits to three
   # segments with an empty one in the middle — dropped below alongside `.`, as GitHub drops it.
   IFS='/' read -r -a segs <<< "$joined"
@@ -133,8 +146,18 @@ resolve_path() {
     esac
   done
 
-  [ "${#parts[@]}" -gt 0 ] || return 1
-  for seg in "${parts[@]}"; do out="${out:+$out/}$seg"; done
+  # How many of the four segments are still in place, counted from the left.
+  for ((i = 0; i < 4 && i < ${#parts[@]}; i++)); do
+    [ "${parts[$i]}" = "${prefix[$i]}" ] || break
+  done
+  case "$i" in
+    4) ;;
+    3) return 2 ;;
+    *) return 1 ;;
+  esac
+
+  [ "${#parts[@]}" -gt 4 ] || return 1               # the root itself names no file to check
+  for seg in "${parts[@]:4}"; do out="${out:+$out/}$seg"; done
   printf '%s' "$out"
 }
 
@@ -251,6 +274,7 @@ checked=0
 scanned=0
 : > "$TMP/missing"
 : > "$TMP/noheading"
+: > "$TMP/above"
 
 while IFS= read -r -d '' file; do
   path="$REPO_ROOT/$file"
@@ -323,7 +347,14 @@ while IFS= read -r -d '' file; do
     if [ -z "$target_path" ]; then
       resolved="$file"                               # an anchor-only target names a heading here
     else
-      resolved="$(resolve_target "$dir" "$target_path")" || continue
+      resolved="$(resolve_target "$dir" "$target_path")"
+      case $? in
+        0) ;;
+        2) checked=$((checked + 1))
+           printf '%s\t%s\n' "$file" "$target_path" >> "$TMP/above"
+           continue ;;
+        *) continue ;;
+      esac
       checked=$((checked + 1))
       if [ ! -e "$REPO_ROOT/$resolved" ]; then
         printf '%s\t%s\n' "$file" "$target_path" >> "$TMP/missing"
@@ -361,7 +392,8 @@ while IFS= read -r -d '' file; do
     if [ -z "$target_path" ]; then
       resolved="$file"
     else
-      # A missing file is check 1's finding; a heading in it is not reported as well.
+      # A missing file is check 1's finding, as is a path one level above the root; a heading in
+      # either is not reported as well.
       resolved="$(resolve_target "$dir" "$target_path")" || continue
       [ -e "$REPO_ROOT/$resolved" ] || continue
     fi
@@ -377,7 +409,7 @@ done < "$TMP/tracked"
 # --- the verdict ------------------------------------------------------------------
 # Both verdicts carry the counts, which makes a run self-diagnosing after the fact — "2 references
 # checked" alongside a clean verdict reads very differently from "431".
-if [ -s "$TMP/missing" ] || [ -s "$TMP/noheading" ]; then
+if [ -s "$TMP/missing" ] || [ -s "$TMP/above" ] || [ -s "$TMP/noheading" ]; then
   {
     if [ -s "$TMP/missing" ]; then
       printf 'link-check: FAIL — these links name a file that is not in the repository:\n'
@@ -386,8 +418,16 @@ if [ -s "$TMP/missing" ] || [ -s "$TMP/noheading" ]; then
       printf 'Point each one at where the content now lives, or remove it where the surrounding\n'
       printf 'text no longer needs it.\n'
     fi
-    if [ -s "$TMP/noheading" ]; then
+    if [ -s "$TMP/above" ]; then
       [ -s "$TMP/missing" ] && printf '\n'
+      printf 'link-check: FAIL — these relative links climb one level above the repository root:\n'
+      sort -u "$TMP/above" | sed $'s/\t/ → /; s/^/  - /'
+      printf '\n'
+      printf 'GitHub resolves them to blob/<segment>, which is not a page. Drop the extra ../, or, to\n'
+      printf 'reach another branch, write the full https://github.com/…/blob/<branch>/… URL.\n'
+    fi
+    if [ -s "$TMP/noheading" ]; then
+      { [ -s "$TMP/missing" ] || [ -s "$TMP/above" ]; } && printf '\n'
       printf 'link-check: FAIL — these name a heading the file they point at does not have:\n'
       sort -u "$TMP/noheading" | sed $'s/\t/ : /; s/\t/ in /; s/^/  - /'
       printf '\n'

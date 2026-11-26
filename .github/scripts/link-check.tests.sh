@@ -149,7 +149,46 @@ new_case
 commit_file "README.md" 'A [way out](../../outside.md), and [the guide](docs/guide.md).'
 commit_file "docs/guide.md" '# Guide'
 check
-ok "a target climbing above the repository root is skipped, not reported" 'clean'
+ok "a target climbing two levels above the repository root is skipped, not reported" 'clean'
+
+new_case
+commit_file "docs/guide.md" 'Back to [the readme](../../README.md).'
+commit_file "README.md" '# Readme'
+check
+ok "a target climbing exactly one level above the root fails — GitHub renders it as blob/README.md" \
+  'failed && names "climb one level above" && names "docs/guide.md → ../../README.md"'
+
+new_case
+commit_file "README.md" 'Up [one](../x.md), and [the guide](docs/guide.md).'
+commit_file "docs/guide.md" '# Guide'
+check
+ok "a one-level overshoot from the root README fails too" 'failed && names "README.md → ../x.md"'
+
+new_case
+commit_file "docs/guide.md" 'Out and [back in](../../x/../README.md).'
+commit_file "README.md" '# Readme'
+check
+ok "the overshoot is judged where the path ends, not where it passes: x/.. still lands on blob/README.md" \
+  'failed && names "../../x/../README.md"'
+
+new_case
+commit_file "docs/guide.md" 'Far out to [the issues](../../../issues), and [the readme](../README.md).'
+commit_file "README.md" '# Readme'
+check
+ok "climbing two or more levels from a subfolder is still skipped" 'clean'
+
+new_case
+commit_file "README.md" "A [full link](${MAINURL}/blob/main/../x.md), and [the guide](docs/guide.md)."
+commit_file "docs/guide.md" '# Guide'
+check
+ok "a full link to main whose path climbs one level above the root fails the same way" \
+  'failed && names "climb one level above"'
+
+new_case
+commit_file "README.md" 'See [the guide](../guide.md) → *Steps*.'
+check
+ok "a one-level overshoot named with → *Heading* is reported once, as the overshoot, not as a heading" \
+  'failed && named_once "../guide.md" && ! names "a heading the file"'
 
 new_case
 commit_file "README.md" 'An ![diagram](docs/img.png) and a [titled link](docs/guide.md "The Guide").'
@@ -323,7 +362,7 @@ ok "heading case, punctuation and spacing are slugified as GitHub does" 'clean'
 # GitHub slugs the rendered heading, so a link in one contributes its text and not its target.
 # Folding the target in would make the anchor below unreachable on a link that works on GitHub.
 new_case
-commit_file "README.md" "$(printf '# Guide\n\n### 2.1 Runner — [`Chain.run`](../chain/chain.sh)\n\nSee [it](#21-runner--chainrun).')"
+commit_file "README.md" "$(printf '# Guide\n\n### 2.1 Runner — [`Chain.run`](chain/chain.sh)\n\nSee [it](#21-runner--chainrun).')"
 commit_file "chain/chain.sh" '# code'
 check
 ok "a link inside a heading slugs as its text, not its target" 'clean'
