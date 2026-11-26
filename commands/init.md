@@ -1,8 +1,8 @@
 ---
-description: Set a repository up for gaffer from what it already contains — the settings, git-ignore line and imports the commands assume, plus a CONVENTIONS.md and REVIEW.md that point at the repository's own files — delivered as a pull request of recommendations to edit or discard. Re-run on a repository already set up, it reports only what is missing.
+description: Set a repository up for gaffer from what it already contains — the settings, git-ignore line and imports the commands assume, plus a CONVENTIONS.md and REVIEW.md that point at the repository's own files — written into the checkout as it stands, on whatever branch it is on, for you to review and commit or discard. Commits and pushes nothing. With --git-ignore, what it writes is kept out of git in this clone. Re-run on a repository already set up, it reports only what is missing.
 ---
 
-Read `CLAUDE.md` for project context, if there is one, and the conventions as *Repository conventions* below says, before proceeding.
+Read `CLAUDE.md` for project context, if there is one, before proceeding.
 
 **Load the `gaffer:tracker` skill with the Skill tool before the first tracker operation.** A line written `tracker: <operation> <arguments>` names an operation that skill says how to carry out on this repository's tracker; it is notation, not a command to run.
 
@@ -12,18 +12,15 @@ Read `CLAUDE.md` for project context, if there is one, and the conventions as *R
 $ARGUMENTS
 ```
 
-Nothing is expected. `/gaffer:init` takes no argument and asks the invoker nothing: it runs from start to finish, and the pull request it raises is where the user reviews, edits or discards what it did.
+One option, and nothing else:
 
-## Repository conventions
+- `--git-ignore` — keep what this command writes out of git, for a repository whose owner has not agreed to carry it. Each file it manages is added to `.git/info/exclude`, the ignore file that belongs to this clone and is never committed, and `.gitignore` is left alone. A file git already tracks cannot be hidden that way, so none is changed: the imports a tracked `CLAUDE.md` would gain go in `CLAUDE.local.md`, and the entries a tracked `.claude/settings.json` would gain go in `.claude/settings.local.json` — the files Claude Code reads beside them for one clone. A tracked `CONVENTIONS.md` or `REVIEW.md` gains nothing either. The tree is left as clean as it was, so the later commands, which refuse a dirty tree, still run.
 
-The steps in this file are generic. The conventions they run on live in two files, read section by section: the plugin's defaults in `${CLAUDE_PLUGIN_ROOT}/defaults/CONVENTIONS.md`, and the repository's own `CONVENTIONS.md` at the root of the repository this command runs in, if it has one, written as additions to the defaults. Each step applies its own rule together with the two sections under the matching heading — the default first, then the repository's, which wins where they conflict, and stands alone where its first line is `Replaces the default.`. Wherever this file says `CONVENTIONS.md` → *Heading*, it means those two sections read that way. The headings this command reads:
-
-| Heading | Supplies |
-|---|---|
-| `Scratch files` | the git-ignored file step 6 writes the pull request body to |
+`/gaffer:init` asks the invoker nothing: it runs from start to finish, and what it wrote is in the checkout for the user to review, edit, commit or discard.
 
 ## What it writes, and what it never does
 
+- **It commits nothing.** It writes into the checkout as it stands: whatever branch is checked out, with whatever else is uncommitted there. It never stages, commits or pushes, never creates or switches a branch, and raises no pull request. Whether what it wrote is committed, and when, is the user's to decide.
 - **It writes what it can point at.** Every line it adds to `CONVENTIONS.md` or `REVIEW.md` names a file that is tracked in the repository — a CI workflow, a script, a guide, a config file. A heading it has nothing to point at for is left out, so the plugin's default applies.
 - **It copies only command lines.** Under *Build, test and format* it copies the build, test and format commands **word for word** from the file that runs them, citing that file, because `/gaffer:build` and `/gaffer:verify` stop without a command and a pointer would not supply one. Where the build and the tests are separate lines in that file, join them with ` && ` in the order the file runs them. Everywhere else it writes pointers, not copies.
 - **It states no principle, policy or decision** the repository's files do not already record: not a versioning stance, not whether to keep change-intent records, not a risk tier, not a severity. If the repository records one — a `CODEOWNERS` file, a decisions directory with its own README — the line points at it and says only what that file says.
@@ -35,21 +32,19 @@ The steps in this file are generic. The conventions they run on live in two file
 
 The plugin's own files are read from `${CLAUDE_PLUGIN_ROOT}`: the setup script `init/setup.sh`, the templates under `templates/`, the defaults under `defaults/`. Run the script with `bash`, never by its executable bit.
 
-1. **Check the repository is ready.** From the repository root:
+1. **Check the command can run here.** From the repository root:
 
    ```bash
    bash "${CLAUDE_PLUGIN_ROOT}/init/setup.sh" check
    ```
 
-   It prints `ready: <default branch>` or `not ready: <reason>`. On `not ready` — uncommitted or untracked files, not on the default branch, commits on it that are not on `origin`, no GitHub repository behind the remote, `gh` not signed in, `jq` missing — **stop before changing anything**, and report the reason and what to do about it. Running from somewhere other than the repository root is the same stop.
+   It prints `ready`, or `not ready: <reason>` when `jq` is missing, or an error when the current directory is not the root of a git work tree. On anything but `ready`, **stop before changing anything**, and report the reason and what to do about it. The branch, the state of the working tree and the remote are not checked: none of them matters to what follows.
 
-2. **Branch.** Create `gaffer/init-<UTC timestamp, YYYYMMDD-HHMMSS>` from the default branch. Every run gets its own branch and its own pull request, even while an earlier init pull request is still open: the repository may have changed since, and the user may want to compare the two.
-
-3. **Read the headings and what the repository already has.**
+2. **Read the headings and what the repository already has.**
    - The heading list is the `## ` headings of `${CLAUDE_PLUGIN_ROOT}/templates/CONVENTIONS.md` and `${CLAUDE_PLUGIN_ROOT}/templates/REVIEW.md`, in their order. Read the template's placeholder under each heading, and the matching section of the plugin's defaults, for what the heading carries.
    - Read the repository's own `CONVENTIONS.md` and `REVIEW.md` at the root, if they exist. A heading present in either already is **already present**, and nothing more happens to it.
 
-4. **Look for what the repository already records.** For each heading not already present, look at the tracked files (`git ls-files`) for something that answers it. Read a candidate before citing it: a file is cited for what it actually says, not for its name. Where to look, as a starting point rather than a limit:
+3. **Look for what the repository already records.** For each heading not already present, look at the tracked files (`git ls-files`) for something that answers it. Read a candidate before citing it: a file is cited for what it actually says, not for its name. Where to look, as a starting point rather than a limit:
 
    | Heading | Look for |
    |---|---|
@@ -75,9 +70,9 @@ The plugin's own files are read from `${CLAUDE_PLUGIN_ROOT}`: the setup script `
 
    Headings such as *Severity*, *Risk tier*, *Test-driven development*, *Issue concerns*, *Issue review checks* and *Audit* are mostly decisions: fill one only where a tracked file already states it.
 
-5. **Write the files.**
+4. **Write the files.**
    - **A file that does not exist yet** starts with the template's title and opening paragraph, copied from `${CLAUDE_PLUGIN_ROOT}/templates/`, then the filled headings in template order. Write the file only if at least one heading was filled.
-   - **A file that exists** gains the filled headings appended at its end, in template order, after a blank line.
+   - **A file that exists** gains the filled headings appended at its end, in template order, after a blank line. With `--git-ignore`, a file git tracks (`git ls-files`) is not changed at all: the headings it would have gained are given in the report instead, with what each would have said.
    - Under each heading, one bullet per thing found: what it is, then the file as a relative markdown link — e.g. ``- **Testing guide** — [`docs/testing.md`](docs/testing.md).`` A copied command keeps its own code span and is followed by its source.
    - Then run the setup, which must come after `CONVENTIONS.md` is written, since it imports that file into `CLAUDE.md` only once it exists:
 
@@ -85,56 +80,27 @@ The plugin's own files are read from `${CLAUDE_PLUGIN_ROOT}`: the setup script `
      bash "${CLAUDE_PLUGIN_ROOT}/init/setup.sh" files
      ```
 
-     It prints one `added:` or `present:` line per item, `skipped:` for the `CONVENTIONS.md` import when there is no such file, and `ignored:` for each file it manages that the repository git-ignores: that file exists in this checkout but no pull request can carry it. Keep the output for the body. A non-zero exit is a stop: report its error, leave the branch as it is for the user to inspect, and raise nothing.
-   - Then list the states the commands need the repository's tracker to have: `tracker: states`. It yields each state, what shows it in this tracker, and whether it exists yet, with how to create one that is missing. It creates nothing, and neither does this command: making a state exist is the user's to do. Keep the list for the body and the report. If the operation fails, say so in both, quoting what it reported, and carry on: nothing else here depends on it.
+     With `--git-ignore`, pass it on: `bash "${CLAUDE_PLUGIN_ROOT}/init/setup.sh" files --git-ignore`.
 
-6. **Raise the pull request, or report that nothing is missing.**
-   - **Nothing changed** — `git status --porcelain --untracked-files=all` is empty: switch back to the default branch, delete the init branch, raise nothing, and report that the repository is already set up. List every state `tracker: states` gave, marking each present or missing, and say that each must exist before the issue commands are used; name any `ignored:` file.
-   - **Otherwise**: stage, by name, only what this run wrote, never `git add -A`: of `CONVENTIONS.md`, `REVIEW.md`, `CLAUDE.md`, `.gitignore`, `.claude/settings.json` and `.claude/memory/MEMORY.md`, each one this run created or changed and that `files` did not report `ignored:`. Commit as `Set up gaffer: conventions, review criteria and settings`, push with `-u`, and open a pull request against the default branch titled `Set up gaffer`. Write the body to the scratch file `CONVENTIONS.md` → *Scratch files* names (`init-pr-body.md` by default) with the `Write` tool and pass it with `--body-file`. The body is:
+     It prints one `added:` or `present:` line per item, and `skipped:` for the `CONVENTIONS.md` import when there is no such file. Without `--git-ignore` it also prints `ignored:` for each file it manages that the repository git-ignores: that file is written here, but no commit will carry it. With `--git-ignore` it prints, for each path it manages, that the path is now git-ignored or already was; `tracked:` for one git already tracks, which it leaves as it is, naming the local file it wrote to instead where there is one; and `shows:` for a path `git status` still shows, with why — a `.gitignore` with a change this run did not make, such as the line an earlier run without the option wrote, or a path a `.gitignore` negation un-ignores. Keep the output for the report. A non-zero exit is a stop: report its error, and leave the files as they are for the user to inspect.
+   - Then list the states the commands need the repository's tracker to have: `tracker: states`. It yields each state, what shows it in this tracker, and whether it exists yet, with how to create one that is missing. It creates nothing, and neither does this command: making a state exist is the user's to do. Keep the list for the report. If the operation fails, say so there, quoting what it reported, and carry on: nothing else here depends on it.
 
-     ```markdown
-     Recommendations from `/gaffer:init`, read from what this repository already contains. Edit anything on this branch before merging, or close the pull request to discard it. A heading marked *nothing found* runs on the plugin's default until you write a section for it.
-
-     ## CONVENTIONS.md
-
-     | Heading | Outcome |
-     |---|---|
-     | Build, test and format | filled from `<file>`, `<file>` |
-     | Test-driven development | nothing found, default applies |
-     | … | already present |
-
-     ## REVIEW.md
-
-     | Heading | Outcome |
-     |---|---|
-     | … | … |
-
-     ## Setup
-
-     - <each `added:` line from `files` whose file is not also `ignored:`, in plain words>
-     - <each `ignored:` file: "`<path>` is git-ignored here, so this pull request cannot carry it; un-ignore it or add it by hand">
-
-     ## Tracker states
-
-     The issue commands and the chain need each of these to exist in the tracker. Neither `/gaffer:init` nor this pull request creates one.
-
-     - <each state `states` gave: its name, what shows it in this tracker, and *present*, or *missing* with how to create it — or "Could not be checked: <what the operation reported>">
-     ```
-
-     Every heading of both templates gets a row, in template order, with exactly one of: *filled from* and the files cited, *already present*, or *nothing found, default applies*. Write a `|` in a cell as `\|`. Setup items that were already present are left out of *Setup*; if all were, write "All present already."
-   - Then switch back to the default branch, so the next run starts where this one did.
+5. **Stop there.** Stage nothing and commit nothing. Report as below.
 
 ## Output to the user
 
 Keep it short:
 
-- the pull request URL — or that nothing was missing, or the `not ready` reason and what to do
-- how many headings were filled, already present and left to the default, per file
+- that nothing was missing, when no heading was filled and `files` printed no `added:` line — or the `not ready` reason and what to do
+- each file this run created or changed
+- per file, the headings filled and the files each was filled from, how many were already present, and the name of each heading left to the plugin's default, since the user fills those in later
 - the setup items added
-- every tracker state the commands need, each marked present or missing, and that the missing ones must be created before the issue commands are used
+- where that leaves git:
+  - without `--git-ignore`: nothing is staged or committed, so `git status` and `git diff` show what was written, to commit or discard; name each `ignored:` file as one no commit will carry until it is un-ignored
+  - with `--git-ignore`: what was written is excluded in this clone by `.git/info/exclude`, shows in no `git status`, and reaches nobody else; name each `tracked:` file as left unchanged, with the local file that took its additions, and any tracked `CONVENTIONS.md` or `REVIEW.md` with the headings it would have gained; name each `shows:` path with its reason — a `.gitignore` change this run did not make can be discarded, since nothing now relies on it
+- every tracker state the commands need, each marked present or missing, and that the missing ones must be created before the issue commands are used — or that the states could not be checked, quoting what the operation reported
 - a reminder to check the copied build-and-test command in particular, since `/gaffer:build` will run it as written
 
 ## When NOT to use this command
 
-- The repository is not on GitHub — the command needs a pull request to deliver its recommendations.
 - To check existing conventions for staleness rather than gaps — that is `/gaffer:context-gardening`, or lens 4 of `/gaffer:audit-codebase`.
