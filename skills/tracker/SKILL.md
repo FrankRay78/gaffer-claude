@@ -82,7 +82,7 @@ One `--label` for each state; none where no state is given. It prints the new is
 
 ### body-set
 
-`body-set <ref> <file>` replaces the whole body. Write the file's text as JSON to a scratch file, then send it:
+`body-set <ref> <file>` replaces the whole body. Write the file's text as JSON to a scratch file beside it, then send it:
 
 ```bash
 jq -n --rawfile b <file> '{body: $b}' > <patch file>
