@@ -11,6 +11,7 @@ Keep a clone of the plugin whose `skills/tracker/SKILL.md` holds instructions fo
 - **Run from the clone.** Start sessions with `claude --plugin-dir <clone>`, and run the chain by hand as `bash <clone>/chain/chain.sh <issue>`, which loads its stages from the checkout it sits in ([`chain.md`](chain.md)).
 - **Keep the frontmatter's `name: tracker`, and leave model invocation enabled.** A command loads the skill by that name, and a skill the model may not invoke cannot be loaded by one.
 - **Keep it short.** Every command that reaches the tracker loads the whole file. This plugin's is held to 1,500 words (`wc -w skills/tracker/SKILL.md`).
+- **Put every shell call in a `bash` fence.** [`skills/tracker.tests.sh`](../skills/tracker.tests.sh) reads the fences and fails when a command, default, template or script makes one of those calls itself, so the test follows whatever file is there and needs no edit. A file that makes no shell call leaves it nothing to look for.
 - **State every operation below, with its arguments and what it yields.** A command says only `tracker: <operation> <arguments>`; everything else about the tracker is the file's to say.
 
 Claude Code re-attaches a loaded skill after it compacts a conversation. A subagent does not inherit a skill its parent loaded, which is why each command file tells whoever is applying it to load the skill.

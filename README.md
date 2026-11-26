@@ -98,7 +98,7 @@ To enable it for every clone of a repository, commit this to its `.claude/settin
 ```
 .claude-plugin/   plugin.json and marketplace.json
 commands/         the slash commands
-skills/           tracker/SKILL.md, how each tracker operation is carried out — the one file to replace for another tracker
+skills/           tracker/SKILL.md, how each tracker operation is carried out — the one file to replace for another tracker — and its test matrix
 hooks/            hooks.json, no-chmod.sh and its test matrix
 chain/            chain.sh, chain-next.sh and their test matrices — run from a clone, not from the installed plugin
 init/             setup.sh, the mechanical part of /gaffer:init, and its test matrix
