@@ -1,0 +1,148 @@
+name: Publish Jira Distribution
+
+# Publishes gaffer with the Jira tracker skill to the private marketplace repository
+# FrankRay78/gaffer-claude-jira, for the maintainer's own use:
+#
+#   claude plugin marketplace add FrankRay78/gaffer-claude-jira
+#   claude plugin install gaffer@gaffer-claude-jira
+#
+# What is published is `main` as `git archive` exports it — so without the paths .gitattributes
+# marks `export-ignore` — with the files of the `jira-tracker-skill` branch laid over it. That
+# branch is an orphan holding only the files that differ in the Jira distribution
+# (skills/tracker/SKILL.md and .claude-plugin/marketplace.json), so `main` never carries a second
+# tracker skill. To change the Jira skill, commit to that branch.
+#
+# Runs on every push to `main`, and from the Actions tab (*Run workflow*). A push to
+# `jira-tracker-skill` starts nothing, because that branch has no workflow file: an edit there is
+# published by the next merge to `main`, or by starting this workflow by hand.
+#
+# Each publish replaces the downstream's `main` with ONE fresh commit, force-pushed, whose message
+# names the commits it was built from. The downstream is publish output only: anything committed
+# there is gone at the next publish. When the files would not change, nothing is pushed.
+#
+# Deliberately runs no test and no check before it pushes. If `main` changes the tracker
+# operations, that reaches the Jira distribution before the Jira skill is updated; keeping the
+# skill current is the maintainer's job.
+#
+# ONE-OFF SETUP, taken by hand before this workflow's first run:
+#
+#   1. The downstream repository, private:
+#        gh repo create FrankRay78/gaffer-claude-jira --private
+#
+#   2. The orphan branch, seeded with the Jira files:
+#        git switch --orphan jira-tracker-skill
+#        # add skills/tracker/SKILL.md (the Jira skill) and .claude-plugin/marketplace.json
+#        # (a copy of main's, with "name": "gaffer-claude-jira")
+#        git add skills/tracker/SKILL.md .claude-plugin/marketplace.json
+#        git commit -m "Seed the Jira tracker overlay"
+#        git push -u origin jira-tracker-skill
+#
+#   3. The ruleset that keeps the branch from being deleted:
+#        gh api -X POST repos/FrankRay78/gaffer-claude/rulesets --input .github/ruleset-jira-tracker-skill.json
+#
+#   4. The credential: a fine-grained personal access token whose only repository is
+#      FrankRay78/gaffer-claude-jira, with Contents read and write, stored as this repository's
+#      secret JIRA_PUBLISH_TOKEN:
+#        gh secret set JIRA_PUBLISH_TOKEN --repo FrankRay78/gaffer-claude
+#      The workflow's own GITHUB_TOKEN cannot push to another repository. When the token expires
+#      the publish fails at its first step that reaches the downstream; replace the secret and
+#      re-run.
+
+on:
+  # Never `pull_request`: these two events run only code already on a branch of this repository,
+  # so a fork's pull request cannot reach the secret.
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One publish at a time, none dropped mid-push. A queued run that is superseded loses nothing:
+# every run publishes the current `main`, not the commit that started it.
+concurrency:
+  group: publish-jira
+  cancel-in-progress: false
+
+env:
+  DOWNSTREAM: FrankRay78/gaffer-claude-jira
+  OVERLAY_BRANCH: jira-tracker-skill
+
+jobs:
+  publish:
+    name: publish-jira
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+    - name: Checkout main
+      uses: actions/checkout@v4
+      with:
+        # Always `main`, so a run started by hand from another branch still publishes `main`.
+        ref: main
+        # The job's token is not left in the clone's config; the push below uses its own.
+        persist-credentials: false
+
+    - name: Build the distribution
+      run: |
+        set -euo pipefail
+        git fetch --no-tags --depth 1 origin "+refs/heads/$OVERLAY_BRANCH:refs/remotes/origin/$OVERLAY_BRANCH"
+        out="$RUNNER_TEMP/dist"
+        mkdir -p "$out"
+        # `main` minus the export-ignore paths, then the overlay's files over their counterparts.
+        git archive HEAD | tar -x -C "$out"
+        git archive "origin/$OVERLAY_BRANCH" | tar -x -C "$out"
+        {
+          echo "UPSTREAM_SHA=$(git rev-parse HEAD)"
+          echo "OVERLAY_SHA=$(git rev-parse "origin/$OVERLAY_BRANCH")"
+        } >> "$GITHUB_ENV"
+
+    - name: Publish
+      env:
+        JIRA_PUBLISH_TOKEN: ${{ secrets.JIRA_PUBLISH_TOKEN }}
+      run: |
+        set -euo pipefail
+        [ -n "$JIRA_PUBLISH_TOKEN" ] || { echo "::error::The secret JIRA_PUBLISH_TOKEN is not set."; exit 1; }
+        out="$RUNNER_TEMP/dist"
+        pub="$RUNNER_TEMP/pub"
+        git init -q "$pub"
+        cd "$pub"
+        # The token travels in a header git reads from the environment, so it is in no URL, no
+        # config file and no process argument.
+        export GIT_CONFIG_COUNT=1
+        export GIT_CONFIG_KEY_0="http.https://github.com/.extraheader"
+        export GIT_CONFIG_VALUE_0="Authorization: Basic $(printf 'x-access-token:%s' "$JIRA_PUBLISH_TOKEN" | base64 -w0)"
+        url="https://github.com/$DOWNSTREAM.git"
+
+        # What is published now. A downstream with no `main` yet has nothing; any other failure
+        # to read it (a bad or expired token, most likely) stops the run here.
+        published_tree=''
+        rc=0
+        git ls-remote --exit-code "$url" refs/heads/main > /dev/null || rc=$?
+        if [ "$rc" = 0 ]; then
+          git fetch -q --no-tags --depth 1 "$url" refs/heads/main
+          published_tree=$(git rev-parse 'FETCH_HEAD^{tree}')
+        elif [ "$rc" != 2 ]; then
+          echo "::error::Could not read $DOWNSTREAM — check the JIRA_PUBLISH_TOKEN secret."
+          exit 1
+        fi
+
+        # -f: the tree is exactly what was built, whatever the shipped .gitignore says.
+        git --work-tree="$out" add -A -f .
+        tree=$(git write-tree)
+        if [ "$tree" = "$published_tree" ]; then
+          echo "Nothing to publish: $DOWNSTREAM main already holds these files."
+          exit 0
+        fi
+
+        export GIT_AUTHOR_NAME='github-actions[bot]' GIT_AUTHOR_EMAIL='41898282+github-actions[bot]@users.noreply.github.com'
+        export GIT_COMMITTER_NAME="$GIT_AUTHOR_NAME" GIT_COMMITTER_EMAIL="$GIT_AUTHOR_EMAIL"
+        commit=$(git commit-tree "$tree" -F - <<MSG
+        Publish $GITHUB_REPOSITORY@$UPSTREAM_SHA
+
+        Built from $GITHUB_REPOSITORY main at $UPSTREAM_SHA,
+        with the files of $OVERLAY_BRANCH at $OVERLAY_SHA laid over it.
+        MSG
+        )
+        git push --force "$url" "$commit:refs/heads/main"
+        echo "Published $commit to $DOWNSTREAM main."
