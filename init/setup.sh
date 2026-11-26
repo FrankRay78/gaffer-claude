@@ -301,12 +301,12 @@ ensure_import() {
 
 do_files() {
   command -v jq >/dev/null || fail "jq is not on the path"
-  read_marketplace
   if [ "$GIT_IGNORE" = 1 ]; then
     EXCLUDE=$(git rev-parse --git-path info/exclude) || fail "could not find this clone's exclude file"
     resolve_targets
     ensure_excluded
   fi
+  read_marketplace
   report_settings
   [ "$GIT_IGNORE" = 1 ] || ensure_ignored
   ensure_memory_index

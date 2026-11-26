@@ -256,6 +256,8 @@ ok "manifest missing → error naming it, nothing changed" '[ $RC = 1 ] && grep 
 echo '{"name":"../x y"}' > "$NOMAN/.claude-plugin/marketplace.json"
 fresh; before=$(snapshot); OUT=$(bash "$NOMAN/init/setup.sh" files "$R" 2>&1); RC=$?
 ok "a name that is no marketplace name → error, nothing changed" '[ $RC = 1 ] && grep -q "cannot read the marketplace name" <<<"$OUT" && [ "$(snapshot)" = "$before" ]'
+fresh; echo "# Conventions" > "$R/CONVENTIONS.md"; OUT=$(bash "$NOMAN/init/setup.sh" files --git-ignore "$R" 2>&1); RC=$?
+ok "--git-ignore → error, but what was already written is hidden" '[ $RC = 1 ] && grep -q "cannot read the marketplace name" <<<"$OUT" && [ -z "$(status)" ]'
 fresh; OUT=$(bash "$NOMAN/init/setup.sh" check "$R" 2>&1); RC=$?
 ok "check does not read the manifest" '[ $RC = 0 ] && [ "$OUT" = "ready" ]'
 
