@@ -30,8 +30,10 @@
 # OUTPUT. One line per item, `<status>: <item>`, for the command's report. `check` prints `ready`
 # or `not ready: <reason>`. `files` prints `added:` for something it puts in place and `present:`
 # for something already there, and `skipped:` for the CONVENTIONS.md import when there is no
-# CONVENTIONS.md. Without --git-ignore it also prints `ignored: <path>` for any file it manages
-# that the repository git-ignores, since a commit will not carry it. With it, `tracked:` as above,
+# CONVENTIONS.md, and for the gaffer marketplace and plugin entries when this script runs from a
+# local checkout (see LOCAL_CHECKOUT) and the settings lack them. Without --git-ignore it also
+# prints `ignored: <path>` for any file it manages that the repository git-ignores, since a commit
+# will not carry it. With it, `tracked:` as above,
 # and `shows: <path> <why>` for a path git status still shows: a .gitignore with a change this run
 # did not make, or a path a .gitignore negation un-ignores, which outranks the exclude file.
 #
@@ -49,7 +51,8 @@ set -uo pipefail
 
 MARKETPLACE='gaffer-claude'
 MARKETPLACE_SOURCE='{"source":{"source":"github","repo":"FrankRay78/gaffer-claude"}}'
-PLUGINS=('gaffer@gaffer-claude' 'pr-review-toolkit@claude-plugins-official')
+GAFFER_PLUGIN='gaffer@gaffer-claude'
+PLUGINS=('pr-review-toolkit@claude-plugins-official')
 ASK_RULE='Bash(chmod:*)'
 SCRATCH='.claude/scratch/'
 MEMORY_INDEX='.claude/memory/MEMORY.md'
@@ -58,6 +61,20 @@ MEMORY_HEADER='<!-- Memory index: one line per entry, `- [Title](file.md) — on
 # git tracks it; see resolve_targets.
 SETTINGS='.claude/settings.json'
 IMPORTS='CLAUDE.md'
+
+# LOCAL_CHECKOUT — the plugin root when this script runs from a checkout passed as --plugin-dir,
+# and empty when it runs from a copy Claude Code installed, which lives under the config
+# directory's plugins/. A checkout may differ from the marketplace's gaffer, such as a clone with
+# its own tracker skill, so the entries that enable the marketplace's gaffer are not written for
+# it: a session opened without the --plugin-dir would load the marketplace copy instead.
+plugin_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P) || { echo "error: cannot find the plugin root" >&2; exit 1; }
+installed_dir="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/plugins"
+[ ! -d "$installed_dir" ] || installed_dir=$(cd "$installed_dir" && pwd -P)
+case "$plugin_root/" in
+  "$installed_dir"/*) LOCAL_CHECKOUT='' ;;
+  *)                  LOCAL_CHECKOUT=$plugin_root ;;
+esac
+
 usage() { echo "usage: bash setup.sh check [<repo>] | files [--git-ignore] [<repo>]" >&2; exit 2; }
 fail() { echo "error: $*" >&2; exit 1; }
 
@@ -101,38 +118,50 @@ read_settings() {
 
 # Prints what the settings are missing, one item per line, and writes the merged $SETTINGS to $1.
 # Where $SETTINGS is the local file, an entry the tracked settings.json already has counts as
-# present, so a plugin the repository turned off there is not turned back on here.
+# present, so a plugin the repository turned off there is not turned back on here. From a local
+# checkout the gaffer marketplace and plugin are listed when missing but not written.
 settings_merge() {
-  local out=$1 json other='{}'
+  local out=$1 json other='{}' local_checkout=false
+  [ -z "$LOCAL_CHECKOUT" ] || local_checkout=true
   json=$(read_settings "$SETTINGS") || exit 1
   if [ "$SETTINGS" != .claude/settings.json ]; then other=$(read_settings .claude/settings.json) || exit 1; fi
-  jq --arg m "$MARKETPLACE" --argjson ms "$MARKETPLACE_SOURCE" --arg ask "$ASK_RULE" --argjson o "$other" \
-     --args '
+  jq --arg m "$MARKETPLACE" --argjson ms "$MARKETPLACE_SOURCE" --arg g "$GAFFER_PLUGIN" --arg ask "$ASK_RULE" \
+     --argjson o "$other" --argjson local "$local_checkout" --args '
     def ensure(path; v): if (getpath(path) == null and ($o | getpath(path)) == null) then setpath(path; v) else . end;
-    ensure(["extraKnownMarketplaces", $m]; $ms)
+    (if $local then . else ensure(["extraKnownMarketplaces", $m]; $ms) | ensure(["enabledPlugins", $g]; true) end)
     | reduce $ARGS.positional[] as $p (.; ensure(["enabledPlugins", $p]; true))
     | if ((.permissions.ask // []) + ($o.permissions.ask // []) | index($ask)) then . else .permissions.ask = ((.permissions.ask // []) + [$ask]) end
   ' "${PLUGINS[@]}" <<<"$json" > "$out" || fail "could not merge $SETTINGS"
-  jq -r --arg m "$MARKETPLACE" --arg ask "$ASK_RULE" --argjson o "$other" --args '
+  jq -r --arg m "$MARKETPLACE" --arg g "$GAFFER_PLUGIN" --arg ask "$ASK_RULE" --argjson o "$other" --args '
     (if .extraKnownMarketplaces[$m] == null and $o.extraKnownMarketplaces[$m] == null then "marketplace \($m)" else empty end),
-    ($ARGS.positional[] as $p | if .enabledPlugins[$p] == null and $o.enabledPlugins[$p] == null then "plugin \($p)" else empty end),
+    (. as $s | [$g] + $ARGS.positional | .[] as $p | if $s.enabledPlugins[$p] == null and $o.enabledPlugins[$p] == null then "plugin \($p)" else empty end),
     (if ((.permissions.ask // []) + ($o.permissions.ask // []) | index($ask)) then empty else "permission ask \($ask)" end)
   ' "${PLUGINS[@]}" <<<"$json"
 }
 
 report_settings() {
-  local tmp missing
+  local tmp missing written item
+  local -a skippable=("marketplace $MARKETPLACE" "plugin $GAFFER_PLUGIN")
   tmp=$(mktemp) || fail "mktemp failed"
   missing=$(settings_merge "$tmp") || { rm -f "$tmp"; exit 1; }
-  if [ -n "$missing" ]; then
+  written=$missing
+  if [ -n "$LOCAL_CHECKOUT" ]; then
+    for item in "${skippable[@]}"; do written=$(grep -vxF "$item" <<<"$written"); done
+  fi
+  if [ -n "$written" ]; then
     mkdir -p .claude
     mv "$tmp" "$SETTINGS"
   else
     rm -f "$tmp"
   fi
-  local item
-  for item in "marketplace $MARKETPLACE" "${PLUGINS[@]/#/plugin }" "permission ask $ASK_RULE"; do
-    if grep -qxF "$item" <<<"$missing"; then echo "added: $SETTINGS $item"; else echo "present: $SETTINGS $item"; fi
+  for item in "${skippable[@]}" "${PLUGINS[@]/#/plugin }" "permission ask $ASK_RULE"; do
+    if ! grep -qxF "$item" <<<"$missing"; then
+      echo "present: $SETTINGS $item"
+    elif grep -qxF "$item" <<<"$written"; then
+      echo "added: $SETTINGS $item"
+    else
+      echo "skipped: $SETTINGS $item (gaffer runs from the local checkout $LOCAL_CHECKOUT, not a marketplace install)"
+    fi
   done
 }
 

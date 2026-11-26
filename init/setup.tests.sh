@@ -12,10 +12,18 @@
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SETUP="$HERE/setup.sh"
 
 SB="$(mktemp -d)"
 trap 'rm -rf "$SB"' EXIT
+
+# Most cases run a copy of setup.sh placed where Claude Code installs a marketplace plugin, under
+# the config directory's plugins/, since that is how init usually runs. LOCAL_SETUP is this
+# checkout's own copy, as `claude --plugin-dir <checkout>` runs it.
+export CLAUDE_CONFIG_DIR="$SB/config"
+install_copy() { mkdir -p "$1/init" && cp "$HERE/setup.sh" "$1/init/setup.sh"; }
+install_copy "$CLAUDE_CONFIG_DIR/plugins/cache/gaffer-claude/gaffer/0.0.0"
+SETUP="$CLAUDE_CONFIG_DIR/plugins/cache/gaffer-claude/gaffer/0.0.0/init/setup.sh"
+LOCAL_SETUP="$HERE/setup.sh"
 
 # The heredoc is unquoted, so $SB is fixed when the stub is written; the escaped \$@ stays for gh.
 mkdir -p "$SB/bin"
@@ -204,6 +212,25 @@ fresh; run files --git-ignore "$R"; run files "$R"
 ok "--git-ignore, then plain: the .gitignore line is written all the same, for the clones a commit reaches" 'grep -qx ".claude/scratch/" "$R/.gitignore" && grep -qxF "added: .claude/scratch/ git-ignored (.gitignore)" <<<"$OUT"'
 fresh; printf '.claude/scratch/\n' > "$R/.gitignore"; git -C "$R" add -A && git -C "$R" commit -qm ignore; run files --git-ignore "$R"
 ok "--git-ignore beside a committed, unchanged .gitignore rule relies on it, and reports no .gitignore change" 'grep -qx "present: .claude/scratch/ git-ignored" <<<"$OUT" && ! grep -q "^shows:" <<<"$OUT"'
+
+echo "files, run from a local checkout rather than a marketplace install:"
+fresh; OUT=$(bash "$LOCAL_SETUP" files "$R" 2>&1); RC=$?
+ok "exits 0" '[ $RC = 0 ]'
+ok "no gaffer marketplace and no gaffer plugin written" 'jq -e ".extraKnownMarketplaces == null and .enabledPlugins[\"gaffer@gaffer-claude\"] == null" "$R/.claude/settings.json" >/dev/null'
+ok "pr-review-toolkit and the chmod rule still written" 'jq -e ".enabledPlugins[\"pr-review-toolkit@claude-plugins-official\"] == true and (.permissions.ask | index(\"Bash(chmod:*)\"))" "$R/.claude/settings.json" >/dev/null'
+ok "both reported skipped, naming the checkout" '[ "$(grep -c "^skipped: .claude/settings.json .*(gaffer runs from the local checkout $(cd "$HERE/.." && pwd -P), not a marketplace install)$" <<<"$OUT")" = 2 ] && grep -q "^skipped: .claude/settings.json marketplace gaffer-claude " <<<"$OUT" && grep -q "^skipped: .claude/settings.json plugin gaffer@gaffer-claude " <<<"$OUT"'
+ok "everything else reported as added" '[ "$(grep -c "^added:" <<<"$OUT")" = 5 ] && ! grep -q "^present:" <<<"$OUT"'
+before=$(snapshot); OUT=$(bash "$LOCAL_SETUP" files "$R" 2>&1); RC=$?
+ok "second run changes no byte, and skips the two again" '[ "$(snapshot)" = "$before" ] && ! grep -q "^added:" <<<"$OUT" && [ "$(grep -c "^skipped: .claude/settings.json" <<<"$OUT")" = 2 ]'
+fresh; mkdir -p "$R/.claude"; echo '{"enabledPlugins":{"pr-review-toolkit@claude-plugins-official":true},"permissions":{"ask":["Bash(chmod:*)"]}}' > "$R/.claude/settings.json"
+before=$(snapshot); OUT=$(bash "$LOCAL_SETUP" files "$R" 2>&1)
+ok "settings needing only the skipped entries → settings.json not rewritten" '[ "$(sha256sum < "$R/.claude/settings.json")" = "$(cd "$R" && grep " ./.claude/settings.json$" <<<"$before" | cut -d" " -f1)  -" ]'
+fresh; mkdir -p "$R/.claude"; echo '{"extraKnownMarketplaces":{"gaffer-claude":{"source":{"source":"github","repo":"FrankRay78/gaffer-claude"}}},"enabledPlugins":{"gaffer@gaffer-claude":true}}' > "$R/.claude/settings.json"
+OUT=$(bash "$LOCAL_SETUP" files "$R" 2>&1)
+ok "gaffer entries already there are kept and reported present" 'jq -e ".enabledPlugins[\"gaffer@gaffer-claude\"] == true and .extraKnownMarketplaces[\"gaffer-claude\"] != null" "$R/.claude/settings.json" >/dev/null && grep -q "^present: .claude/settings.json marketplace gaffer-claude$" <<<"$OUT" && grep -q "^present: .claude/settings.json plugin gaffer@gaffer-claude$" <<<"$OUT"'
+fresh; install_copy "$SB/home/.claude/plugins/cache/gaffer-claude/gaffer/0.0.0"
+OUT=$(env -u CLAUDE_CONFIG_DIR HOME="$SB/home" bash "$SB/home/.claude/plugins/cache/gaffer-claude/gaffer/0.0.0/init/setup.sh" files "$R" 2>&1)
+ok "no CLAUDE_CONFIG_DIR → an install under ~/.claude/plugins writes the gaffer entries" 'jq -e ".enabledPlugins[\"gaffer@gaffer-claude\"] == true" "$R/.claude/settings.json" >/dev/null && ! grep -q "^skipped: .claude/settings.json" <<<"$OUT"'
 
 echo "modes that are gone:"
 fresh; run labels "$R"
