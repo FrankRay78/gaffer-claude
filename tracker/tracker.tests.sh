@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
 #
-# tracker.tests.sh — standalone test matrix for tracker.sh and the GitHub adapter.
+# tracker.tests.sh — standalone test matrix for tracker.sh, the tracker operations on GitHub.
 #
 # Every case runs in a throwaway git repository under a mktemp sandbox, with a fake `gh` first on
 # PATH that keeps a small GitHub — issues, pull requests, comments and labels — in a JSON file, so
-# nothing reaches GitHub. It specifies which adapter a setting selects and what is refused before
-# the tracker is reached, the calls the GitHub adapter makes (the ones the commands made before the
-# interface existed), and it runs conformance.sh against the GitHub adapter. Exits non-zero on any
-# failure.
+# nothing reaches GitHub. It specifies what is refused before GitHub is reached, where the label
+# names come from, and the calls each operation makes (the ones the commands made before the
+# interface existed). Exits non-zero on any failure.
 #
 #   Usage:  bash tracker/tracker.tests.sh
 
@@ -15,7 +14,7 @@ set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TRACKER="$HERE/tracker.sh"
-CONFORMANCE="$HERE/conformance.sh"
+COVERAGE="$HERE/coverage.sh"
 
 SB="$(mktemp -d)"
 trap 'rm -rf "$SB"' EXIT
@@ -141,7 +140,7 @@ esac
 STUB
 chmod +x "$SB/bin/gh"
 export PATH="$SB/bin:$PATH"
-# A PATH with what the dispatcher and adapter need but gh.
+# A PATH with what the script needs but gh.
 mkdir -p "$SB/nogh"
 for t in bash git jq sed tr grep mktemp rm cat dirname awk tail; do ln -s "$(command -v "$t")" "$SB/nogh/$t"; done
 
@@ -186,88 +185,58 @@ run() { OUT=$(cd "$R" && bash "$TRACKER" "$@" 2>&1); RC=$?; }
 # run_out — as run, but stdout alone in OUT.
 run_out() { OUT=$(cd "$R" && bash "$TRACKER" "$@" 2>/dev/null); RC=$?; }
 
-echo "The setting:"
-fresh; run_out operations
-ok "no settings file: the github adapter" '[ $RC = 0 ] && [ "$(jq -r .tracker <<<"$OUT")" = github ]'
-fresh; settings '{"pre_review": true}'; run_out operations
-ok "a settings file without the key: the github adapter" '[ "$(jq -r .tracker <<<"$OUT")" = github ]'
-fresh; settings '{"tracker": "github"}'; mkdir -p "$R/sub"; OUT=$(cd "$R/sub" && bash "$TRACKER" operations 2>/dev/null)
-ok "the settings file is found from a subdirectory of the repository" '[ "$(jq -r .settings <<<"$OUT")" = "$R/.gaffer/chain.json" ]'
-fresh; settings '{"tracker": "jira"}'; run state-add 7 ready
-ok "a tracker with no adapter: exit 78, naming the setting, the tracker and the operation" '[ $RC = 78 ] && grep -qF "\"tracker\"" <<<"$OUT" && grep -qF "\"jira\"" <<<"$OUT" && grep -qF "'"'"'state-add'"'"'" <<<"$OUT"'
-ok "… and nothing reached the tracker" '[ "$(gh_calls)" = 0 ]'
-fresh; settings '{"tracker": "../github"}'; run view 7
-ok "a tracker name that is a path is refused, not followed" '[ $RC = 78 ] && [ "$(gh_calls)" = 0 ]'
-fresh; settings '{"tracker": 5}'; run view 7
-ok "a tracker that is not a string is refused" '[ $RC = 78 ] && [ "$(gh_calls)" = 0 ]'
+echo "The settings file:"
+fresh; n=$(issue "An issue"); settings '{"tracker": "jira", "pre_review": true}'; reset_log; run state-add "$n" ready
+ok "no tracker setting is read: a settings file that names one changes nothing" '[ $RC = 0 ] && logged "issue|edit|$n|--repo|o/r|--add-label|ready|"'
+with_label() { jq --arg l "$1" '.labels += [{name: $l}]' "$STUB_DIR/state.json" > "$STUB_DIR/s" && mv "$STUB_DIR/s" "$STUB_DIR/state.json"; }
+fresh; n=$(issue "An issue"); with_label go; settings '{"github": {"labels": {"ready": "go"}}}'; mkdir -p "$R/sub"; reset_log
+OUT=$(cd "$R/sub" && bash "$TRACKER" state-add "$n" ready 2>&1); RC=$?
+ok "the repository's .gaffer/chain.json is found from a subdirectory" '[ $RC = 0 ] && logged "issue|edit|$n|--repo|o/r|--add-label|go|"'
+with_label queued; printf '{"github": {"labels": {"ready": "queued"}}}' > "$SB/other.json"; reset_log
+OUT=$(cd "$R" && GAFFER_SETTINGS="$SB/other.json" bash "$TRACKER" state-add "$n" ready 2>&1); RC=$?
+ok "GAFFER_SETTINGS names the file read, over the repository's own" '[ $RC = 0 ] && logged "issue|edit|$n|--repo|o/r|--add-label|queued|"'
+reset_log; OUT=$(cd "$R" && GAFFER_SETTINGS="$SB/none.json" bash "$TRACKER" view "$n" 2>&1); RC=$?
+ok "a GAFFER_SETTINGS file that does not exist is refused: exit 78, naming it, before gh is run" '[ $RC = 78 ] && grep -qF "$SB/none.json" <<<"$OUT" && [ "$(gh_calls)" = 0 ]'
 fresh; settings '[1]'; run view 7
 ok "a settings file that is not an object is refused" '[ $RC = 78 ] && [ "$(gh_calls)" = 0 ]'
-fresh; settings '{"tracker": "github"}'; printf '{"tracker": "jira"}' > "$SB/other.json"
-OUT=$(cd "$R" && GAFFER_SETTINGS="$SB/other.json" bash "$TRACKER" view 7 2>&1); RC=$?
-ok "GAFFER_SETTINGS names the file read, over the repository's own" '[ $RC = 78 ] && grep -qF "$SB/other.json" <<<"$OUT"'
-OUT=$(cd "$R" && GAFFER_SETTINGS="$SB/none.json" bash "$TRACKER" view 7 2>&1); RC=$?
-ok "a GAFFER_SETTINGS file that does not exist is refused" '[ $RC = 78 ] && [ "$(gh_calls)" = 0 ]'
+fresh; n=$(issue "An issue"); reset_log; run state-add "$n" needs-answers
+ok "with no settings file every state has its default label" '[ $RC = 0 ] && logged "issue|edit|$n|--repo|o/r|--add-label|needs answers|"'
 
-echo "The contract, before the tracker is reached:"
+echo "Refused before GitHub is reached:"
 fresh; run frobnicate 7
-ok "an operation outside the contract: exit 2" '[ $RC = 2 ] && [ "$(gh_calls)" = 0 ]'
+ok "an operation that is not one of the interface's: exit 2" '[ $RC = 2 ] && [ "$(gh_calls)" = 0 ]'
+ok "… naming exactly the operations the coverage check lists" '[ "$(sed -n "s/.*the operations are //p" <<<"$OUT" | sed "s/, /\n/g" | sort)" = "$(bash "$COVERAGE" --list | sort)" ]'
+for c in operations "require view"; do
+  run $c; ok "'$c', the dispatcher's own, is gone: exit 2" '[ $RC = 2 ] && [ "$(gh_calls)" = 0 ]'
+done
+while IFS= read -r c; do
+  [ "$c" = setup ] && continue
+  run "$c"; ok "$c, an operation the coverage check lists, is one the script performs: with no argument, a usage error" '[ $RC = 2 ] && grep -qF "usage: bash tracker.sh $c" <<<"$OUT" && [ "$(gh_calls)" = 0 ]'
+done < <(bash "$COVERAGE" --list)
 fresh; run state-add 7 needs_answers
 ok "a state outside the closed list: exit 2, naming the states" '[ $RC = 2 ] && grep -qF "needs-answers, ready, parked, audit" <<<"$OUT" && [ "$(gh_calls)" = 0 ]'
+run state-remove 7 Ready
+ok "… on state-remove too" '[ $RC = 2 ] && [ "$(gh_calls)" = 0 ]'
+run state-add not-a-reference needs_answers
+ok "… and it is the state that is refused, whatever the reference" '[ $RC = 2 ]'
 fresh; printf b > "$R/b"; run create --title t --body-file b --state Ready
 ok "a state outside the list on create: exit 2" '[ $RC = 2 ] && [ "$(gh_calls)" = 0 ]'
 fresh; run marker speckit
-ok "a marker outside the list: exit 2" '[ $RC = 2 ]'
+ok "a marker outside the list: exit 2, naming the markers" '[ $RC = 2 ] && grep -qF "review, confirmed-decisions, review-pr" <<<"$OUT"'
 run comment-find 7 speckit
 ok "comment-find with a marker outside the list: exit 2, before gh is run" '[ $RC = 2 ] && [ "$(gh_calls)" = 0 ]'
-for c in "--body-file b --title" "--title t --body-file"; do
+for c in "--body-file b --title" "--title t --body-file" "--title t" "--body-file b" "--title t --body-file b --state" "--title t --body-file b --labels x"; do
   OUT=$(cd "$R" && timeout 10 bash "$TRACKER" create $c 2>&1); RC=$?
-  ok "create ending in a flag with no value fails rather than hangs: $c" '[ $RC = 1 ] && grep -q usage <<<"$OUT"'
+  ok "create with an argument missing or unknown fails rather than hangs: $c" '[ $RC = 2 ] && grep -q usage <<<"$OUT" && [ "$(gh_calls)" = 0 ]'
 done
 fresh
-for c in "state-add 7" "marker" "branch-ref" "comment-find 7"; do
-  run $c; ok "'$c' with an argument missing: exit 2, before gh is run" '[ $RC = 2 ] && [ "$(gh_calls)" = 0 ]'
+for c in "setup now" "ref" "ref --forms" "branch-ref" "view" "view 7 8" "body-set 7" "state-add 7" "state-remove 7" "comment-find 7" \
+  "comment-post 7" "comment-edit 7 1" "comment-delete 7" "link 7" "close 7" "pr-reference" "marker" "search-title"; do
+  run $c; ok "'$c' with an argument missing or to spare: exit 2, before gh is run" '[ $RC = 2 ] && [ "$(gh_calls)" = 0 ]'
 done
-printf b > "$R/b"; run create --title t --body-file b --state
-ok "create ending in --state with no value: exit 2" '[ $RC = 2 ] && [ "$(gh_calls)" = 0 ]'
-run require view frobnicate
-ok "require with an operation outside the contract: exit 2" '[ $RC = 2 ]'
-fresh; run require view state-add comment-delete search-title
-ok "require: every operation the github adapter implements" '[ $RC = 0 ] && [ -z "$OUT" ]'
-
-# A copy of the dispatcher with adapters written here: "partial" implements only ref and view;
-# "fake" implements every required operation, writing each call to FAKE_LOG, and recognises keys like PROJ-12.
-P="$SB/plugin/tracker"; mkdir -p "$P/adapters"; cp "$TRACKER" "$P/tracker.sh"
-cat > "$P/adapters/partial.sh" <<'A'
-case $1 in operations) printf 'ref\nview\n' ;; *) echo "partial $*" >> "$FAKE_LOG" ;; esac
-A
-cat > "$P/adapters/fake.sh" <<'A'
-case $1 in
-  operations) printf '%s\n' setup ref view create body-set state-add state-remove comment-find comment-post comment-edit link close pr-reference marker ;;
-  ref) [ "$2" = --forms ] && shift; [[ $2 =~ ^[A-Z]+-[0-9]+$ ]] || exit 1; echo "$2" ;;
-  *) echo "fake $*" >> "$FAKE_LOG" ;;
-esac
-A
-export FAKE_LOG="$SB/fake-log"
-prun() { OUT=$(cd "$R" && bash "$P/tracker.sh" "$@" 2>&1); RC=$?; }
-fresh; settings '{"tracker": "partial"}'; rm -f "$FAKE_LOG"; prun state-add 7 ready
-ok "an adapter without the operation: exit 3, naming the setting and the operation" '[ $RC = 3 ] && grep -qF "\"partial\"" <<<"$OUT" && grep -qF "'"'"'state-add'"'"'" <<<"$OUT"'
-ok "… and the adapter was never called" '[ ! -f "$FAKE_LOG" ]'
-prun require view state-add
-ok "require names the first operation the adapter lacks" '[ $RC = 3 ] && grep -qF "'"'"'state-add'"'"'" <<<"$OUT"'
-prun require ref view
-ok "require passes for what it implements" '[ $RC = 0 ]'
-cat > "$P/adapters/broken.sh" <<'A'
-exit 5
-A
-fresh; settings '{"tracker": "broken"}'
-for c in "require view" "view 7" "operations" "comment-delete 7 1"; do
-  prun $c
-  ok "an adapter that cannot list its operations: '$c' exits 78, never 3" '[ $RC = 78 ] && grep -qF "cannot list its operations" <<<"$OUT"'
+for c in "body-set 7 no-such-file" "comment-post 7 no-such-file" "comment-edit 7 1 no-such-file" "close 7 no-such-file"; do
+  run $c; ok "'$c': a file that does not exist is a failure, exit 1, before gh is run" '[ $RC = 1 ] && grep -qF "no-such-file" <<<"$OUT" && [ "$(gh_calls)" = 0 ]'
 done
-fresh; settings '{"tracker": "fake"}'; rm -f "$FAKE_LOG"; prun state-add PROJ-12 ready
-ok "another tracker: the call reaches its adapter, and gh is never run" '[ $RC = 0 ] && grep -qxF "fake state-add PROJ-12 ready" "$FAKE_LOG" && [ "$(gh_calls)" = 0 ]'
-prun branch-ref feature/PROJ-12-add-the-thing
-ok "another tracker: branch-ref finds a key with a hyphen in it whole" '[ $RC = 0 ] && [ "$OUT" = PROJ-12 ]'
 
 echo "References (github):"
 fresh
@@ -291,12 +260,13 @@ ok "ref reaches no tracker" '[ "$(gh_calls)" = 0 ]'
 run_out branch-ref feature/248-pr-closing-keyword; ok "branch-ref feature/248-pr-closing-keyword → 248" '[ $RC = 0 ] && [ "$OUT" = 248 ]'
 run branch-ref feature/build-command; ok "branch-ref of a branch with no number: no candidate" '[ $RC = 1 ]'
 run branch-ref feature/net10-upgrade; ok "branch-ref never takes a number from inside a word" '[ $RC = 1 ]'
+run_out branch-ref docs/12-fix-the-guide; ok "branch-ref reads the number after any prefix" '[ $RC = 0 ] && [ "$OUT" = 12 ]'
 run branch-ref feature/248; ok "branch-ref needs the <N>-<slug> shape" '[ $RC = 1 ]'
 run branch-ref main; ok "branch-ref of main: no candidate" '[ $RC = 1 ]'
 settings '{"github": 5}'
 run ref 50; ok "a github key that is not an object is refused: exit 78" '[ $RC = 78 ]'
 settings '{"github": {"labels": {"ready": ""}}}'
-run ref 50; ok "a malformed github.labels is refused by ref too, so the chain finds it before a stage" '[ $RC = 78 ]'
+run ref 50; ok "a malformed github.labels is refused by ref too, so a command's first read meets it" '[ $RC = 78 ]'
 run branch-ref feature/248-x; ok "branch-ref passes on a refusal rather than reading it as no candidate" '[ $RC = 78 ] && grep -qF "github.labels" <<<"$OUT"'
 rm -f "$R/.gaffer/chain.json"
 
@@ -308,7 +278,7 @@ run state-add "$n" ready; ok "state-add ready adds 'ready'" 'logged "issue|edit|
 foreign a/b "$n"; before=$(home_state); reset_log
 run state-add "https://github.com/a/b/issues/$n" parked; ok "another repository's issue URL passes its --repo, and this repository's issue is untouched" '[ $RC = 0 ] && logged "issue|edit|$n|--repo|a/b|--add-label|parked|" && [ "$(home_state)" = "$before" ]'
 run state-add "https://github.com/o/r/issues/$n" parked; ok "this repository's issue URL passes the origin repository" 'logged "issue|edit|$n|--repo|o/r|--add-label|parked|"'
-# A fork clone: gh would resolve a bare number to the upstream remote; the adapter names origin.
+# A fork clone: gh would resolve a bare number to the upstream remote; the script names origin.
 git -C "$R" remote add upstream https://github.com/up/r.git; reset_log
 run state-add "$n" ready; ok "with an upstream remote beside origin, a bare number still goes to origin" 'logged "issue|edit|$n|--repo|o/r|--add-label|ready|"'
 git -C "$R" remote remove upstream
@@ -464,26 +434,23 @@ ok "a label that cannot be created: exit 1, naming it" '[ $RC = 1 ] && grep -qF 
 touch "$STUB_DIR/fail"; run setup
 ok "a label listing that fails: exit 1" '[ $RC = 1 ]'
 
-echo "Conformance:"
-fresh; OUT=$(cd "$R" && bash "$CONFORMANCE" 2>&1); RC=$?
-ok "the github adapter meets every operation against the fake gh" '[ $RC = 0 ] && ! grep -q "^not met" <<<"$OUT" && [ "$(grep -c "^met:" <<<"$OUT")" = 16 ]'
-# An adapter that is github's in every way but one: its state-remove does nothing.
-cp "$HERE/adapters/github.sh" "$P/adapters/github.sh"
-cat > "$P/adapters/leaky.sh" <<'A'
-[ "$1" = state-remove ] && exit 0
-exec bash "$(dirname "$0")/github.sh" "$@"
-A
-cp "$CONFORMANCE" "$P/conformance.sh"
-fresh; settings '{"tracker": "leaky"}'; OUT=$(cd "$R" && bash "$P/conformance.sh" 2>&1); RC=$?
-ok "an adapter that misses one operation is named for it, and fails" '[ $RC = 1 ] && grep -q "^not met: state-remove" <<<"$OUT" && grep -qxF "met: state-add" <<<"$OUT"'
-
-# An adapter that is github's but leaves out both optional operations.
-cat > "$P/adapters/minimal.sh" <<'A'
-if [ "$1" = operations ]; then bash "$(dirname "$0")/github.sh" operations | grep -vxE 'comment-delete|search-title'; exit 0; fi
-exec bash "$(dirname "$0")/github.sh" "$@"
-A
-fresh; settings '{"tracker": "minimal"}'; OUT=$(cd "$R" && bash "$P/conformance.sh" 2>&1); RC=$?
-ok "an adapter without the optional operations meets the contract, and the report says which it left out" '[ $RC = 0 ] && grep -qxF "not implemented (optional): comment-delete" <<<"$OUT" && grep -qxF "not implemented (optional): search-title" <<<"$OUT"'
+echo "What is written reads back:"
+fresh; n=$(issue "Round trip")
+for st in needs-answers ready parked audit; do
+  run state-add "$n" "$st"; run_out view "$n"
+  ok "state-add $st: view reads the issue in it" '[ "$(jq --arg s "$st" ".states | index(\$s) != null" <<<"$OUT")" = true ]'
+  run state-add "$n" "$st"
+  ok "… and adding it again is no error" '[ $RC = 0 ]'
+  run state-remove "$n" "$st"; rc=$RC; run_out view "$n"
+  ok "state-remove $st: view reads it out again" '[ "$rc" = 0 ] && [ "$(jq --arg s "$st" ".states | index(\$s) == null" <<<"$OUT")" = true ]'
+  run state-remove "$n" "$st"
+  ok "… and removing it again is no error" '[ $RC = 0 ]'
+done
+printf 'Body with `code`, a $dollar, a | pipe and a "quote".\n\nSecond paragraph.\n' > "$R/b"
+run body-set "$n" b; run_out view "$n"
+ok "body-set: the body view reads is the file's" '[ "$(jq -r .body <<<"$OUT")" = "$(cat "$R/b")" ]'
+printf 'Done.\n' > "$R/note"; run close "$n" note; run_out view "$n"
+ok "close: view reads the issue closed" '[ "$(jq -r .state <<<"$OUT")" = closed ]'
 
 echo
 echo "$PASS passed, $FAIL failed"

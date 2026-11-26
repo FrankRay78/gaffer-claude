@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 #
-# boundary.tests.sh — nothing the plugin runs reaches GitHub issues except through tracker.sh.
+# boundary.tests.sh — nothing the plugin runs reaches GitHub issues except through the interface.
 #
 # Scans what the plugin runs or tells a model to run — every committed file under commands/,
 # defaults/ and templates/, and every committed shell script that is not a test matrix — for a
 # `gh issue` call, an issue REST path, an issue search, or a label call. Two files are exempt by
-# name: the GitHub adapter, which is where those calls belong, and chain/chain-next.sh, the runner,
-# which selects and parks issues on GitHub alone. Test matrices stub gh, and docs describe rather
+# name: tracker/tracker.sh, the script the interface file runs, which is where those calls belong,
+# and chain/chain-next.sh, the runner, which selects and parks issues on GitHub alone. Test matrices stub gh, and docs describe rather
 # than run, so neither is scanned. The scanner is checked against planted calls first, so a pattern
 # that matches nothing cannot pass the repository vacuously.
 #
@@ -15,7 +15,7 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-EXEMPT=(tracker/adapters/github.sh chain/chain-next.sh)
+EXEMPT=(tracker/tracker.sh chain/chain-next.sh)
 PATTERN='gh issue|gh label|gh search issues|search/issues|repos/[^[:space:]]*/(issues|labels)|issues/[^[:space:]]*comments|--(add|remove)-label'
 
 # scan <root> — every offending line under <root>'s committed files, as path:line:text.
@@ -33,7 +33,7 @@ ok() { if eval "$2"; then PASS=$((PASS + 1)); echo "  ok   $1"; else FAIL=$((FAI
 
 SB=$(mktemp -d); trap 'rm -rf "$SB"' EXIT
 git -C "$SB" init -q
-mkdir -p "$SB/commands" "$SB/chain" "$SB/tracker/adapters" "$SB/docs"
+mkdir -p "$SB/commands" "$SB/chain" "$SB/tracker" "$SB/docs"
 printf 'Run `gh issue view 5`.\n' > "$SB/commands/a.md"
 printf 'gh api repos/o/r/issues/comments/9 -X PATCH\n' > "$SB/commands/b.md"
 printf 'gh api --paginate "repos/{owner}/{repo}/issues/5/comments"\n' > "$SB/commands/c.md"
@@ -41,7 +41,7 @@ printf 'gh label create x\n' > "$SB/commands/d.md"
 printf 'gh api repos/o/r/issues/5/labels -f labels[]=x\n' > "$SB/commands/e.md"
 printf 'x() { gh pr edit 5 --add-label ready; }\n' > "$SB/chain/run.sh"
 printf 'gh issue view 5\n' > "$SB/chain/chain-next.sh"
-printf 'gh issue view 5\n' > "$SB/tracker/adapters/github.sh"
+printf 'gh issue view 5\n' > "$SB/tracker/tracker.sh"
 printf 'gh issue view 5\n' > "$SB/chain/run.tests.sh"
 printf 'gh issue view 5\n' > "$SB/docs/guide.md"
 printf 'gh pr view 5; gh api repos/o/r/pulls/5/reviews\n' > "$SB/commands/f.md"
@@ -56,13 +56,13 @@ echo "The scanner:"
 for f in commands/a.md commands/b.md commands/c.md commands/d.md commands/e.md commands/g.md commands/h.md commands/i.md commands/j.md commands/k.md chain/run.sh; do
   ok "finds the planted call in $f" 'grep -q "^$f:" <<<"$OUT"'
 done
-for f in chain/chain-next.sh tracker/adapters/github.sh chain/run.tests.sh docs/guide.md commands/f.md; do
+for f in chain/chain-next.sh tracker/tracker.sh chain/run.tests.sh docs/guide.md commands/f.md; do
   ok "leaves $f alone" '! grep -q "^$f:" <<<"$OUT"'
 done
 
 echo "This repository:"
 OUT=$(scan "$ROOT")
-ok "no command, default, template or script reaches GitHub issues outside the adapter and the runner" '[ -z "$OUT" ]'
+ok "no command, default, template or script reaches GitHub issues outside the interface's script and the runner" '[ -z "$OUT" ]'
 
 echo
 echo "$PASS passed, $FAIL failed"
