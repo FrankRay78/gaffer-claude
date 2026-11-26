@@ -22,7 +22,7 @@ The commands read conventions and review criteria section by section, from the p
 
 ## 4. The chain settings file
 
-`.gaffer/chain.json` in the repository, read by the chain scripts and by nothing inside a session: the runner's clone and the accounts whose issues it may build, with defaults for the runner's labels, the pre-review opt-in, each stage's model and effort, the permissions opt-in and where state is kept. It names no tracker. [`chain.md`](chain.md) → *The settings file* is its one statement; a key the runner does not know is refused.
+`.gaffer/chain.json` in the repository, read by the chain scripts and by nothing inside a session: the runner's clone and the accounts whose issues it may build, with defaults for the runner's labels, each stage's model and effort, the permissions opt-in and where state is kept. It names no tracker. [`chain.md`](chain.md) → *The settings file* is its one statement; a key the runner does not know is refused.
 
 ## 5. Conventions the commands assume
 

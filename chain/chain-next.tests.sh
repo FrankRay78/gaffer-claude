@@ -123,24 +123,24 @@ if [ -n "$(git status --porcelain)" ] || [ "$(git rev-parse --abbrev-ref HEAD)" 
   echo "chain: refused — not a clean main"; exit 1
 fi
 if [ -n "$(git for-each-ref --format='%(refname)' "refs/heads/feature/$n-*")" ]; then
-  echo "chain: [1/3] build — starting"
-  echo "chain: FAILED at [1/3] build — feature/$n-work already exists"; exit 1
+  echo "chain: [1/4] build — starting"
+  echo "chain: FAILED at [1/4] build — feature/$n-work already exists"; exit 1
 fi
 if [ -f "$STUB_DIR/config-$n" ]; then
   echo "chain: refused — in .gaffer/chain.json, stages.verify.effort is 'hgih', not one of low, medium, high, xhigh, max; no stage was started."
   exit 78
 fi
 if [ -f "$STUB_DIR/limit-$n" ]; then
-  echo "chain: [1/3] build — starting"
-  echo "chain: FAILED at [1/3] build — the Claude usage limit was reached — You've hit your session limit · resets 3:20pm (Europe/Berlin)"
+  echo "chain: [1/4] build — starting"
+  echo "chain: FAILED at [1/4] build — the Claude usage limit was reached — You've hit your session limit · resets 3:20pm (Europe/Berlin)"
   exit 75
 fi
 git checkout -q -b "feature/$n-work"
 git commit -q --allow-empty -m "Refs #$n: stub work"
 mkdir -p obj && echo build-output > obj/out.txt && echo half-written > "wip-$n.txt"
-echo "chain: [1/3] build — ok"
+echo "chain: [1/4] build — ok"
 if [ -f "$STUB_DIR/draft-then-fail-$n" ]; then
-  # Opted in: raise-pr opened a draft, and the pre-review stopped on it.
+  # raise-pr opened a draft, and the pre-review stopped on it.
   git push -q -u origin "feature/$n-work"
   prs="$STUB_DIR/prs.json"; [ -f "$prs" ] || echo '[]' > "$prs"
   jq --argjson n "$n" '. += [{number: (100 + $n), url: "https://github.com/o/r/pull/\(100 + $n)", isDraft: true, headRefName: "feature/\($n)-work", closingIssuesReferences: [{number: $n}]}]' \
@@ -153,10 +153,10 @@ if [ -f "$STUB_DIR/draft-then-fail-$n" ]; then
 fi
 if [ -f "$STUB_DIR/push-then-fail-$n" ]; then
   git push -q -u origin "feature/$n-work"
-  echo "chain: FAILED at [3/3] raise-pr — gh pr create failed"; exit 1
+  echo "chain: FAILED at [3/4] raise-pr — gh pr create failed"; exit 1
 fi
 if [ -f "$STUB_DIR/fail-$n" ]; then
-  echo "chain: FAILED at [2/$(cat "$STUB_DIR/chain-total" 2>/dev/null || echo 3)] verify — suite red"
+  echo "chain: FAILED at [2/$(cat "$STUB_DIR/chain-total" 2>/dev/null || echo 4)] verify — suite red"
   echo "chain: no later stage ran; reopen that stage with \`claude --resume sess-2\`."
   exit 1
 fi
@@ -349,7 +349,7 @@ touch "$STUB_DIR/fail-8"
 fire
 ok "exits non-zero" '[ "$RC" != 0 ]'
 ok "the issue is marked parked" '[ "$(labels_of 8)" = "ready,parked" ]'
-ok "the comment names the failed stage and its reason" 'grep -qF "stopped at **[2/3] verify** — suite red" "$STUB_DIR/comment-8.txt"'
+ok "the comment names the failed stage and its reason" 'grep -qF "stopped at **[2/4] verify** — suite red" "$STUB_DIR/comment-8.txt"'
 ok "the comment names no usage limit, and closes the way it always has" '! grep -qi "usage limit" "$STUB_DIR/comment-8.txt" && grep -qF "Remove the \`parked\` label to have the runner build this issue again from scratch." "$STUB_DIR/comment-8.txt"'
 log=$(ls "$STATE"/logs/8-*.log 2>/dev/null | head -n 1)
 ok "the comment names the log, which holds the chain's full output" '[ -n "$log" ] && grep -qF "$log" "$STUB_DIR/comment-8.txt" && grep -qF "claude --resume sess-2" "$log"'
@@ -431,9 +431,18 @@ fire
 ok "a usage-limit stop at the pre-review says so, and still names the draft's way on" 'grep -qF "usage limit was reached" "$STUB_DIR/comment-8.txt" && grep -qF "alone will not rebuild it" "$STUB_DIR/comment-8.txt" && ! grep -qF "Nothing on this issue needs looking at" "$STUB_DIR/comment-8.txt"'
 new_case
 issues '[{"number":8,"state":"OPEN","labels":["ready"]}]'
-settings "{\"clone\": \"$CLONE\", \"writers\": [\"User:maintainer\"], \"state_dir\": \"$STATE\", \"pre_review\": true}"
+settings "{\"clone\": \"$CLONE\", \"writers\": [\"User:maintainer\"], \"state_dir\": \"$STATE\", \"stages\": {\"pre-review\": {\"effort\": \"max\"}}}"
 fire
-ok "the runner accepts the chain's pre_review key and passes the settings on" '[ "$RC" = 0 ] && [ "$(chain_calls)" = 8 ] && grep -qF -- "--settings|$SETTINGS|" "$STUB_DIR/start-1"'
+ok "the runner accepts a pre-review row in stages and passes the settings on" '[ "$RC" = 0 ] && [ "$(chain_calls)" = 8 ] && grep -qF -- "--settings|$SETTINGS|" "$STUB_DIR/start-1"'
+# pre_review was the chain's opt-in to the pre-review, which every run now includes; a file that
+# still names it is refused by name, whatever its value, rather than as a key never known.
+for gone in true false; do
+  new_case
+  issues '[{"number":8,"state":"OPEN","labels":["ready"]}]'
+  settings "{\"clone\": \"$CLONE\", \"writers\": [\"User:maintainer\"], \"state_dir\": \"$STATE\", \"pre_review\": $gone}"
+  fire
+  ok "a settings file naming pre_review: $gone is refused, saying the key no longer exists, with nothing queried, reset or run" '[ "$RC" = 1 ] && grep -qF "pre_review, a setting that no longer exists" <<<"$OUTPUT" && [ -z "$(chain_calls)" ] && ! grep -q "^issue|list|" "$STUB_DIR/gh-log" 2>/dev/null && [ ! -e "$STATE" ]'
+done
 new_case
 issues '[{"number":8,"state":"OPEN","labels":["ready"]}]'
 settings "{\"clone\": \"$CLONE\", \"writers\": [\"User:maintainer\"], \"state_dir\": \"$STATE\", \"tracker\": \"jira\"}"
