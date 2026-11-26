@@ -13,6 +13,15 @@ set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SETUP="$HERE/setup.sh"
 
+# The identity setup.sh writes is the marketplace manifest's, so what the cases expect is read from
+# the manifest too: this matrix names no marketplace of its own and passes unedited in a copy of
+# the plugin published under another one. The repository is cut from the URL with sed, not with
+# setup.sh's own expression, so the two are checked against each other.
+MANIFEST="$HERE/../.claude-plugin/marketplace.json"
+MKT=$(jq -r '.name' "$MANIFEST")
+SLUG=$(jq -r '.plugins[0].repository' "$MANIFEST" | sed -E -e 's#^https://github\.com/##' -e 's#(\.git)?/?$##')
+GAFFER="$(jq -r '.plugins[0].name' "$MANIFEST")@$MKT"
+
 SB="$(mktemp -d)"
 trap 'rm -rf "$SB"' EXIT
 
@@ -88,8 +97,8 @@ ok "default branch is read as a bare name (--jq)" 'grep -qxF "repo|view|--json|d
 echo "files, on a repository with nothing:"
 fresh; run files "$R"
 ok "exits 0" '[ $RC = 0 ]'
-ok "gaffer marketplace added" 'jq -e ".extraKnownMarketplaces[\"gaffer-claude\"].source.repo == \"FrankRay78/gaffer-claude\"" "$R/.claude/settings.json" >/dev/null'
-ok "gaffer enabled" 'jq -e ".enabledPlugins[\"gaffer@gaffer-claude\"] == true" "$R/.claude/settings.json" >/dev/null'
+ok "the manifest's marketplace added, from its GitHub repository" '[[ "$SLUG" =~ ^[^/]+/[^/]+$ ]] && jq -e --arg m "$MKT" --arg r "$SLUG" ".extraKnownMarketplaces[\$m] == {source: {source: \"github\", repo: \$r}}" "$R/.claude/settings.json" >/dev/null'
+ok "the manifest's plugin enabled" 'jq -e --arg p "$GAFFER" ".enabledPlugins[\$p] == true" "$R/.claude/settings.json" >/dev/null'
 ok "pr-review-toolkit enabled" 'jq -e ".enabledPlugins[\"pr-review-toolkit@claude-plugins-official\"] == true" "$R/.claude/settings.json" >/dev/null'
 ok "chmod ask rule added" 'jq -e ".permissions.ask | index(\"Bash(chmod:*)\")" "$R/.claude/settings.json" >/dev/null'
 ok "scratch is git-ignored" 'git -C "$R" check-ignore -q .claude/scratch/anything'
@@ -106,21 +115,21 @@ ok "second run reports everything present" '! grep -q "^added:" <<<"$OUT" && [ "
 
 echo "files, preserving what is there:"
 fresh; mkdir -p "$R/.claude"
-cat > "$R/.claude/settings.json" <<'JSON'
-{ "model": "opus", "enabledPlugins": { "gaffer@gaffer-claude": false, "other@x": true },
+cat > "$R/.claude/settings.json" <<JSON
+{ "model": "opus", "enabledPlugins": { "$GAFFER": false, "other@x": true },
   "permissions": { "allow": ["Bash(ls:*)"], "ask": ["Bash(rm:*)"] } }
 JSON
 run files "$R"
 ok "unrelated settings kept" 'jq -e ".model == \"opus\" and .enabledPlugins[\"other@x\"] == true and .permissions.allow == [\"Bash(ls:*)\"]" "$R/.claude/settings.json" >/dev/null'
-ok "a plugin turned off stays off" 'jq -e ".enabledPlugins[\"gaffer@gaffer-claude\"] == false" "$R/.claude/settings.json" >/dev/null && grep -q "^present: .claude/settings.json plugin gaffer@gaffer-claude" <<<"$OUT"'
+ok "a plugin turned off stays off" 'jq -e --arg p "$GAFFER" ".enabledPlugins[\$p] == false" "$R/.claude/settings.json" >/dev/null && grep -qxF "present: .claude/settings.json plugin $GAFFER" <<<"$OUT"'
 ok "ask rule appended after existing ones" 'jq -e ".permissions.ask == [\"Bash(rm:*)\", \"Bash(chmod:*)\"]" "$R/.claude/settings.json" >/dev/null'
 
 fresh; mkdir -p "$R/.claude"; echo '[1,2' > "$R/.claude/settings.json"; before=$(snapshot); run files "$R"
 ok "unreadable settings → error, nothing changed" '[ $RC = 1 ] && grep -q "not a JSON object" <<<"$OUT" && [ "$(snapshot)" = "$before" ]'
 fresh; mkdir -p "$R/.claude"; echo '[1,2]' > "$R/.claude/settings.json"; before=$(snapshot); run files "$R"
 ok "settings that are JSON but not an object → error, nothing changed" '[ $RC = 1 ] && grep -q "not a JSON object" <<<"$OUT" && [ "$(snapshot)" = "$before" ]'
-fresh; mkdir -p "$R/.claude"; echo '{"extraKnownMarketplaces":{"gaffer-claude":{"source":{"source":"directory","path":"/x"}}},"permissions":{"ask":["Bash(rm:*)","Bash(chmod:*)"]}}' > "$R/.claude/settings.json"; run files "$R"
-ok "an existing gaffer marketplace entry is kept as it is" 'jq -e ".extraKnownMarketplaces[\"gaffer-claude\"].source.path == \"/x\"" "$R/.claude/settings.json" >/dev/null'
+fresh; mkdir -p "$R/.claude"; jq -n --arg m "$MKT" '{extraKnownMarketplaces: {($m): {source: {source: "directory", path: "/x"}}}, permissions: {ask: ["Bash(rm:*)", "Bash(chmod:*)"]}}' > "$R/.claude/settings.json"; run files "$R"
+ok "an existing entry for the marketplace is kept as it is" 'jq -e --arg m "$MKT" ".extraKnownMarketplaces[\$m] == {source: {source: \"directory\", path: \"/x\"}}" "$R/.claude/settings.json" >/dev/null'
 ok "chmod rule already among other ask rules → not added again" 'jq -e ".permissions.ask == [\"Bash(rm:*)\", \"Bash(chmod:*)\"]" "$R/.claude/settings.json" >/dev/null'
 fresh; before=$(snapshot); OUT=$(PATH="$SB/nojq" "$BASH_BIN" "$SETUP" files "$R" 2>&1); RC=$?
 ok "jq missing → files refuses, nothing changed" '[ $RC = 1 ] && grep -q "jq is not on the path" <<<"$OUT" && [ "$(snapshot)" = "$before" ]'
@@ -148,6 +157,56 @@ ok "imports already present in either form → CLAUDE.md untouched" '[ "$(cat "$
 
 fresh; mkdir -p "$R/.claude/memory"; echo "- [A](a.md) — b" > "$R/.claude/memory/MEMORY.md"; run files "$R"
 ok "existing memory index kept" '[ "$(cat "$R/.claude/memory/MEMORY.md")" = "- [A](a.md) — b" ]'
+
+# A copy of the plugin is this checkout with another marketplace manifest and nothing else changed,
+# so the copy here is setup.sh beside a manifest of its own. These cases fix their own identity, so
+# they hold whichever checkout the matrix runs in.
+NC=0
+copy() { # copy [<manifest text>] — a plugin checkout at $C; with no argument it has no manifest
+  NC=$((NC + 1)); C="$SB/copy$NC"
+  mkdir -p "$C/init" "$C/.claude-plugin"
+  cp "$SETUP" "$C/init/setup.sh"
+  [ $# = 0 ] || printf '%s\n' "$1" > "$C/.claude-plugin/marketplace.json"
+}
+run_copy() { OUT=$(bash "$C/init/setup.sh" "$@" 2>&1); RC=$?; }
+
+echo "files, run from a copy published under another marketplace:"
+fresh; copy '{"name":"other-market","plugins":[{"name":"gaffer","source":"./","repository":"https://github.com/someone/other-repo"}]}'
+run_copy files "$R"
+ok "exits 0" '[ $RC = 0 ]'
+ok "the copy's marketplace and repository are proposed, and no other marketplace" 'jq -e ".extraKnownMarketplaces == {\"other-market\": {source: {source: \"github\", repo: \"someone/other-repo\"}}}" "$R/.claude/settings.json" >/dev/null'
+ok "the copy's plugin id is enabled, and no other gaffer" 'jq -e ".enabledPlugins == {\"gaffer@other-market\": true, \"pr-review-toolkit@claude-plugins-official\": true}" "$R/.claude/settings.json" >/dev/null'
+ok "the report names the copy" 'grep -qxF "added: .claude/settings.json marketplace other-market" <<<"$OUT" && grep -qxF "added: .claude/settings.json plugin gaffer@other-market" <<<"$OUT"'
+before=$(snapshot); run_copy files "$R"
+ok "second run from the copy changes no byte" '[ "$(snapshot)" = "$before" ] && ! grep -q "^added:" <<<"$OUT"'
+fresh; copy '{"name":"m2","plugins":[{"name":"tool","source":"./","repository":"https://github.com/o/r.git"}]}'; run_copy files "$R"
+ok "a repository URL ending .git, and a plugin of another name" 'jq -e ".extraKnownMarketplaces.m2.source.repo == \"o/r\" and .enabledPlugins[\"tool@m2\"] == true" "$R/.claude/settings.json" >/dev/null'
+fresh; copy '{"name":"m3","plugins":[{"name":"gaffer","source":"./","repository":"https://github.com/o/r/"}]}'; run_copy files "$R"
+ok "a repository URL ending in a slash" 'jq -e ".extraKnownMarketplaces.m3.source.repo == \"o/r\"" "$R/.claude/settings.json" >/dev/null'
+fresh; copy '{"name":"m4","plugins":[{"name":"gaffer","source":"./","repository":"https://github.com/o/r"}]}'
+OUT=$(cd "$SB" && bash "copy$NC/init/setup.sh" files "repo$N" 2>&1); RC=$?
+ok "called by a path relative to another directory, the manifest is still found" '[ $RC = 0 ] && jq -e ".extraKnownMarketplaces.m4.source.repo == \"o/r\"" "$R/.claude/settings.json" >/dev/null'
+
+echo "files, when the manifest does not give the identity:"
+refused() { [ $RC = 1 ] && grep -q "marketplace" <<<"$OUT" && grep -q "nothing was changed" <<<"$OUT" && [ "$(snapshot)" = "$before" ]; }
+fresh; copy; before=$(snapshot); run_copy files "$R"
+ok "no manifest → error, nothing changed" 'refused && grep -q "no marketplace manifest" <<<"$OUT"'
+fresh; copy '{"name":"m","plugins":[{"name":"gaffer","source":"./"}]}'; before=$(snapshot); run_copy files "$R"
+ok "no repository → error naming the field, nothing changed" 'refused && grep -qF ".plugins[0].repository" <<<"$OUT"'
+fresh; copy '{"name":"m","plugins":[{"name":"gaffer","source":"./","repository":"https://gitlab.com/o/r"}]}'; before=$(snapshot); run_copy files "$R"
+ok "a repository that is not on github.com → error, nothing changed" 'refused'
+fresh; copy '{"name":"m","plugins":[{"name":"gaffer","source":"./","repository":"https://github.com/o"}]}'; before=$(snapshot); run_copy files "$R"
+ok "a repository URL with no repository in it → error, nothing changed" 'refused'
+fresh; copy '{"name":"m","plugins":[{"name":"gaffer","source":"./","repository":"https://github.com/o/r/tree/main"}]}'; before=$(snapshot); run_copy files "$R"
+ok "a repository URL that goes past the repository → error, nothing changed" 'refused'
+fresh; copy '{"plugins":[{"name":"gaffer","source":"./","repository":"https://github.com/o/r"}]}'; before=$(snapshot); run_copy files "$R"
+ok "no marketplace name → error, nothing changed" 'refused'
+fresh; copy '{"name":"m","plugins":[]}'; before=$(snapshot); run_copy files "$R"
+ok "no plugin entry → error, nothing changed" 'refused'
+fresh; copy '{"name":'; before=$(snapshot); run_copy files "$R"
+ok "a manifest that is not JSON → error, nothing changed" 'refused'
+fresh; copy; run_copy check "$R"
+ok "check reads no manifest: it is ready without one" '[ $RC = 0 ] && [ "$OUT" = "ready: main" ]'
 
 echo "labels:"
 fresh; run labels "$R"

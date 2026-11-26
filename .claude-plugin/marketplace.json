@@ -10,6 +10,7 @@
     {
       "name": "gaffer",
       "source": "./",
+      "repository": "https://github.com/FrankRay78/gaffer-claude",
       "description": "SDLC commands and the no-chmod hook. Commands are typed as /gaffer:<name>.",
       "category": "development"
     }

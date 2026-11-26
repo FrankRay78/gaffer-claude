@@ -16,6 +16,29 @@ Keep a clone of the plugin whose `skills/tracker/SKILL.md` holds instructions fo
 
 Claude Code re-attaches a loaded skill after it compacts a conversation. A subagent does not inherit a skill its parent loaded, which is why each command file tells whoever is applying it to load the skill.
 
+## The worked example: the Jira copy
+
+[`FrankRay78/gaffer-claude-jira`](https://github.com/FrankRay78/gaffer-claude-jira) is a complete public copy of this plugin whose skill file says Jira. It is published as a marketplace of its own, so someone whose issues live in Jira chooses their tracker by choosing which repository they install from, and configures nothing:
+
+```bash
+claude plugin marketplace add FrankRay78/gaffer-claude-jira
+claude plugin install gaffer@gaffer-claude-jira
+```
+
+The plugin is named `gaffer` in both repositories, so the commands are `/gaffer:<name>` and the skill is `gaffer:tracker` whichever is installed. Install one of the two on a machine, not both.
+
+The copy differs from this repository by five files and no others:
+
+| File in the copy | How it differs |
+|---|---|
+| `skills/tracker/SKILL.md` | Instructions for Jira, in place of GitHub's. It names no Jira site or project: the consuming repository supplies those, where the file says. |
+| `skills/tracker.tests.sh` | What the Jira file needs checked. |
+| `.claude-plugin/marketplace.json` | The copy's marketplace name and repository. `/gaffer:init` reads the settings it proposes from this file, so run from the copy it proposes the copy. |
+| `README.md` | A banner at the top saying what the copy is and how to install it. |
+| `.github/workflows/sync-upstream.yml` | The sync, which this repository does not have. |
+
+**How it is kept in step.** No command carries a fallback for a missing operation, so a copy that misses a change to the operations here breaks. The copy's maintainer starts a sync by hand. It brings this repository's `main` into the copy as a pull request, so the test matrices run before anything reaches the copy's users, and the copy's `main` moves only when that pull request is merged. The sync always keeps the copy's own skill file and matrix. When this repository changed either, the pull request says which and links to the change, and the maintainer ports what matters by hand. A change here that conflicts with the copy in any other file fails the sync, which names the file and opens no pull request.
+
 ## Operations
 
 Every operation is required. No command carries a fallback for a missing one: where a tracker has no native means for an operation, the file meets the stated outcome its own way, as this plugin's file does for `link`, which on GitHub is a comment mentioning the other issue.

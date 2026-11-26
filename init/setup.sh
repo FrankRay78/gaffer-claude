@@ -20,22 +20,29 @@
 # since a pull request cannot carry it, and `skipped:` for the CONVENTIONS.md import when there is
 # no CONVENTIONS.md.
 #
+# IDENTITY. The marketplace, its GitHub repository and the plugin id that `files` writes into the
+# settings are read from .claude-plugin/marketplace.json of the checkout this script sits in: its
+# `name`, and the first plugin entry's `name` and `repository`. A copy of the plugin published
+# under another marketplace therefore proposes itself, with no edit to this script.
+#
 # IDEMPOTENT. Anything already present is left exactly as it is, including a setting the
 # repository has deliberately turned off: a second run of `files` changes no byte. A file is only
 # rewritten when something in it is missing; .claude/settings.json is then re-serialised by jq, so
 # its entries are kept but its indentation may change.
 #
-# EXIT. 0 on success (including `ready`); 1 on `not ready`, an unreadable settings file, or a gh
-# failure, with nothing changed by the step that failed; 2 on bad usage.
+# EXIT. 0 on success (including `ready`); 1 on `not ready`, an unreadable settings file, a manifest
+# that does not give the identity, or a gh failure, with nothing changed by the step that failed;
+# 2 on bad usage.
 #
 # Needs git, jq and, for `check`, gh signed in. Run with `bash`; nothing relies on an
 # executable bit.
 
 set -uo pipefail
 
-MARKETPLACE='gaffer-claude'
-MARKETPLACE_SOURCE='{"source":{"source":"github","repo":"FrankRay78/gaffer-claude"}}'
-PLUGINS=('gaffer@gaffer-claude' 'pr-review-toolkit@claude-plugins-official')
+# Resolved before the cd below, which would break a relative path to this script.
+HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd) || exit 1
+MANIFEST="$HERE/../.claude-plugin/marketplace.json"
+REVIEW_PLUGIN='pr-review-toolkit@claude-plugins-official'
 ASK_RULE='Bash(chmod:*)'
 SCRATCH='.claude/scratch/'
 MEMORY_INDEX='.claude/memory/MEMORY.md'
@@ -74,6 +81,24 @@ do_check() {
 # ---------------------------------------------------------------------------------------------
 # files
 # ---------------------------------------------------------------------------------------------
+
+# Sets MARKETPLACE, MARKETPLACE_SOURCE and PLUGINS from the manifest. The repository is the
+# `owner/repo` of a https://github.com/ URL, since that is the form a settings entry takes.
+load_identity() {
+  local id
+  [ -f "$MANIFEST" ] || fail "no marketplace manifest at $MANIFEST (nothing was changed)"
+  id=$(jq -ec '
+    { marketplace: .name,
+      plugin: .plugins[0].name,
+      repo: (.plugins[0].repository | strings
+             | capture("^https://github\\.com/(?<r>[^/]+/[^/]+?)(\\.git)?/?$").r) }
+    | select(all(.[]; type == "string" and length > 0))
+  ' "$MANIFEST" 2>/dev/null) \
+    || fail "$MANIFEST must give a marketplace name (.name), a plugin name (.plugins[0].name) and a https://github.com/<owner>/<repo> URL (.plugins[0].repository); nothing was changed"
+  MARKETPLACE=$(jq -r .marketplace <<<"$id")
+  MARKETPLACE_SOURCE=$(jq -c '{source: {source: "github", repo: .repo}}' <<<"$id")
+  PLUGINS=("$(jq -r '"\(.plugin)@\(.marketplace)"' <<<"$id")" "$REVIEW_PLUGIN")
+}
 
 # Prints what the settings file is missing, one item per line, and writes the merged file to $1.
 settings_merge() {
@@ -154,6 +179,7 @@ ensure_import() {
 
 do_files() {
   command -v jq >/dev/null || fail "jq is not on the path"
+  load_identity
   report_settings
   ensure_ignored
   ensure_memory_index
