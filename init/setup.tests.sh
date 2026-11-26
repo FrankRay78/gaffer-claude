@@ -96,7 +96,7 @@ ok "scratch is git-ignored" 'git -C "$R" check-ignore -q .claude/scratch/anythin
 ok "memory index created" '[ -f "$R/.claude/memory/MEMORY.md" ]'
 ok "CLAUDE.md created importing the memory index" 'grep -qx "@.claude/memory/MEMORY.md" "$R/CLAUDE.md"'
 ok "no CONVENTIONS.md → no import of it, and says so" '! grep -q CONVENTIONS "$R/CLAUDE.md" && grep -q "^skipped: CLAUDE.md import of CONVENTIONS.md" <<<"$OUT"'
-ok "no allow rule is written: one for the tracker would have to match a path the repository could also hold" 'jq -e ".permissions.allow == null" "$R/.claude/settings.json" >/dev/null'
+ok "no allow rule is written: what the tracker skill's calls need allowed is the repository's or the user's to grant" 'jq -e ".permissions.allow == null" "$R/.claude/settings.json" >/dev/null'
 ok "every change reported as added" '[ "$(grep -c "^added:" <<<"$OUT")" = 7 ] && ! grep -q "^present:" <<<"$OUT"'
 
 echo "files, run twice:"
@@ -151,7 +151,7 @@ ok "existing memory index kept" '[ "$(cat "$R/.claude/memory/MEMORY.md")" = "- [
 
 echo "labels:"
 fresh; run labels "$R"
-ok "the labels mode is gone — the tracker's setup makes the states — so it is a usage error" '[ $RC = 2 ] && [ ! -s "$STUB_DIR/gh-log" ]'
+ok "the labels mode is gone — the tracker skill's setup makes the states — so it is a usage error" '[ $RC = 2 ] && [ ! -s "$STUB_DIR/gh-log" ]'
 
 echo
 echo "$PASS passed, $FAIL failed"

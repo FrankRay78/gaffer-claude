@@ -17,6 +17,8 @@ $ARGUMENTS
 
 Optional. A PR number (`158`), a `#158`, or a full PR URL. Empty means review the PR open for the current branch — resolve with `gh pr view --json number,url`; if there isn't one, stop: "No open PR for the current branch — pass a PR number or raise one first."
 
+**Load the `gaffer:tracker` skill with the Skill tool before the first tracker operation**, which is step 3's read of the issue the pull request refers to. A line written `tracker: <operation> <arguments>` names an operation that skill says how to carry out on this repository's tracker; it is notation, not a command to run. The pull request itself, its reviews and its comments are reached with `gh`, as the steps below write it.
+
 Flags, anywhere in the arguments:
 
 - `--dry-run` — run everything but post nothing; print exactly what would have been posted. Use for calibrating noise.
@@ -116,7 +118,7 @@ Every subagent this command starts — triage, specialists, verifiers — follow
 
    Then record the checkout's commit, once, as the **reviewed commit**: `git rev-parse HEAD` in place, or `git -C .claude/scratch/review-pr-<N> rev-parse HEAD` for a worktree. It is the commit this review reads and the one step 10 posts against, whatever the PR's head has become by then. Every later step reads the PR's diff from the checkout, `git diff origin/<baseRefName>...<reviewed commit>`, never from `gh pr diff` or step 1's `files`, which describe the head as it is now.
 
-3. **Load the context.** Read the plugin's `${CLAUDE_PLUGIN_ROOT}/defaults/REVIEW.md`, then `REVIEW.md` from the root of the repository this command runs in (*Repository criteria*) — in CI the checkout root, holding the default branch's copy; for a worktree review, the invoker's repository, not the worktree. Where the repository has none, say so in the summary's reasons for the tier and level, so a review run on the defaults alone reads as one. Read the *Code quality* sections of the plugin's `${CLAUDE_PLUGIN_ROOT}/defaults/CONVENTIONS.md` and the repository's `CONVENTIONS.md` from that same root, for the comment rule. Then, in the checkout, read `CLAUDE.md` and the documents `REVIEW.md` → *Context to load* names for the layers the PR touches. Read the issue the PR body closes or references (`Closes #<N>`, `Refs #<N>`) for intent.
+3. **Load the context.** Read the plugin's `${CLAUDE_PLUGIN_ROOT}/defaults/REVIEW.md`, then `REVIEW.md` from the root of the repository this command runs in (*Repository criteria*) — in CI the checkout root, holding the default branch's copy; for a worktree review, the invoker's repository, not the worktree. Where the repository has none, say so in the summary's reasons for the tier and level, so a review run on the defaults alone reads as one. Read the *Code quality* sections of the plugin's `${CLAUDE_PLUGIN_ROOT}/defaults/CONVENTIONS.md` and the repository's `CONVENTIONS.md` from that same root, for the comment rule. Then, in the checkout, read `CLAUDE.md` and the documents `REVIEW.md` → *Context to load* names for the layers the PR touches. Read the issue the PR body closes or refers to, for intent: `tracker: view <ref>`, with the reference taken from the body's line about the issue.
 
 ### Phase 1 — Triage map
 
