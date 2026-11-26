@@ -17,7 +17,7 @@ Optionally an issue reference the repository's tracker recognises, such as `248`
 
 One flag, anywhere in the arguments:
 
-- `--draft` — open the pull request as a draft. The chain passes it when a repository opts in to the pre-review, so the repository's own review does not start until `/gaffer:pre-review` marks the pull request ready ([`docs/chain.md`](../docs/chain.md)). Without it — the normal case, and always the case by hand unless you type it — the pull request is opened ready for review.
+- `--draft` — open the pull request as a draft. The chain always passes it, so the repository's own review does not start until `/gaffer:pre-review` marks the pull request ready ([`docs/chain.md`](../docs/chain.md)). Without it — the normal case, and always the case by hand unless you type it — the pull request is opened ready for review.
 
 ## Repository conventions
 

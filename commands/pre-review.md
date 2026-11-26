@@ -9,7 +9,7 @@ Read `CLAUDE.md` for project context, and the conventions as *Repository convent
 
 `/gaffer:pre-review` runs the repository's own review over a pull request before that review is posted, and fixes what it finds while fixing is cheapest. It runs `/gaffer:review-pr --dry-run` against the current branch's open pull request, makes **one** fix pass over what that review confirms, pushes the fix once the suite is green, corrects the pull request body where a finding is about the body, and then marks the pull request ready for review if it was a draft. Marking it ready is what starts the repository's usual review, so the posted review then runs on a pull request whose verified findings are already dealt with.
 
-It is the stage the chain runs after `/gaffer:raise-pr --draft` when a repository opts in ([`docs/chain.md`](../docs/chain.md)), and it runs the same way by hand: to pre-review a pull request you raised yourself, or to finish a draft a failed chain run left open. A pull request that is already ready for review stays as it is — only a draft is marked ready.
+It is the stage every chain run ends with, after `/gaffer:raise-pr --draft` ([`docs/chain.md`](../docs/chain.md)), and it runs the same way by hand: to pre-review a pull request you raised yourself, or to finish a draft a failed chain run left open. A pull request that is already ready for review stays as it is — only a draft is marked ready.
 
 **It is not `/gaffer:verify`'s review.** Verify's reviewers ask generic quality questions of a branch before any pull request exists. This one asks the repository's own: `/gaffer:review-pr` judges against `REVIEW.md`. Both run; neither replaces the other.
 

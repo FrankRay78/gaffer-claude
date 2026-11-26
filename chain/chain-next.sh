@@ -12,8 +12,8 @@
 # says a stage was cut off by the account's Claude usage limit, that comment says so instead and
 # tells the maintainer the issue itself needs only its parked label removed once the limit has
 # reset. It never merges, and it never itself deletes or pushes anything on GitHub; only the
-# chain's raise-pr stage and, where the settings opt in, its pre-review stage push. A pre-review
-# that fails leaves its pull request open as a draft, and the comment names it.
+# chain's raise-pr and pre-review stages push. A pre-review that fails leaves its pull request
+# open as a draft, and the comment names it.
 #
 # WHY. chain.sh carries one named issue to a pull request, but someone still has to pick the
 # issue, and return the checkout to a clean main afterwards — the chain leaves its feature branch
@@ -70,12 +70,16 @@ expand_home() { case "$1" in "~/"*) printf '%s' "$HOME/${1#\~/}" ;; *) printf '%
 # because they are what stops the runner building a stranger's issue on a public repository — a
 # file that names none refuses every issue. A key the runner does not know is a typo until proven
 # otherwise, and refused, since a misspelt key would otherwise be a silently applied default.
+# `pre_review`, the opt-in the chain no longer has, is refused by name, so the file's author is
+# told it is gone rather than that it was never known.
 read_settings() {
   local f=$1 s unknown
   [ -f "$f" ] || die "refused — the settings file $f does not exist; nothing was run."
   s=$(jq -e 'if type == "object" then . else error("x") end' "$f" 2>/dev/null) \
     || die "refused — the settings file $f is not a JSON object; nothing was run."
-  unknown=$(jq -r 'keys - ["clone", "writers", "labels", "stages", "skip_permissions", "state_dir", "pre_review"] | .[]' <<<"$s" | paste -sd' ')
+  ! jq -e 'has("pre_review")' <<<"$s" >/dev/null \
+    || die "refused — $f names pre_review, a setting that no longer exists: every chain run includes the pre-review, so remove the key. Nothing was run."
+  unknown=$(jq -r 'keys - ["clone", "writers", "labels", "stages", "skip_permissions", "state_dir"] | .[]' <<<"$s" | paste -sd' ')
   [ -z "$unknown" ] || die "refused — $f names a setting this runner does not know: $unknown. Nothing was run."
   CLONE=$(jq -r 'if (.clone | type) == "string" and (.clone | length) > 0 then .clone else error("x") end' <<<"$s" 2>/dev/null) \
     || die "refused — $f must name the runner's dedicated clone as \"clone\"; nothing was run."
@@ -91,8 +95,6 @@ read_settings() {
   [ "$READY_LABEL" != "$PARKED_LABEL" ] || die "refused — in $f, the ready and parked labels are the same label; nothing was run."
   SKIP_PERMISSIONS=$(jq -r 'if .skip_permissions == null then false elif (.skip_permissions | type) == "boolean" then .skip_permissions else error("x") end' <<<"$s" 2>/dev/null) \
     || die "refused — in $f, skip_permissions is not true or false; nothing was run."
-  jq -e '.pre_review == null or (.pre_review | type) == "boolean"' <<<"$s" >/dev/null \
-    || die "refused — in $f, pre_review is not true or false; nothing was run."
   STATE=$(jq -r --arg d "${XDG_STATE_HOME:-$HOME/.local/state}/gaffer-chain/$(basename "$CLONE")" \
       'if .state_dir == null then $d elif (.state_dir | type) == "string" and (.state_dir | length) > 0 then .state_dir else error("x") end' <<<"$s" 2>/dev/null) \
     || die "refused — in $f, state_dir is not a non-empty string; nothing was run."
