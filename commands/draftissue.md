@@ -26,7 +26,9 @@ The argument may add guidance alongside the source ("item 12, but leave CSV out"
 
 If `$ARGUMENTS` is empty, ask the user for the source. Do not invent one.
 
-**Every tracker call goes through the tracker interface**, `bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh <operation> …`, never a tracker's own CLI or API: the repository's settings choose the tracker, and [`docs/tracker.md`](../docs/tracker.md) is the contract — each operation's arguments, its JSON output and its exit codes. Write the script's path unquoted, as shown, so an allow rule for it matches. Put a reference the user typed in single quotes, as shown: unquoted, a leading `#` starts a shell comment and the reference is lost. Tell an existing issue from free text with `bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh ref '<candidate>'`, where `<candidate>` is only the part of the argument that could name an issue, never guidance beside it (`#12`, not `#12, but leave CSV out`). A backlog form — `backlog <number>` or `item <number>` — names a backlog item, not an issue: never pass it, or the number in it, to `ref`, which would read `12` as issue #12. Exit 0 means it is an issue reference, and prints the `<ref>` every later call uses; exit 1 means it is not one; any other exit is the tracker setting at fault, so stop and pass on what it printed.
+**Load the `gaffer:tracker` skill with the Skill tool before the first tracker operation.** A line written `tracker: <operation> <arguments>` names an operation that skill says how to carry out on this repository's tracker; it is notation, not a command to run.
+
+Tell an existing issue from free text with `tracker: ref <candidate>`, where `<candidate>` is only the part of the argument that could name an issue, never guidance beside it (`#12`, not `#12, but leave CSV out`). A backlog form — `backlog <number>` or `item <number>` — names a backlog item, not an issue: never pass it, or the number in it, to `ref`, which would read `12` as issue #12. Where `ref` recognises the candidate it is an issue reference, and what it yields is the `<ref>` every later operation uses; where it does not, the argument is not one.
 
 ---
 
@@ -66,7 +68,7 @@ It raises the issue without a draft-approval pause. `/gaffer:reviewissue` and `/
 ### 1. Read the source
 
 - **Free text** — the argument is the whole source.
-- **Existing issue** — `bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh view <ref>`, which prints the issue's `title`, `body` and `comments` as JSON. Use the body, any comment carrying the review marker (`bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh marker review` prints it; on GitHub `<!-- speckit:review -->`), and any `## Confirmed decisions` section as raw material. An old issue often mixes requirements with technical design: draft from the requirements, and treat its technical content like any source's hints. Tell the user which issues were ingested.
+- **Existing issue** — `tracker: view <ref>`, which yields the issue's title, body and comments; if it fails, stop and pass on what it reported. Use the body, any comment carrying the review marker (the text `tracker: marker review` yields), and any `## Confirmed decisions` section as raw material. An old issue often mixes requirements with technical design: draft from the requirements, and treat its technical content like any source's hints. Tell the user which issues were ingested.
 - **Document** — read it: `gh` or `git` for a GitHub-hosted page (a wiki is a git repository), the file itself for a path, a fetch otherwise. Narrow to the part the argument names.
 - **Backlog item** — read the item as `CONVENTIONS.md` → *Issue sources* describes, together with whatever the backlog says about it elsewhere: the items it depends on, notes or open questions that name it, and anything listed as rejected or already done next to it.
 
@@ -168,25 +170,15 @@ Apply any drafting conventions `CONVENTIONS.md` → *Acceptance criteria* lists.
 
 ### 5. Raise the issue
 
-Choose a short title naming the capability. First check the tracker can raise it, and for a migration close the source too:
+Choose a short title naming the capability, and create the issue:
 
-```bash
-bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh require create
-```
+- `tracker: create --title <title> --body-file <scratch-file>`
 
-Add `ref close` to that list for a migration. If it exits non-zero, stop here, keep the scratch file, and tell the user its path so they can post it by hand, passing on what the check printed — it names the setting and the operation at fault. Otherwise create the issue:
+It yields the new issue's reference and URL; then delete the scratch file. If the create fails, stop here, keep the scratch file, and tell the user its path so they can post it by hand, passing on what the operation reported.
 
-```bash
-bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh create --title "<title>" --body-file <scratch-file>
-```
+**Migration — supersede the source issue.** Once the new issue exists, ask the user before closing each source issue, even if the argument said to close it — they may want to read the new one first. Close each one they confirm, one at a time. Write the note `Superseded by <mention>` to a scratch file with the **Write tool**, where `<mention>` is the new issue's form for prose, which `tracker: ref <new ref>` yields, then:
 
-It prints the new issue's `{ref, url}`; then delete the scratch file. If the create fails, stop here the same way, keeping the scratch file.
-
-**Migration — supersede the source issue.** Once the new issue exists, ask the user before closing each source issue, even if the argument said to close it — they may want to read the new one first. Close each one they confirm, one at a time. Write the note `Superseded by <mention>` to a scratch file with the **Write tool**, where `<mention>` is the `mention` that `bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh ref --forms <new ref>` prints (on GitHub, `#<M>`), then:
-
-```bash
-bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh close <ref> <note file>
-```
+- `tracker: close <ref> <note file>`
 
 The command never edits any other source: not a document, not a backlog.
 
