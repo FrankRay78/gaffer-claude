@@ -1,5 +1,5 @@
 ---
-description: Set a repository up for gaffer from what it already contains — the settings, git-ignore line, imports and tracker states the commands assume, plus a CONVENTIONS.md and REVIEW.md that point at the repository's own files — delivered as a pull request of recommendations to edit or discard. Re-run on a repository already set up, it reports only what is missing.
+description: Set a repository up for gaffer from what it already contains — the settings, git-ignore line and imports the commands assume, plus a CONVENTIONS.md and REVIEW.md that point at the repository's own files — delivered as a pull request of recommendations to edit or discard. Re-run on a repository already set up, it reports only what is missing.
 ---
 
 Read `CLAUDE.md` for project context, if there is one, and the conventions as *Repository conventions* below says, before proceeding.
@@ -86,10 +86,10 @@ The plugin's own files are read from `${CLAUDE_PLUGIN_ROOT}`: the setup script `
      ```
 
      It prints one `added:` or `present:` line per item, `skipped:` for the `CONVENTIONS.md` import when there is no such file, and `ignored:` for each file it manages that the repository git-ignores: that file exists in this checkout but no pull request can carry it. Keep the output for the body. A non-zero exit is a stop: report its error, leave the branch as it is for the user to inspect, and raise nothing.
-   - Then make sure every state the commands use exists in the repository's tracker: `tracker: setup`. It says which states it added and which were present; keep that for the body too. If it fails, stop the same way.
+   - Then list the states the commands need the repository's tracker to have: `tracker: states`. It yields each state, what shows it in this tracker, and whether it exists yet, with how to create one that is missing. It creates nothing, and neither does this command: making a state exist is the user's to do. Keep the list for the body and the report. If the operation fails, say so in both, quoting what it reported, and carry on: nothing else here depends on it.
 
 6. **Raise the pull request, or report that nothing is missing.**
-   - **Nothing changed** — `git status --porcelain --untracked-files=all` is empty: switch back to the default branch, delete the init branch, raise nothing, and report that the repository is already set up. Say whether `tracker: setup` added any state, since that happens outside any pull request, and name any `ignored:` file.
+   - **Nothing changed** — `git status --porcelain --untracked-files=all` is empty: switch back to the default branch, delete the init branch, raise nothing, and report that the repository is already set up. List every state `tracker: states` gave, marking each present or missing, and say that each must exist before the issue commands are used; name any `ignored:` file.
    - **Otherwise**: stage, by name, only what this run wrote, never `git add -A`: of `CONVENTIONS.md`, `REVIEW.md`, `CLAUDE.md`, `.gitignore`, `.claude/settings.json` and `.claude/memory/MEMORY.md`, each one this run created or changed and that `files` did not report `ignored:`. Commit as `Set up gaffer: conventions, review criteria and settings`, push with `-u`, and open a pull request against the default branch titled `Set up gaffer`. Write the body to the scratch file `CONVENTIONS.md` → *Scratch files* names (`init-pr-body.md` by default) with the `Write` tool and pass it with `--body-file`. The body is:
 
      ```markdown
@@ -116,7 +116,9 @@ The plugin's own files are read from `${CLAUDE_PLUGIN_ROOT}`: the setup script `
 
      ## Tracker states
 
-     - <each state `setup` added, or "All present already.">
+     The issue commands and the chain need each of these to exist in the tracker. Neither `/gaffer:init` nor this pull request creates one.
+
+     - <each state `states` gave: its name, what shows it in this tracker, and *present*, or *missing* with how to create it — or "Could not be checked: <what the operation reported>">
      ```
 
      Every heading of both templates gets a row, in template order, with exactly one of: *filled from* and the files cited, *already present*, or *nothing found, default applies*. Write a `|` in a cell as `\|`. Setup items that were already present are left out of *Setup*; if all were, write "All present already."
@@ -128,7 +130,8 @@ Keep it short:
 
 - the pull request URL — or that nothing was missing, or the `not ready` reason and what to do
 - how many headings were filled, already present and left to the default, per file
-- the setup items and tracker states added
+- the setup items added
+- every tracker state the commands need, each marked present or missing, and that the missing ones must be created before the issue commands are used
 - a reminder to check the copied build-and-test command in particular, since `/gaffer:build` will run it as written
 
 ## When NOT to use this command

@@ -151,7 +151,7 @@ ok "existing memory index kept" '[ "$(cat "$R/.claude/memory/MEMORY.md")" = "- [
 
 echo "labels:"
 fresh; run labels "$R"
-ok "the labels mode is gone — the tracker skill's setup makes the states — so it is a usage error" '[ $RC = 2 ] && [ ! -s "$STUB_DIR/gh-log" ]'
+ok "the labels mode is gone — init lists the tracker's states and creates none — so it is a usage error" '[ $RC = 2 ] && [ ! -s "$STUB_DIR/gh-log" ]'
 
 echo
 echo "$PASS passed, $FAIL failed"

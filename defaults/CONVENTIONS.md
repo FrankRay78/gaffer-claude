@@ -90,7 +90,7 @@ Nothing beyond `/gaffer:reviewissue`'s generic categories by default. A reposito
 
 ## Audit
 
-By default `/gaffer:audit-codebase` reads every tracked file, takes no evidence beyond the build-and-test command under *Build, test and format*, holds the code to the rules under the headings above and whatever `CLAUDE.md` states as the project's rules, knows nothing about the tree in advance, and raises its issue in the tracker's `audit` state. A repository that has more says so here: the paths in scope, an evidence table of the tools that already decide a question, the rules each lens audits, what each lens should know about this tree before it starts (a known flaky test, symbols a generator consumes, fixtures that look like traceability markers).
+By default `/gaffer:audit-codebase` reads every tracked file, takes no evidence beyond the build-and-test command under *Build, test and format*, holds the code to the rules under the headings above and whatever `CLAUDE.md` states as the project's rules, knows nothing about the tree in advance, and raises its issue in no tracker state. A repository that has more says so here: the paths in scope, an evidence table of the tools that already decide a question, the rules each lens audits, what each lens should know about this tree before it starts (a known flaky test, symbols a generator consumes, fixtures that look like traceability markers).
 
 ## Hooks, scripts and plugins
 

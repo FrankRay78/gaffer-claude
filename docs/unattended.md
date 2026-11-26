@@ -6,7 +6,7 @@ For whoever wires a gaffer command into a chain script, a scheduled runner or a 
 
 | Command | Outward-facing acts, and when |
 |---|---|
-| `init` | Creates a `gaffer/init-<timestamp>` branch, commits, pushes and opens one pull request — only from a clean default branch — and makes any missing state in the tracker — on GitHub the `needs answers`, `ready`, `parked` and `audit` labels. Raises nothing when nothing is missing. |
+| `init` | Creates a `gaffer/init-<timestamp>` branch, commits, pushes and opens one pull request — only from a clean default branch. Raises nothing when nothing is missing. It lists the states the commands need the tracker to have and says which are missing; it creates none. |
 | `build` | Creates `feature/<N>-<slug>` from `origin/main` and commits to it — only from a clean `main` with no unpushed commits, for an open issue with no linked PR. Recreates a leftover branch of that name only if it holds nothing uninspected. |
 | `verify` | Commits formatting, then the review's fixes after a green re-run, or after a failure that did not reproduce in a test file the branch left untouched, or whose file the output did not show, which the report names. A fix it cannot land is left uncommitted and named in the report. |
 | `raise-pr` | Pushes the branch and opens the PR — as a draft when passed `--draft` — adding the line that closes the issue (on GitHub `Closes #<N>`) only when the tracker's `pr-reference` confirms that open issue in this repository. |
@@ -15,7 +15,7 @@ For whoever wires a gaffer command into a chain script, a scheduled runner or a 
 | `review-followup` | Replies in, resolves and re-opens review threads, and posts the next round; at most three rounds. |
 | `reviewissue` | Posts the review comment carrying the tracker's review marker (on GitHub `<!-- speckit:review -->`) and puts the issue in `needs-answers` (on GitHub the label `needs answers`); a re-run edits that comment in place. |
 | `confirmissue` | Rewrites the issue body with `## Confirmed decisions`, swaps `needs-answers` for `ready`, then deletes the review comment — only after reading both changes back. |
-| `audit-codebase` | Opens one issue, in the `audit` state alone — on GitHub the `audit` label. |
+| `audit-codebase` | Opens one issue, in no tracker state. |
 | `chain/chain.sh` | Nothing of its own: build, verify and raise-pr — and pre-review, where the settings opt in — in order, stopping at the first that fails. |
 | `chain/chain-next.sh` | Resets its own dedicated clone, runs the chain there, and on failure labels the issue `parked` with a comment, naming any draft PR a failed pre-review left open. Never pushes, merges or deletes on GitHub. |
 
@@ -37,7 +37,7 @@ The model's report is not the result. Check:
 - **review-pr, review-followup** — a new review marked `<!-- review-pr -->` on the commit it reviewed (even where the pull request's head has moved since), carrying the `Risk tier: … · Human review: …` line.
 - **reviewissue** — the marked comment on the issue and the `needs answers` label.
 - **confirmissue** — `## Confirmed decisions` in the body, `ready` present, `needs answers` gone, the marked comment deleted.
-- **init** — a new pull request titled `Set up gaffer` from a `gaffer/init-*` branch, or none and a report that nothing was missing; either way the caller back on the default branch with a clean tree, and the `needs answers`, `ready`, `parked` and `audit` labels present.
+- **init** — a new pull request titled `Set up gaffer` from a `gaffer/init-*` branch, or none and a report that nothing was missing; either way the caller back on the default branch with a clean tree, and the tracker untouched.
 - **audit-codebase** — one new issue titled `Codebase audit: <short HEAD> (<date>)`, and a clean tree.
 
 ## In CI

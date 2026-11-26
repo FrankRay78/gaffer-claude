@@ -25,7 +25,7 @@ Commands are typed as `/gaffer:<name>`. Each command's prompt under [`commands/`
 
 | Command | What it does | Unattended? |
 |---|---|---|
-| `init` | Sets a repository up from what it already contains: settings, git-ignore line, `CLAUDE.md` imports, labels, and a `CONVENTIONS.md` and `REVIEW.md` pointing at its own files, as a pull request of recommendations. Re-run, it reports what is missing. | Yes |
+| `init` | Sets a repository up from what it already contains: settings, git-ignore line, `CLAUDE.md` imports, and a `CONVENTIONS.md` and `REVIEW.md` pointing at its own files, as a pull request of recommendations. Re-run, it reports what is missing. | Yes |
 | `draftissue` | Turns an idea, a document, a backlog item or an old issue into a needs-first GitHub issue and raises it. | No — discusses open decisions |
 | `reviewissue` | Reviews an issue before building: posts the gaps and a recommendation for each as an inline-answerable comment, labels it `needs answers`. | Yes, given an issue number |
 | `confirmissue` | Folds the answered review into *Confirmed decisions* on the issue, labels it `ready`, deletes the review comment. | Yes, given an issue number |
@@ -73,7 +73,7 @@ To enable it for every clone of a repository, commit this to its `.claude/settin
 - **`git`, `gh` 2.73.0 or later (authenticated) and `jq`** on the path. An older `gh` cannot read an issue's linked pull requests, so every issue command stops at its first read. The hook also needs `awk`.
 - **The `pr-review-toolkit` plugin**: `/gaffer:verify` spawns its reviewers by their `pr-review-toolkit:` names.
 - **`Bash(chmod:*)` on `permissions.ask`** in `.claude/settings.json`, as the backstop for the forms the hook declines to decide; a plugin cannot set permission rules.
-- **Issues on GitHub**, with the labels `/gaffer:init` creates. A repository whose issues live elsewhere runs a clone of the plugin with the one tracker skill file replaced ([`docs/tracker.md`](docs/tracker.md)).
+- **Issues on GitHub**, with the labels `/gaffer:init` lists as needed; it creates none. A repository whose issues live elsewhere runs a clone of the plugin with the one tracker skill file replaced ([`docs/tracker.md`](docs/tracker.md)).
 - **`.claude/scratch/` git-ignored**, for every command's working files.
 - **`main` as the default branch**, `CLAUDE.md` for project context, and `.claude/memory/` for durable learnings, loaded by an `@.claude/memory/MEMORY.md` line in `CLAUDE.md`. Without that line no session sees an entry.
 - **A build-and-test command** under *Build, test and format* in the repository's `CONVENTIONS.md` before the build stage is used. It is the one convention with no default: `build` and `verify` stop rather than invent one.

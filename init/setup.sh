@@ -3,8 +3,9 @@
 # setup.sh — the mechanical part of /gaffer:init.
 #
 # Wires a repository for the plugin: the checks that say it can take a pull request, and the files
-# every command assumes. The states the issue stage and the chain use are made by the tracker
-# skill's `setup` operation (skills/tracker/SKILL.md), not here. The judgement part of
+# every command assumes. The states the issue stage and the chain use are not made here or by any
+# command: /gaffer:init lists them from the tracker skill (skills/tracker/SKILL.md), and the user
+# makes them. The judgement part of
 # init (reading the repository and filling CONVENTIONS.md and REVIEW.md) is the command's; this
 # script does only what a person would otherwise type from docs/getting-started.md, so it can be
 # tested without a model.

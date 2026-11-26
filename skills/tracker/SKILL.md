@@ -5,7 +5,7 @@ description: How gaffer's commands reach the issue tracker. Load before carrying
 
 # The tracker: GitHub issues
 
-A gaffer command names a tracker operation as `tracker: <operation> <arguments>`. This file says how to carry each one out with `gh`.
+A gaffer command names a tracker operation as `tracker: <operation> <arguments>`. This file says how to carry each one out with `gh`. A person may ask for one directly, as `/gaffer:tracker <operation> <arguments>`.
 
 The calls below are the ones to make. If `gh` rejects a flag or a field, read its error, adjust the call, and still deliver what the operation yields. Never skip an operation, and never report one done that failed.
 
@@ -19,12 +19,11 @@ The calls below are the ones to make. If `gh` rejects a flag or a field, read it
 
 ## States and markers
 
-| State | Label | Label description, for `setup` |
+| State | Label | Label description |
 |---|---|---|
 | `needs-answers` | `needs answers` | A review is posted and awaiting the author's answers |
 | `ready` | `ready` | The issue is confirmed and may be built |
 | `parked` | `parked` | An unattended run stopped on this issue; remove to retry |
-| `audit` | `audit` | A codebase audit's findings, raised by /gaffer:audit-codebase |
 
 Label names compare without regard to case.
 
@@ -36,9 +35,11 @@ Label names compare without regard to case.
 
 ## Operations
 
-### setup
+### states
 
-List the labels with `gh label list --repo <R> --limit 1000 --json name --jq '.[].name'`. For each state whose label is not listed, run `gh label create "<label>" --repo <R> --description "<description>"`. Report each label as added or present.
+`states` lists each state, the label that shows it, and whether that label exists. It creates nothing.
+
+List the labels with `gh label list --repo <R> --limit 1000 --json name --jq '.[].name'`. Report each state with its label, as present or missing. For a missing one, give the command that creates it: `gh label create "<label>" --repo <R> --description "<description>"`.
 
 ### ref
 
@@ -72,13 +73,13 @@ gh api --paginate repos/<R>/issues/<N>/comments
 
 ### create
 
-`create --title <title> --body-file <file> [--state <state>]…`
+`create --title <title> --body-file <file>`
 
 ```bash
-gh issue create --repo <R> --title "<title>" --body-file <file> --label "<label>"
+gh issue create --repo <R> --title "<title>" --body-file <file>
 ```
 
-One `--label` for each state; none where no state is given. It prints the new issue's URL, whose last segment is its reference.
+It prints the new issue's URL, whose last segment is its reference.
 
 ### body-set
 

@@ -32,7 +32,7 @@ It asks nothing. It checks the repository can take a pull request — no uncommi
 - **`.claude/memory/MEMORY.md`**, and **`CLAUDE.md` importing it** and `CONVENTIONS.md` (once there is one), so the memory entries `/gaffer:capture-learnings` writes and the conventions are in every session's context.
 - **A `CONVENTIONS.md` and a `REVIEW.md`** with a section for each template heading the repository already answers: pointers to its CI workflows, scripts and guides, and the build, test and format commands copied word for word from the file that runs them. It writes no principle or decision; a heading with nothing to point at is left out, so the plugin's default applies.
 
-The pull request body lists every template heading as *filled from* the files it cites, *already present*, or *nothing found, default applies*. It also makes sure the tracker has every state the commands use: on GitHub, the `needs answers`, `ready`, `parked` and `audit` labels the issue stage, the chain and the audit use — tracker state rather than files. Read the pull request, check the copied build-and-test command above all, edit anything on its branch, and merge it — or close it to discard it.
+The pull request body lists every template heading as *filled from* the files it cites, *already present*, or *nothing found, default applies*. It also lists the states the issue stage and the chain need the tracker to have, as the tracker skill gives them, and says which are missing. It creates none: make the missing ones yourself before the first `/gaffer:reviewissue`, which fails at its last step without them. Read the pull request, check the copied build-and-test command above all, edit anything on its branch, and merge it — or close it to discard it.
 
 Committing the settings does not install the plugin: when the project is opened and trusted, Claude Code fetches the marketplace it names, but each collaborator still runs step 1 once on their machine, and a session before that offers no `/gaffer:` commands.
 
@@ -52,13 +52,10 @@ What `/gaffer:init` adds to `.claude/settings.json`:
 }
 ```
 
-Then git-ignore `.claude/scratch/`, and add `@CONVENTIONS.md` and `@.claude/memory/MEMORY.md` lines to `CLAUDE.md`, creating it if there is none. Claude Code does not read `.claude/memory/` on its own, so without the second line no session sees a memory entry; the import is harmless before the first entry exists. Then create the labels:
+Then git-ignore `.claude/scratch/`, and add `@CONVENTIONS.md` and `@.claude/memory/MEMORY.md` lines to `CLAUDE.md`, creating it if there is none. Claude Code does not read `.claude/memory/` on its own, so without the second line no session sees a memory entry; the import is harmless before the first entry exists. Then make sure the tracker has the states the commands use. In a session, this lists them, what shows each in the tracker, which are missing, and how to create those:
 
-```bash
-gh label create "needs answers" --description "A review is posted and awaiting the author's answers"
-gh label create ready --description "The issue is confirmed and may be built"
-gh label create parked --description "An unattended run stopped on this issue; remove to retry"
-gh label create audit --description "A codebase audit's findings, raised by /gaffer:audit-codebase"
+```
+/gaffer:tracker states
 ```
 
 The commands also assume `main` is the default branch and that `git`, `gh` 2.73.0 or later (signed in) and `jq` are on the path. The full list is under *What a repository needs* in the [README](../README.md).

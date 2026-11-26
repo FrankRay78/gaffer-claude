@@ -32,7 +32,7 @@ Not configurable; a repository that differs changes the command, by an issue her
 - `.claude/memory/` holds durable learnings, one file per fact, indexed in `MEMORY.md`, which `CLAUDE.md` loads into every session with the line `@.claude/memory/MEMORY.md`. Claude Code does not read the folder on its own.
 - `.claude/scratch/`, git-ignored, holds every working file.
 - `main` is the default branch; `build` branches from `origin/main` and names branches `feature/<N>-<slug>`, where `<N>` is the issue reference in the tracker's branch form, which `raise-pr` reads back.
-- The commands speak of four tracker states (§6): `needs-answers` and `ready` carry the issue stage's state, `parked` the runner's and `audit` the audit's. On GitHub they are the labels `needs answers`, `ready`, `parked` and `audit`, which the tracker skill names. `audit-codebase` puts its issue in `audit` alone, never `ready` or `parked`, because automation reacts to them.
+- The commands speak of three tracker states (§6): `needs-answers` and `ready` carry the issue stage's state, and `parked` the runner's. On GitHub they are the labels `needs answers`, `ready` and `parked`, which the tracker skill names. No command creates one: `/gaffer:init` lists them and says which are missing. `audit-codebase` puts its issue in no state, never `ready` or `parked`, because automation reacts to them.
 - Markers let the commands find each other's output: the tracker's `review` and `confirmed-decisions` markers on issues (on GitHub `<!-- speckit:review -->` and `<!-- confirmed-decisions -->`), and `<!-- review-pr -->` on pull request reviews.
 
 ## 6. The tracker skill

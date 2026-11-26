@@ -21,11 +21,11 @@ Every operation is required. No command carries a fallback for a missing one: wh
 
 | Operation | Arguments | Must yield |
 |---|---|---|
-| `setup` | — | Every state exists in the tracker. Says which it added and which were present. |
+| `states` | — | Each state, what shows it in this tracker, and whether it exists yet, with how to create one that is missing. Creates nothing. |
 | `ref` | `<reference>` | The reference in its normal form, and its forms for a branch name and for commit subjects and prose. Refuses a reference the tracker does not recognise. |
 | `branch-ref` | `<branch>` | The reference a branch name carries, or none. |
 | `view` | `<ref>` | The issue's title, body and URL, whether it is open or closed, the states it is in, the pull requests that will close it, and every comment with its id, author, time and body. |
-| `create` | `--title <title> --body-file <file> [--state <state>]…` | A new issue with that title and body, in the given states. Its reference and URL. |
+| `create` | `--title <title> --body-file <file>` | A new issue with that title and body. Its reference and URL. |
 | `body-set` | `<ref> <file>` | The issue body replaced with the file's text. |
 | `state-add`, `state-remove` | `<ref> <state>` | The issue put in, or taken out of, the state. Repeating either is no error. |
 | `comment-find` | `<ref> <marker>` | The newest comment carrying the marker, by time, or none. |
@@ -52,16 +52,15 @@ Every operation is required. No command carries a fallback for a missing one: wh
 
 ## States and markers
 
-A command speaks of states, never labels. There are four, and `setup` makes each exist.
+A command speaks of states, never labels. There are three. Nothing in the plugin creates one: `/gaffer:init` lists them with `states`, saying which are missing, and whoever owns the tracker makes them. A person can ask for the same list at any time with `/gaffer:tracker states`.
 
 | State | Meaning | Set by |
 |---|---|---|
 | `needs-answers` | A review is posted and waits for the author. | `reviewissue`; removed by `confirmissue` |
 | `ready` | The issue is confirmed and may be built. | `confirmissue` |
 | `parked` | An unattended run stopped on the issue. | the runner, on GitHub directly |
-| `audit` | The issue holds a codebase audit's findings. | `audit-codebase` |
 
-On GitHub they are the labels `needs answers`, `ready`, `parked` and `audit`, named in the skill file and nowhere else in a command.
+On GitHub they are the labels `needs answers`, `ready` and `parked`, named in the skill file and nowhere else in a command. An audit issue is in no state.
 
 Markers are the text by which the commands find each other's output. `review` marks the comment `reviewissue` posts, and `confirmed-decisions` the section `confirmissue` writes into the issue body; a command writes and looks for exactly the text `marker` gives. In this plugin's file they are `<!-- speckit:review -->` and `<!-- confirmed-decisions -->`, which GitHub does not render. `review-pr` marks the summary of a pull request review; pull requests stay on GitHub, where `review-pr` and `review-followup` write it as `<!-- review-pr -->`, so a replacement file gives that same text.
 
@@ -77,7 +76,7 @@ With this plugin's file, those calls are:
 | `gh issue view`, `gh api` reading an issue's comments | `view`, `comment-find`, `pr-reference` | the chain's stages (`build`, `raise-pr`), `review-pr`, and the issue commands |
 | `gh issue create`, `gh issue edit`, `gh issue comment`, `gh issue close`, `gh api` writing an issue or a comment, `jq` | `create`, `state-add`, `state-remove`, `comment-post`, `comment-edit`, `comment-delete`, `body-set`, `link`, `close` | `draftissue`, `reviewissue`, `confirmissue`, `graft`, `audit-codebase` |
 | `gh issue list` | `search-title` | `audit-codebase` |
-| `gh label list`, `gh label create` | `setup` | `init` |
+| `gh label list` | `states` | `init` |
 
 `verify` and `pre-review` use only `ref` and `branch-ref`, which make no call. Loading the skill needs no rule of its own. A replacement file that reaches its tracker through an MCP connector needs that connector's tools allowed instead.
 

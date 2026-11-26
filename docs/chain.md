@@ -94,7 +94,7 @@ By default every stage runs under the repository's own permission rules, and a h
    git clone https://github.com/FrankRay78/gaffer-claude.git ~/Repos/gaffer-runner
    ```
 
-3. Commit the settings file to the repository, with `clone` and `writers` at least, and bring the runner's clone to the `main` that holds it (`git -C ~/Repos/<repo>-runner fetch origin && git -C ~/Repos/<repo>-runner checkout -f -B main origin/main`) — the runner reads the file from the clone as the previous firing left it, so a change takes effect one firing after it merges, and the first firing needs it there already. Create the labels once; `/gaffer:init` has made them where the repository was set up with it, and `ready` already exists where the issue stage has run:
+3. Commit the settings file to the repository, with `clone` and `writers` at least, and bring the runner's clone to the `main` that holds it (`git -C ~/Repos/<repo>-runner fetch origin && git -C ~/Repos/<repo>-runner checkout -f -B main origin/main`) — the runner reads the file from the clone as the previous firing left it, so a change takes effect one firing after it merges, and the first firing needs it there already. Create the runner's parked label once, unless it exists already:
 
    ```bash
    gh label create parked --description "An unattended run stopped on this issue; remove to retry"

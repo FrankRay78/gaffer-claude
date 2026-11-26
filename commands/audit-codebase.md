@@ -79,7 +79,7 @@ A section under any other heading is read too, and applied where its text says. 
 
    **Lens 4 — Harness consistency.** The slash commands the repository runs — its own under `.claude/commands/` and the plugin's under `${CLAUDE_PLUGIN_ROOT}/commands/` — the skills in `.claude/skills/`, the hooks in `.claude/hooks/`, `.claude/settings.json`, the scripts in `scripts/`, the workflows in `.github/workflows/`, the project memory in `.claude/memory/`, `CONVENTIONS.md`, `REVIEW.md` and the workflow documents `CONVENTIONS.md` → *Audit* names are meant to read as one system. A defect in a plugin command is reported as a question for the maintainer, who raises it on the plugin's repository; nothing in this repository edits the plugin. Read them as a set and report:
    - **Contradictions** — two commands, or a command and a document, that give different rules for the same thing: branch naming, commit message form, labels, when to stop, how many review rounds, what counts as a blocking finding.
-   - **Dangling references** — a command, label, script, hook, file, section heading or step number that something points at and that no longer exists or has been renamed. Check a state a command names against the list in [`docs/tracker.md`](../docs/tracker.md) — `needs-answers`, `ready`, `parked`, `audit` — and the headings a command's *Repository conventions* or *Repository criteria* table names against the repository's `CONVENTIONS.md` and `REVIEW.md` and the plugin's defaults.
+   - **Dangling references** — a command, label, script, hook, file, section heading or step number that something points at and that no longer exists or has been renamed. Check a state a command names against the list in [`docs/tracker.md`](../docs/tracker.md) — `needs-answers`, `ready`, `parked` — and the headings a command's *Repository conventions* or *Repository criteria* table names against the repository's `CONVENTIONS.md` and `REVIEW.md` and the plugin's defaults.
    - **Described versus actual** — a hook or script that a document describes as doing one thing while its source does another; a permission or hook registration in `.claude/settings.json` that a document describes differently.
    - **Hand-offs** — where one command's output is another's input (`/gaffer:draftissue` → `/gaffer:reviewissue` → `/gaffer:confirmissue` → `/gaffer:build` → `/gaffer:verify` → `/gaffer:raise-pr`, and the chain scripts that drive them): does each still produce what the next one reads, in the form it reads it?
    - **Stale memory** — an entry under `.claude/memory/` that the code, a command or a later entry has made false, and an index line in `MEMORY.md` with no file or a file with no index line. Report too a `.claude/memory/` holding entries while nothing imports `@.claude/memory/MEMORY.md`: Claude Code does not read the folder on its own, so without that import no session sees any entry in it. The import counts when it sits in `CLAUDE.md` or `.claude/CLAUDE.md`, directly or in a file either imports with `@`, and does not count inside a code fence or code span.
@@ -104,11 +104,11 @@ A section under any other heading is read too, and applied where its text says. 
 
 5. **Raise one issue.** Compose the body at `.claude/scratch/audit/issue-body.md`, then create it:
 
-   - `tracker: create --title "Codebase audit: <short HEAD> (<date>)" --body-file .claude/scratch/audit/issue-body.md --state audit`
+   - `tracker: create --title "Codebase audit: <short HEAD> (<date>)" --body-file .claude/scratch/audit/issue-body.md`
 
    It yields the new issue's reference and URL. One issue per run, whatever the run found.
 
-   If it fails, nothing was raised. Keep `.claude/scratch/audit/issue-body.md`, and report its path and what the operation reported, so the run's findings are not lost. Where it reports that the `audit` state does not exist in the tracker, the remedy is `tracker: setup` (or re-running `/gaffer:init`), then the same `create`.
+   If it fails, nothing was raised. Keep `.claude/scratch/audit/issue-body.md`, and report its path and what the operation reported, so the run's findings are not lost.
 
    The body, in this order:
 
@@ -120,7 +120,7 @@ A section under any other heading is read too, and applied where its text says. 
    - **Refuted — do not re-raise** — each dropped finding with the verifier's reason, so a later audit does not file it again.
    - **Method and its limits** — per-lens raised, verified and survived counts as a table; every tool from step 2 that did not run and what that lens therefore could not check; anything a lens did not reach; and the standing exclusions with their reasons: **security is out of scope because a dedicated security scanner and CI's advisory and code-scanning gates cover it, and mutation testing is not run.** Writing the exclusions down is what stops a later audit from helpfully raising them as gaps.
 
-   **States.** Put the issue in the `audit` state, and nothing else. Never `ready` or `parked`, nor anything a repository's own issue workflows act on: `ready` hands the issue to the unattended chain runner, which builds and raises a pull request with no human deciding, and an automated issue-review workflow expects one feature's acceptance criteria and not a backlog.
+   **States.** Put the issue in no state. Never `ready` or `parked`, nor anything a repository's own issue workflows act on: `ready` hands the issue to the unattended chain runner, which builds and raises a pull request with no human deciding, and an automated issue-review workflow expects one feature's acceptance criteria and not a backlog.
 
    Author each paragraph, bullet and table row as a single unwrapped line. Link only to files that exist at the audited commit, by path relative to the repository root. Do **not** commit the body or any working file.
 
