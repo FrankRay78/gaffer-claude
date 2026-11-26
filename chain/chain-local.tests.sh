@@ -220,6 +220,12 @@ new_case; chain_ok; reply 5 "Reviewed."; before_after "$(good)"
 git -C "$REPO" remote set-url origin git@github.com:old-owner/old-name.git
 run 270
 ok "an origin URL from before a rename is followed to the repository's current name" '[ "$RC" = 0 ] && grep -q "^repo|view|old-owner/old-name|" "$STUB_DIR/gh-log" && [ "$(grep -c "^pr|.*--repo|$REPO_NAME|" "$STUB_DIR/gh-log")" = 4 ]'
+for url in https://github.com/o/r/ ssh://git@ssh.github.com:443/o/r.git; do
+  new_case; chain_ok; reply 5 "Reviewed."; before_after "$(good)"
+  git -C "$REPO" remote set-url origin "$url"
+  run 270
+  ok "origin $url names its repository too" '[ "$RC" = 0 ] && grep -q "^repo|view|o/r|" "$STUB_DIR/gh-log"'
+done
 new_case; chain_ok https://github.com/O/R/pull/9; reply 5 "Reviewed."; before_after "$(good)"
 run 270
 ok "the repository's name is compared without regard to case" '[ "$RC" = 0 ]'
@@ -311,6 +317,24 @@ jq -n '{type:"result",subtype:"success",is_error:true,api_error:"usage_limit_rea
 echo 1 > "$STUB_DIR/rc-5"
 run 270
 ok "a usage-limit reply with no text says it gave no reset time" '[ "$RC" = 75 ] && grep -qF "usage limit was reached; the reply gave no reset time" <<<"$OUTPUT"'
+# limit_reply <result> — the review stage's reply when the usage limit stopped it.
+limit_reply() {
+  jq -n --arg r "$1" '{type:"result",subtype:"success",is_error:true,api_error:"usage_limit_reached",result:$r,session_id:"sess-5"}' > "$STUB_DIR/reply-5.json"
+  echo 1 > "$STUB_DIR/rc-5"
+}
+limit_line() { printf '%s\n' "$OUTPUT" | grep -F "FAILED at review-pr"; }
+new_case; chain_ok; before_after "$(good)"
+limit_reply "$(printf 'You have hit your limit · resets 3pm\r')"
+run 270
+ok "a CRLF limit message leaves no carriage return in the quoted reset time" '[ "$RC" = 75 ] && limit_line | grep -qxF "chain-local: FAILED at review-pr — the Claude usage limit was reached — You have hit your limit · resets 3pm"'
+new_case; chain_ok; before_after "$(good)"
+limit_reply '   '
+run 270
+ok "a limit message of nothing but whitespace is no message" '[ "$RC" = 75 ] && limit_line | grep -qxF "chain-local: FAILED at review-pr — the Claude usage limit was reached; the reply gave no reset time"'
+new_case; chain_ok; before_after "$(good)"
+limit_reply "$(printf 'Claude usage limit reached.\nresets 3pm\nRun /status for details.')"
+run 270
+ok "a multi-line limit message is reduced to its last line" '[ "$RC" = 75 ] && limit_line | grep -qxF "chain-local: FAILED at review-pr — the Claude usage limit was reached — Run /status for details."'
 new_case; chain_ok; before_after "$(good)"
 printf 'not json\n' > "$STUB_DIR/reply-5.json"
 run 270
