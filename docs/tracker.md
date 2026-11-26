@@ -1,115 +1,88 @@
-# The tracker interface
+# The tracker skill
 
-Every command and the chain reach the issue tracker through one script, [`tracker/tracker.sh`](../tracker/tracker.sh), never through a tracker's own CLI or API. The script reads which tracker the repository uses and hands each call to that tracker's adapter, under [`tracker/adapters/`](../tracker/adapters/). The plugin ships one adapter, `github`, which makes the calls the commands made before the interface existed, and for `link`, which no command made, a comment mentioning the other issue. It needs `gh` 2.73.0 or later: `view` reads the pull requests linked to an issue, which older `gh` cannot, and refuses an older one by name. Pull requests and their reviews are not tracker business: they stay on GitHub whatever the tracker.
+Every command that reaches the issue tracker does so through one plugin skill, [`skills/tracker/SKILL.md`](../skills/tracker/SKILL.md), which Claude Code loads as `gaffer:tracker`. A command names an operation in plain notation, such as `tracker: view <ref>`, and tells the agent near its top to load the skill before the first one; the skill says how to carry each operation out. The file this plugin ships says GitHub, as `gh` calls the agent makes itself, so when a `gh` version or a response differs slightly the agent adjusts and still delivers what the operation yields.
 
-```bash
-bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh <operation> [arguments…]
-```
+The plugin ships no tracker script, and no setting chooses a tracker: the tracker is whatever the skill file says. This page is for someone whose issues live elsewhere and who replaces that file.
 
-A command describes what it means — "put this issue in the `ready` state" — and the adapter decides how the tracker shows it: on GitHub, a label.
+## Replacing the file
 
-## The setting
+Keep a clone of the plugin whose `skills/tracker/SKILL.md` holds instructions for your tracker — an authenticated MCP connector your own Claude Code settings allow, for instance — and change nothing else. Nothing beside that file needs editing for another tracker: no command, default, template, script or test.
 
-The `tracker` key of the repository's settings file names the adapter: `"tracker": "github"` selects `tracker/adapters/github.sh`. A missing file or a missing key means `github`, so a repository that has never set it behaves as it always has.
+- **Run from the clone.** Start sessions with `claude --plugin-dir <clone>`, and run the chain by hand as `bash <clone>/chain/chain.sh <issue>`, which loads its stages from the checkout it sits in ([`chain.md`](chain.md)).
+- **Keep the frontmatter's `name: tracker`, and leave model invocation enabled.** A command loads the skill by that name, and a skill the model may not invoke cannot be loaded by one.
+- **Keep it short.** Every command that reaches the tracker loads the whole file. This plugin's is held to 1,500 words (`wc -w skills/tracker/SKILL.md`).
+- **State every operation below, with its arguments and what it yields.** A command says only `tracker: <operation> <arguments>`; everything else about the tracker is the file's to say.
 
-The settings file is `.gaffer/chain.json` at the root of the repository — the chain's settings file, which [`chain.md`](chain.md) → *The settings file* describes — or the file the `GAFFER_SETTINGS` environment variable names. The chain sets `GAFFER_SETTINGS` for every stage to the file it read itself, so a stage started with `chain.sh --settings <file>` reads the same tracker as the chain.
+Claude Code re-attaches a loaded skill after it compacts a conversation. A subagent does not inherit a skill its parent loaded, which is why each command file tells whoever is applying it to load the skill.
 
-An adapter may read its own key from the same file. The `github` adapter reads `github.labels`, which names the label each state maps to:
+## Operations
 
-```json
-{
-  "tracker": "github",
-  "github": { "labels": { "needs-answers": "needs answers", "ready": "ready", "parked": "parked", "audit": "audit" } }
-}
-```
+Every operation is required. No command carries a fallback for a missing one: where a tracker has no native means for an operation, the file meets the stated outcome its own way, as this plugin's file does for `link`, which on GitHub is a comment mentioning the other issue.
 
-Each state defaults to the label shown. `github.labels.ready` is the label `/gaffer:confirmissue` applies; the runner's own `labels.ready` is the label it selects on, and the two are kept apart so a repository can confirm and queue separately, as before.
+| Operation | Arguments | Must yield |
+|---|---|---|
+| `setup` | — | Every state exists in the tracker. Says which it added and which were present. |
+| `ref` | `<reference>` | The reference in its normal form, and its forms for a branch name and for commit subjects and prose. Refuses a reference the tracker does not recognise. |
+| `branch-ref` | `<branch>` | The reference a branch name carries, or none. |
+| `view` | `<ref>` | The issue's title, body and URL, whether it is open or closed, the states it is in, the pull requests that will close it, and every comment with its id, author, time and body. |
+| `create` | `--title <title> --body-file <file> [--state <state>]…` | A new issue with that title and body, in the given states. Its reference and URL. |
+| `body-set` | `<ref> <file>` | The issue body replaced with the file's text. |
+| `state-add`, `state-remove` | `<ref> <state>` | The issue put in, or taken out of, the state. Repeating either is no error. |
+| `comment-find` | `<ref> <marker>` | The newest comment carrying the marker, by time, or none. |
+| `comment-post` | `<ref> <file>` | The file posted as a comment. Its id and URL. |
+| `comment-edit` | `<ref> <id> <file>` | The comment's body replaced with the file's text. Its id and URL. |
+| `comment-delete` | `<ref> <id>` | The comment removed. |
+| `link` | `<ref> <other ref>` | A record on the first issue that it relates to the other. |
+| `close` | `<ref> <file>` | The issue closed, with the file as its closing note. |
+| `pr-reference` | `<ref>` | What a pull request body may write about the issue: see below. |
+| `marker` | `<name>` | The text of the marker. |
+| `search-title` | `<text>` | The issues, open or closed, whose title matches. |
 
-A setting that names no adapter, a tracker name that is not a plain lower-case name, or an adapter that does not implement an operation stops the call before the tracker is reached, with a message naming the setting, the file and the operation. `draftissue`, `reviewissue`, `confirmissue` and `graft` first run `require` for every operation they need, so a broken setting stops them before they change anything; `build` reads the issue before it changes anything, `audit-codebase` makes one tracker call that changes anything, at its end, and `raise-pr` treats a failed lookup as an abstain.
+**A failed operation is a failure, never an empty answer.** The commands treat only an answer of none as "there is none": `reviewissue` posts a first review when `comment-find` yields none, so a lookup that failed must say so, with what the tracker reported.
 
-## Exit codes
+**References.** `ref` gives three forms of one reference. The normal form is what every other operation takes as `<ref>`. The branch form is the `<N>` in the branch `build` creates, `feature/<N>-<slug>`, and `branch-ref` must read it back out of that name. The mention form is what a commit subject and prose carry: `Refs <mention>: …`. On GitHub issue 50 is `50`, `50` and `#50`; a tracker with keys such as `PROJ-12` may give the key for all three. `ref` and `branch-ref` reach no tracker in this plugin's file, and `draftissue` and `graft` use `ref` to tell an issue from free text, so a reference it refuses is read there as not an issue.
 
-| Code | Meaning |
-|---|---|
-| 0 | Success. |
-| 1 | The operation failed, or a reference is not one the tracker recognises. The message is on stderr. |
-| 2 | Bad usage: an operation outside the contract, or a state or marker name outside its closed list. Nothing reached the tracker. |
-| 3 | The adapter does not implement the operation. Nothing reached the tracker. For an optional operation, this is how a command learns to take its fallback. |
-| 78 | The setting names no usable adapter, or the adapter's own setting is malformed. Nothing reached the tracker. |
+**`pr-reference`** has three outcomes, and never fails the command that asked:
+
+- **linked** — an open issue of this repository: the issue's title, and the line that closes it when the pull request merges.
+- **none** — nothing may be closed: a pull request at that number, a closed issue, an issue that lives elsewhere, or nothing there. It may still give a line that only refers to the issue, as this plugin's file does for a closed one.
+- **unverified** — the lookup could not answer: authentication, network, a rate limit. Never reported as none.
+
+`raise-pr` writes the line exactly as given and no closing line of its own, so the closing word for the repository's host lives in the skill file. The same holds for commits: this plugin's file says a commit subject writes `Refs #N` and never a word that closes the issue.
 
 ## States and markers
 
-The interface speaks of states, never labels, from one closed list: `needs-answers`, `ready`, `parked` and `audit`. A command passes them as exact tokens; any other name is refused with exit 2. `audit-codebase` never puts an issue in `ready` or `parked`.
+A command speaks of states, never labels. There are four, and `setup` makes each exist.
 
 | State | Meaning | Set by |
 |---|---|---|
 | `needs-answers` | A review is posted and waits for the author. | `reviewissue`; removed by `confirmissue` |
 | `ready` | The issue is confirmed and may be built. | `confirmissue` |
-| `parked` | An unattended run stopped on the issue. | the runner, which applies its own `labels.parked` on GitHub directly |
+| `parked` | An unattended run stopped on the issue. | the runner, on GitHub directly |
 | `audit` | The issue holds a codebase audit's findings. | `audit-codebase` |
 
-Markers are the text by which the commands find each other's output on an issue: `review` marks the review comment `reviewissue` posts, `confirmed-decisions` marks the section `confirmissue` writes into the issue body, and `review-pr` marks the summary of a pull request review. The `marker <name>` operation prints the text, and the commands write and look for exactly that. On GitHub they are `<!-- speckit:review -->`, `<!-- confirmed-decisions -->` and `<!-- review-pr -->`. Pull requests stay on GitHub, so every adapter returns `<!-- review-pr -->` for the last, and `review-pr`, `review-followup` and `chain-local.sh` use it as written.
+On GitHub they are the labels `needs answers`, `ready`, `parked` and `audit`, named in the skill file and nowhere else in a command.
 
-## Issue references
+Markers are the text by which the commands find each other's output. `review` marks the comment `reviewissue` posts, and `confirmed-decisions` the section `confirmissue` writes into the issue body; a command writes and looks for exactly the text `marker` gives. In this plugin's file they are `<!-- speckit:review -->` and `<!-- confirmed-decisions -->`, which GitHub does not render. `review-pr` marks the summary of a pull request review; pull requests stay on GitHub, where `review-pr` and `review-followup` write it as `<!-- review-pr -->`, so a replacement file gives that same text.
 
-A reference is whatever the user typed to name an issue. `ref` checks that the tracker recognises it and normalises it; every other operation takes the normalised form. On GitHub, `N` and `#N` normalise to `N` — digits with a leading `#` removed, nothing else changed. An issue URL or `<owner>/<repo>#<N>` normalises to `N` when it names this repository, the `origin` remote's, and otherwise to `<owner>/<repo>#<N>`, GitHub's cross-repository form, which every operation also accepts. Every call names its repository — the one the reference names, else `origin`, as do the calls that take no reference (`create`, `search-title`, `setup`, `pr-reference`) — so `gh`'s own default, which in a fork clone is often the upstream, never decides. Only where `origin` is not a GitHub URL is the choice left to `gh`.
+## What a headless stage needs allowed
 
-`ref --forms` gives the two other forms a reference takes: `branch`, the text in a branch name `feature/<branch>-<slug>`, and `mention`, the text in a commit subject `Refs <mention>: …` and in a note pointing at the issue. On GitHub, issue 50 is `{"ref": "50", "branch": "50", "mention": "#50"}`. An adapter whose tracker uses keys such as `PROJ-12` returns the key for all three, so branches, commit subjects and pull request titles carry the key. `ref --forms` exits 1 for a reference no branch name can carry back: on GitHub, another repository's issue, whose branch form would be read back as this repository's issue of the same number.
+A headless session denies, without asking, any call its permission rules do not allow ([`unattended.md`](unattended.md)). `chain.sh` passes its stages no permission rule for the tracker. A stage run with `--skip-permissions` is denied nothing; a stage run under the repository's own permissions needs whatever the skill file's calls need allowed, by the repository's settings or the user's.
 
-`branch-ref <branch>` reads a reference back out of a branch name: the shortest run of hyphen-separated words after the `<prefix>/` that `ref` recognises, with a slug after it. `feature/248-pr-closing-keyword` gives `248`, `feature/PROJ-12-add-thing` gives `PROJ-12` where the tracker recognises keys, and `feature/net10-upgrade` gives nothing. It is the dispatcher's, built on the adapter's `ref`, and an adapter does not implement it.
+With this plugin's file, those calls are:
 
-## Operations
-
-Every operation is required except `comment-delete` and `search-title`. An operation that returns content prints one JSON value on stdout, never text for a shell to evaluate — except `ref` without `--forms` and `marker`, which print one line, and `setup`, which prints a line per state; one that only changes something prints nothing.
-
-| Operation | Arguments | Output |
+| Calls | Operations | Needed by |
 |---|---|---|
-| `setup` | — | Makes sure every state exists in the tracker. One `added: …` or `present: …` line per state; a second run adds nothing. On GitHub, `added: label ready`. |
-| `ref` | `<reference>`, or `--forms <reference>` | The normalised reference, one line; with `--forms`, `{"ref", "branch", "mention"}`. Exit 1 for a reference the tracker does not recognise. Reaches no tracker. |
-| `view` | `<ref>` | The issue: `{"ref", "title", "body", "state", "states", "labels", "url", "links", "comments"}`. `state` is `open` or `closed`, and a reference that names a pull request is exit 1; `states` the contract states the issue is in; `labels` the tracker's own tags, for reading only; `links` `[{"kind", "url"}]`, where `kind` `closing-pull-request` is a pull request that will close it; `comments` `[{"id", "author", "created_at", "body", "url"}]`, oldest first, every one. |
-| `create` | `--title <title> --body-file <file> [--state <state>]…` | `{"ref", "url"}` of the new issue, in the given states. |
-| `body-set` | `<ref> <file>` | Replaces the body with the file's bytes. `{"ref", "url"}`. |
-| `state-add`, `state-remove` | `<ref> <state>` | Nothing. Adding a state the issue is in, or removing one it is not, is not an error. |
-| `comment-find` | `<ref> <marker name>` | The newest comment carrying the marker, by `created_at`, as a `comments` entry; `null` when there is none. |
-| `comment-post` | `<ref> <file>` | Posts the file as a comment. `{"id", "url"}`. |
-| `comment-edit` | `<ref> <id> <file>` | Replaces the comment's body with the file's bytes. `{"id", "url"}`. |
-| `comment-delete` | `<ref> <id>` | Optional. Deletes the comment; nothing. Where it is missing, `confirmissue` overwrites the review with a one-line pointer to the issue's *Confirmed decisions*, carrying no marker, so the review is never found again. |
-| `link` | `<ref> <other ref>` | Records that one issue relates to the other; nothing. On GitHub, a comment mentioning the other issue. |
-| `close` | `<ref> <note file>` | Closes the issue with the note as its closing comment; nothing. |
-| `pr-reference` | `<ref>` | What a pull request body may say about the issue, as one of `{"outcome": "linked", "line", "ref", "title"}` — an open issue of this repository, and `line` the text that closes it on merge (`Closes #N`); `{"outcome": "none", "reason", "line"}` — the lookup settled that nothing may be closed, and `line`, where not `null`, still references it (`Refs #N` for a closed issue); `{"outcome": "unverified", "reason"}` — the lookup could not answer (auth, network, rate limit). Exit 0 for all three: `raise-pr` abstains rather than fails. |
-| `marker` | `<name>` | The marker's text, one line. Reaches no tracker. |
-| `search-title` | `<text>` | Optional. `[{"ref", "title", "state", "url"}]` for the issues, open or closed, whose title matches the text — on GitHub, up to 100 by GitHub's search. Where it is missing, `audit-codebase` runs with no baseline and says so. |
+| `git remote get-url origin` | every operation that reaches GitHub | every command below |
+| `gh issue view`, `gh api` reading an issue's comments | `view`, `comment-find`, `pr-reference` | the chain's stages (`build`, `raise-pr`), `review-pr`, and the issue commands |
+| `gh issue create`, `gh issue edit`, `gh issue comment`, `gh issue close`, `gh api` writing an issue or a comment, `jq` | `create`, `state-add`, `state-remove`, `comment-post`, `comment-edit`, `comment-delete`, `body-set`, `link`, `close` | `draftissue`, `reviewissue`, `confirmissue`, `graft`, `audit-codebase` |
+| `gh issue list` | `search-title` | `audit-codebase` |
+| `gh label list`, `gh label create` | `setup` | `init` |
 
-Three operations are the dispatcher's own: `require <operation>…` (exit 0 when the adapter implements them all, else the exit and message the first missing one would give), `operations` (`{"tracker", "settings", "required", "optional", "implemented"}`) and `branch-ref`.
-
-On GitHub, `pr-reference` carries the check `raise-pr` used to make itself: GitHub numbers issues and pull requests from one sequence and resolves a transferred issue to another number, so the issue's whole URL must be this repository's issue URL for that number before `Closes` is written. A lookup that says nothing exists at that number is `none`; one that fails for any other reason is `unverified`, quoting `gh`.
-
-## Permissions
-
-A headless session denies, without asking, a command its permission rules do not allow ([`unattended.md`](unattended.md)).
-
-- **The chain** passes every stage `--allowedTools "Bash(bash <checkout>/tracker/tracker.sh *)"` for the checkout it loads the plugin from, unless it runs with `--skip-permissions`, where nothing is denied anyway. A stage needs nothing from the repository's settings to reach the tracker. It refuses, with exit 78, a checkout whose path holds whitespace: the unquoted path would split, and every tracker call in a stage would fail.
-- **Any other headless run** — a CI job, a `claude -p` loop outside the chain — passes the same `--allowedTools` rule for the plugin directory it loads.
-- **An interactive session** asks before each tracker call, unless permissions are bypassed. Answering "don't ask again" saves a rule for that exact path in your own settings. The plugin writes no allow rule into a repository: a committed rule cannot name the plugin's path on every machine, and one with a `*` before the script name matches commands that are not the tracker, `bash -c '…'` included.
-
-The commands write the script's path unquoted — `bash ${CLAUDE_PLUGIN_ROOT}/tracker/tracker.sh view 50` — because that is the form the rules match, and a reference the user typed in single quotes — `ref '#50'` — because unquoted a leading `#` starts a shell comment. Each call stands alone, never piped into or chained with another command, which a rule for the tracker would not cover.
-
-## Writing an adapter
-
-An adapter is one bash script, `tracker/adapters/<name>.sh`, run as `bash <name>.sh <operation> [arguments…]` with the arguments the table above gives, after the dispatcher has checked the operation and any state or marker name. Add it by pull request here: the adapters ship with the plugin, so the chain's checkout and the installed plugin carry the same ones.
-
-- `bash <name>.sh operations` prints the operations it implements, one per line. The dispatcher refuses the rest with exit 3 before calling it.
-- `TRACKER_SETTINGS` holds the path of the settings file, or is empty, for an adapter that reads its own key. A malformed key of its own exits 78.
-- Output is exactly the JSON the table gives, on stdout; errors go to stderr with exit 1.
-- Every state maps to something the tracker shows, and `setup` makes it exist.
-- `ref` must normalise its own output to itself, and must not reach the tracker: the chain calls it before a stage starts.
-
-[`tracker/conformance.sh`](../tracker/conformance.sh) checks an adapter against this contract. Run it from the root of a repository whose settings name the adapter, against a tracker it may write to — it creates two issues, comments on them, sets every state, links them and closes both — and it prints `met`, `not met` with the reason, or `not implemented (optional)` for each operation, exiting 0 only when everything the adapter implements is met. What it cannot check is the tracker's own side: that a state shows where people look, or that a link is visible.
+`verify` and `pre-review` use only `ref` and `branch-ref`, which make no call. Loading the skill needs no rule of its own. A replacement file that reaches its tracker through an MCP connector needs that connector's tools allowed instead.
 
 ## What stays on GitHub
 
-- Pull requests, their reviews, and `review-pr`, `review-followup`, `pre-review` and `chain-local.sh`'s review stage.
-- The runner, [`chain/chain-next.sh`](../chain/chain-next.sh), which selects issues by label and parks them on GitHub. It refuses a settings file whose `tracker` is not `github`.
-- `init/setup.sh check`, which checks the repository can take a pull request.
-
-[`tracker/boundary.tests.sh`](../tracker/boundary.tests.sh) holds the line in CI: it fails when `gh issue`, an issue-comment REST path or an issue label call appears in a command, a default, a template or a script, outside the GitHub adapter and `chain/chain-next.sh`.
+- **Pull requests and their reviews.** `raise-pr`, `pre-review`, `review-pr` and `review-followup` reach them with `gh`, and `init` delivers its recommendations as a pull request.
+- **The unattended runner.** [`chain/chain-next.sh`](../chain/chain-next.sh) selects issues by label and parks them with `gh` itself, under the names its own `labels` setting gives ([`chain.md`](chain.md)). It loads no skill and stays GitHub-only: with another tracker, run `chain.sh` by hand. It refuses a `tracker` setting as a key it does not know.
+- **Links to files.** `reviewissue` and `confirmissue` write links to the repository's files as absolute GitHub URLs, because that is where the code is hosted.
