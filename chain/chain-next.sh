@@ -2,9 +2,10 @@
 #
 # chain-next.sh — build the next ready issue to a pull request, from a timer, unattended.
 #
-# Each firing reads one settings file (docs/chain.md), picks the lowest-numbered eligible issue
-# of the repository the settings name — open, carrying the ready label, not the parked label,
-# with no open pull request linked to it, no open blocking issue, and nothing written on it by
+# Each firing reads one settings file (docs/chain.md), as origin's main holds it where the file
+# sits in the clone, picks the lowest-numbered eligible issue of the repository the settings
+# name — open, carrying the ready label, not the parked label, with no open pull request linked
+# to it, no open blocking issue, and nothing written on it by
 # anyone outside the settings' writers — resets the runner's own dedicated clone of that
 # repository to the latest main, and runs chain.sh, beside this file, against the issue there. It
 # ends with either an open pull request (the chain's last stage) or the issue labelled parked with
@@ -64,7 +65,32 @@ die() { echo "chain-next: $*" >&2; exit 1; }
 # name a path without naming the machine's user.
 expand_home() { case "$1" in "~/"*) printf '%s' "$HOME/${1#\~/}" ;; *) printf '%s' "$1" ;; esac; }
 
-# read_settings <file> — every key the runner owns, checked before anything else happens, so a
+# load_settings <file> — read_settings on the copy the runner trusts. Where the file sits in a git
+# checkout — the clone, as its committed .gaffer/chain.json does — that is origin's main's copy,
+# freshly fetched, never the one on disk: the chain leaves its feature branch checked out, so the
+# disk copy is whatever the last build made of it. That checkout must be the clone main's copy
+# names. A file outside any checkout is read as it stands.
+load_settings() {
+  local f=$1 dir rest top path
+  dir=$(dirname "$f"); rest=$(basename "$f")
+  # The branch left checked out may have deleted the file's directory too.
+  while [ ! -d "$dir" ]; do rest="$(basename "$dir")/$rest"; dir=$(dirname "$dir"); done
+  if ! top=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null); then
+    [ -f "$f" ] || die "refused — the settings file $f does not exist; nothing was run."
+    read_settings "$(cat "$f")" "$f"
+    return
+  fi
+  path="$(git -C "$dir" rev-parse --show-prefix)$rest"
+  git -C "$top" fetch -q origin \
+    || die "refused — could not fetch origin in $top to read the settings file $f from its main; nothing was run."
+  git -C "$top" cat-file -e "refs/remotes/origin/main:$path" 2>/dev/null \
+    || die "refused — origin's main in $top has no settings file at $path, and the settings are read only from there; nothing was run."
+  read_settings "$(git -C "$top" show "refs/remotes/origin/main:$path")" "$f on origin's main"
+  [ "$(cd "$CLONE" 2>/dev/null && pwd -P)" = "$(cd "$top" && pwd -P)" ] \
+    || die "refused — the settings file $f sits in $top, but origin's main names $CLONE as the clone; nothing was run."
+}
+
+# read_settings <json> <name> — every key the runner owns, checked before anything else happens, so a
 # fault in the file is reported with nothing selected, reset or run. The clone path and the
 # writers have no default: the clone because it is where the destructive reset runs, the writers
 # because they are what stops the runner building a stranger's issue on a public repository — a
@@ -73,9 +99,8 @@ expand_home() { case "$1" in "~/"*) printf '%s' "$HOME/${1#\~/}" ;; *) printf '%
 # `pre_review`, the opt-in the chain no longer has, is refused by name, so the file's author is
 # told it is gone rather than that it was never known.
 read_settings() {
-  local f=$1 s unknown
-  [ -f "$f" ] || die "refused — the settings file $f does not exist; nothing was run."
-  s=$(jq -e 'if type == "object" then . else error("x") end' "$f" 2>/dev/null) \
+  local f=$2 s unknown
+  s=$(jq -e 'if type == "object" then . else error("x") end' <<<"$1" 2>/dev/null) \
     || die "refused — the settings file $f is not a JSON object; nothing was run."
   ! jq -e 'has("pre_review")' <<<"$s" >/dev/null \
     || die "refused — $f names pre_review, a setting that no longer exists: every chain run includes the pre-review, so remove the key. Nothing was run."
@@ -304,14 +329,13 @@ main() {
   case "$1" in --*) usage; exit 1 ;; esac
   # Absolute, because the chain is started from inside the clone and handed the same file.
   settings=$1
-  [ -f "$settings" ] || die "refused — the settings file $settings does not exist; nothing was run."
-  settings="$(cd "$(dirname "$settings")" && pwd)/$(basename "$settings")"
+  case "$settings" in /*) ;; *) settings="$PWD/$settings" ;; esac
 
   for tool in git gh jq flock claude timeout; do
     command -v "$tool" >/dev/null 2>&1 || die "refused — $tool is not on PATH; nothing was run."
   done
 
-  read_settings "$settings"
+  load_settings "$settings"
   # The plugin checkout before the tracker is queried: a machine fault is reported before
   # anything is chosen, and report mode says what the next firing would refuse on.
   check_plugin

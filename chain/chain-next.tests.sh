@@ -682,6 +682,89 @@ settings "{\"clone\": \"$SB/case$cases/no-such-clone\", \"writers\": [\"User:mai
 fire
 ok "a clone that does not exist is refused, naming it and the setting" '[ "$RC" != 0 ] && grep -qF "no-such-clone" <<<"$OUTPUT" && grep -qF "clone" <<<"$OUTPUT" && [ -z "$(chain_calls)" ] && [ ! -e "$STATE" ]'
 
+echo "A settings file inside the clone is read as origin's main holds it:"
+# on_main <json> — the settings committed to the target origin's main, as a merged pull request
+# leaves them, and the clone brought to that main, as setting it up does.
+on_main() {
+  mkdir -p "$SEED/.gaffer" && printf '%s' "$1" > "$SEED/.gaffer/chain.json"
+  commit_all "$SEED" settings && git -C "$SEED" push -q origin main
+  git -C "$CLONE" fetch -q origin && git -C "$CLONE" checkout -q -f -B main origin/main
+}
+# on_branch <json> — the clone left on a feature branch whose committed settings differ, as an
+# earlier firing's build of an issue that edited them leaves it.
+on_branch() {
+  git -C "$CLONE" checkout -q -b feature/9-edit-settings
+  printf '%s' "$1" > "$CLONE/.gaffer/chain.json"
+  commit_all "$CLONE" "Refs #9: edit the settings"
+}
+main_json="{\"clone\": \"CLONE\", \"writers\": [\"User:maintainer\"], \"state_dir\": \"STATE\"}"
+wide_json="{\"clone\": \"CLONE\", \"writers\": [\"User:maintainer\", \"User:someone-else\"], \"labels\": {\"ready\": \"queued\"}, \"state_dir\": \"STATE\"}"
+in_case() { local j=${1//CLONE/$CLONE}; printf '%s' "${j//STATE/$STATE}"; }
+three_issues='[{"number":3,"state":"OPEN","labels":["ready","queued"],"author":"someone-else"},{"number":4,"state":"OPEN","labels":["queued"]},{"number":5,"state":"OPEN","labels":["ready"]}]'
+# SCENARIO: unmerged settings edit is not applied
+new_case
+issues "$three_issues"
+on_main "$(in_case "$main_json")"
+on_branch "$(in_case "$wide_json")"
+before="$(checkout_state "$CLONE")"
+fire_with "$CLONE/.gaffer/chain.json" --dry-run
+ok "report mode selects with main's writers and labels, not the branch's" '[ "$RC" = 0 ] && grep -qF "would build #5" <<<"$OUTPUT" && grep -qF "skipped #3" <<<"$OUTPUT"'
+ok "and leaves the clone's branches and tree as they were" '[ "$(checkout_state "$CLONE")" = "$before" ]'
+fire_with "$CLONE/.gaffer/chain.json"
+ok "a real firing builds what report mode named" '[ "$RC" = 0 ] && [ "$(chain_calls)" = 5 ]'
+new_case
+issues "$three_issues"
+on_main "$(in_case "$main_json")"
+in_case "$wide_json" > "$CLONE/.gaffer/chain.json"
+fire_with "$CLONE/.gaffer/chain.json"
+ok "an uncommitted edit on main is not applied either" '[ "$RC" = 0 ] && [ "$(chain_calls)" = 5 ]'
+# SCENARIO: broken settings edit on a branch does not stop the runner
+new_case
+issues "$three_issues"
+on_main "$(in_case "$main_json")"
+on_branch '{"clone": '
+fire_with "$CLONE/.gaffer/chain.json"
+ok "a branch whose settings are invalid is not refused for them, and main's are used" '[ "$RC" = 0 ] && [ "$(chain_calls)" = 5 ]'
+new_case
+issues "$three_issues"
+on_main "$(in_case "$main_json")"
+git -C "$CLONE" checkout -q -b feature/9-drop-settings && git -C "$CLONE" rm -q -r .gaffer && commit_all "$CLONE" "Refs #9: drop the settings"
+fire_with "$CLONE/.gaffer/chain.json"
+ok "nor is a branch that deleted them" '[ "$RC" = 0 ] && [ "$(chain_calls)" = 5 ]'
+# SCENARIO: merged settings change is applied
+new_case
+issues "$three_issues"
+on_main "$(in_case "$main_json")"
+git -C "$CLONE" checkout -q -b feature/9-other
+printf '%s' "$(in_case "$wide_json")" > "$SEED/.gaffer/chain.json"; commit_all "$SEED" "widen"; git -C "$SEED" push -q origin main
+fire_with "$CLONE/.gaffer/chain.json" --dry-run
+ok "a change merged since the clone last fetched is in effect at the next firing" '[ "$RC" = 0 ] && grep -qF "would build #3" <<<"$OUTPUT"'
+new_case
+issues "$three_issues"
+on_main '{"clone": '
+on_branch "$(in_case "$main_json")"
+fire_with "$CLONE/.gaffer/chain.json"
+ok "settings invalid on main are refused before any issue is selected, whatever the branch holds" '[ "$RC" != 0 ] && grep -qF "chain.json" <<<"$OUTPUT" && [ -z "$(chain_calls)" ] && ! grep -q "^issue|list|" "$STUB_DIR/gh-log" 2>/dev/null && [ ! -e "$STATE" ]'
+new_case
+issues "$three_issues"
+on_main "$(in_case "$main_json")"
+in_case "$main_json" > "$CLONE/.gaffer/other.json"
+fire_with "$CLONE/.gaffer/other.json"
+ok "a path main has no settings file at is refused, saying so, never read from disk" '[ "$RC" != 0 ] && grep -qF "other.json" <<<"$OUTPUT" && grep -qF "main" <<<"$OUTPUT" && [ -z "$(chain_calls)" ] && ! grep -q "^issue|list|" "$STUB_DIR/gh-log" 2>/dev/null'
+new_case
+issues "$three_issues"
+git -C "$OTHER" config chain-next.dedicated true
+on_main "$(in_case "${main_json//CLONE/$OTHER}")"
+fire_with "$CLONE/.gaffer/chain.json"
+ok "main's copy naming another clone than the one it sits in is refused" '[ "$RC" != 0 ] && grep -qF "$OTHER" <<<"$OUTPUT" && [ -z "$(chain_calls)" ] && ! grep -q "^issue|list|" "$STUB_DIR/gh-log" 2>/dev/null'
+new_case
+issues "$three_issues"
+on_main "$(in_case "$main_json")"
+mv "$ORIGIN" "$ORIGIN.away"
+fire_with "$CLONE/.gaffer/chain.json" --dry-run
+ok "a fetch that fails is refused before any issue is selected, in report mode too" '[ "$RC" != 0 ] && grep -qF "fetch" <<<"$OUTPUT" && ! grep -q "^issue|list|" "$STUB_DIR/gh-log" 2>/dev/null'
+mv "$ORIGIN.away" "$ORIGIN"
+
 echo "The runner runs only from a plugin checkout that is plainly main:"
 new_case
 issues '[{"number":5,"state":"OPEN","labels":["ready"]}]'
