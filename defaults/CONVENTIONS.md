@@ -74,6 +74,8 @@ This project keeps none by default, so `/gaffer:build` writes none and `/gaffer:
 
 ## Pull requests
 
+No title form by default. `/gaffer:raise-pr` titles a pull request from its branch: it strips the prefix and the issue reference, whatever the reference's case, and title-cases the rest, so `feature/316-remove-planning-pipeline` is titled `Remove Planning Pipeline`. A repository whose titles must take a form, such as one a required check enforces, states it here in prose: the pattern, the types it allows, how a breaking change is marked, and the check that enforces it. `/gaffer:raise-pr` then writes every title in that form. `/gaffer:pre-review` never checks or changes a title.
+
 No check on the issue link by default. A repository that fails or flags a pull request closing no issue names the check here, so `/gaffer:raise-pr` can say when its abstain turns that check red.
 
 ## Issue sources

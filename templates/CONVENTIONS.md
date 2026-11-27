@@ -50,7 +50,7 @@ This repository's additions to the gaffer plugin's default conventions. Each sec
 
 ## Pull requests
 
-<The check that runs on the issue link, if any.>
+<The form pull request titles must take, if any — the pattern, the types it allows, how a breaking change is marked, and the check that enforces it; with none named, `/gaffer:raise-pr` titles each pull request from its branch. The check that runs on the issue link, if any.>
 
 ## Issue sources
 

@@ -57,7 +57,7 @@ The plugin's own files are read from `${CLAUDE_PLUGIN_ROOT}`: the setup script `
    | *Commit messages* | a commit-message config or hook, a contributing guide's commit section |
    | *Documentation* | user guides, API docs, release documents, and the kind of change each describes |
    | *Change-intent records* | a decisions or ADR directory and any convention file that governs it |
-   | *Pull requests* | a workflow or required check that fails or flags a pull request linking no issue — only that: `/gaffer:raise-pr` reads this heading for that check alone, writes a body sized to the change rather than a PR template, and takes its title from the branch, so a template or a title format cited here is a rule no command follows |
+   | *Pull requests* | a workflow or required check that fails or flags a pull request linking no issue, and a tracked workflow or config that checks the title form, with the form it enforces and the check's name — only those: `/gaffer:raise-pr` reads this heading for that check and that form, and writes a body sized to the change rather than a PR template, so a template cited here is a rule no command follows |
    | *Issue sources* | issue templates, a backlog document |
    | *Hooks, scripts and plugins* | hooks in `.claude/settings.json`, `.claude/hooks/`, a scripts directory, other enabled plugins |
    | *Where it runs* | a workflow that runs `/gaffer:review-pr` or `/gaffer:review-followup` |

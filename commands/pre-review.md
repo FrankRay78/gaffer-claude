@@ -47,6 +47,8 @@ A section under any other heading is read too, and applied where its text says. 
 
    From what it prints, take every **finding** (Critical or Major, verified) and every **note** (Minor or mechanical, verified), each with its `file:line`, claim and any **Pre-existing** tag. If the review stops before it composes a review, STOP with its reason.
 
+   Drop any item about the pull request's title: this command does not check, change or report on the title, and does not fail over it, even where the title does not match a form `CONVENTIONS.md` → *Pull requests* names. Such an item is not counted, fixed or named in the report, and the title is left exactly as it is.
+
    `/gaffer:review-pr` reads `REVIEW.md` from this checkout, so on a branch that edits `REVIEW.md` this review judges by the branch's copy where the posted review in CI uses the default branch's. The report says so when the branch touches it.
 
 2. **Decide and fix.** The table is the only statement of what happens to an item:
