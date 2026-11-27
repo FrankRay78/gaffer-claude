@@ -29,7 +29,8 @@
 # Usage: chain-local.sh [--dry-run] [--review-dry-run] [--skip-permissions] [--settings <file>] <issue>
 #   Every listed option but --review-dry-run is chain.sh's and is passed to it, as is the issue, as
 #   typed. --review-dry-run runs the review with --dry-run, so it prints what it would post and
-#   posts nothing. --skip-permissions applies to the review stage too. The review runs on
+#   posts nothing. --skip-permissions, or skip_permissions true in the settings file, applies to
+#   the review stage too. The review runs on
 #   CHAIN_MODEL, else opus, at high effort, within CHAIN_STAGE_TIMEOUT seconds, else 2h.
 #   Tests: chain-local.tests.sh beside this file.
 
@@ -58,18 +59,27 @@ usage() {
 dry_run=0
 review_dry_run=0
 skip_permissions=0
+settings_file=
 chain_args=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --dry-run) dry_run=1; chain_args+=("$1"); shift ;;
     --review-dry-run) review_dry_run=1; shift ;;
     --skip-permissions) skip_permissions=1; chain_args+=("$1"); shift ;;
-    --settings) [ $# -ge 2 ] || { usage; exit 1; }; chain_args+=("$1" "$2"); shift 2 ;;
+    --settings) [ $# -ge 2 ] || { usage; exit 1; }; settings_file=$2; chain_args+=("$1" "$2"); shift 2 ;;
     -h|--help) usage; exit 0 ;;
     --*) usage; exit 1 ;;
     *) chain_args+=("$1"); shift ;;
   esac
 done
+
+# The settings file chain.sh reads, by its rule, so the review skips permissions exactly when the
+# chain's stages do. Read before the chain runs, as chain.sh reads it, so no stage can change it; a
+# value chain.sh refuses never reaches the review, since the chain stops first.
+if [ -z "$settings_file" ] && [ -f .gaffer/chain.json ]; then settings_file=.gaffer/chain.json; fi
+if [ -n "$settings_file" ] && jq -e '.skip_permissions == true' "$settings_file" >/dev/null 2>&1; then
+  skip_permissions=1
+fi
 
 review_prompt() {
   if [ "$review_dry_run" = 1 ]; then echo "/gaffer:review-pr $1 --dry-run"; else echo "/gaffer:review-pr $1"; fi
