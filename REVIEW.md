@@ -8,6 +8,12 @@ This repository's additions to the gaffer plugin's default review criteria. Each
 - **`/gaffer:review-followup`** — [`.github/workflows/review-followup.yml`](.github/workflows/review-followup.yml), when the `review-followup` label is added to such a pull request, by the maintainer or by `@claude` on the maintainer's request; the label comes off when the run ends.
 - **Both** — post as `github-actions[bot]`, run on `main`'s copy of this file and `CONVENTIONS.md`, put in place over the checkout's before the agent starts, and on gaffer's commands loaded from a clone of `main`, never the pull request's — [`docs/contributing.md`](docs/contributing.md) → *Continuous integration*.
 
+## Severity
+
+- **Who can act on this repository** — one maintainer, with no collaborators, and no outside contributions accepted. Only the maintainer, and the agents acting for them, can push a branch, open a pull request the review runs on, or write something on an issue that the chain will build: the chain runner, `@claude` and these review workflows. Rate a security finding with that in mind.
+- **Anyone outside that** — a stranger's fork, issue, comment or review — counts as the attacker, and a finding that gives them access they don't already have keeps its default severity.
+- **A finding that needs the maintainer, or one of their agents, to act against the repository on purpose** — planting files or git metadata, building a decoy repository, writing a hostile branch — is a Minor at most. That rating holds unless the review can show the step happens without anyone meaning it to, or gives a stranger a route in. Such an actor can already do more than any one gate stops, so hardening against them is a choice for the maintainer, not a merge blocker.
+
 ## What not to flag
 
 - **The `shell-tests` gate** — every committed `*.tests.sh` passing, every tracked JSON file parsing, and `claude plugin validate .` — [`.github/workflows/shell-tests.yml`](.github/workflows/shell-tests.yml).
