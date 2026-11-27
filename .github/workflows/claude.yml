@@ -38,11 +38,17 @@ jobs:
 
       # The action starts the agent in auto mode, where a safety review decides each command no
       # rule covers. That is kept, so the agent can run what the maintainer would — the tests, the
-      # scripts, `gh` — but the review is a judgement, not a boundary. The deny rules are the
-      # boundary for the one move that turns injected text into a program run with this job's
-      # tokens: writing git's config, which names programs a later git call runs. `git config`
-      # and `git -c` set it directly, and `--output`, which `git diff`, `git log` and `git show`
-      # take, writes anywhere. Deny outranks auto mode's review, quoted or escaped spellings too.
+      # scripts, `gh` — but the review is a judgement, not a boundary, and it is this agent's only
+      # one: a script it was talked into writing is already a program run with this job's tokens.
+      # The deny rules are not a boundary either. They refuse the plain spellings of three moves
+      # that get git to run a program: `git config` writes the config that names one for a later
+      # git call, `git -c` sets such a program for the call it starts (`core.pager`, `alias.*`),
+      # and `--output`, which `git diff`, `git log` and `git show` take, writes git's config or any
+      # other file. They match from the start of the command, so `git -C . config`, a shell
+      # redirect into `.git/config`, the Write tool on `~/.gitconfig` and a file in `.git/hooks/`
+      # all pass them and fall to auto mode's review. `Bash(git *--output*)` also refuses a commit
+      # whose message mentions `--output`: reword it. What keeps the job's tokens in is that only
+      # the maintainer's comments start a run, and the text a run reads is mostly theirs.
       # A label this run adds starts the workflow it triggers, as the maintainer's own does
       # (review-followup.yml accepts `claude[bot]` as the sender, and says why that is safe). The
       # appended instruction is what makes "make this change, then add `review-followup`" review

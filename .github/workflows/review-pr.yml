@@ -150,11 +150,20 @@ jobs:
       # - `--permission-mode default`: the action otherwise starts the agent in auto mode, where a
       #   safety review can pass a command no rule allows, so the allowlist is a floor, not a
       #   ceiling. In default mode what no rule allows is denied, as no one is there to approve it.
-      # - `Edit(./ci-scratch/**)`, not a bare `Write`: a bare rule lets the Write tool write any
+      # - `Edit(./ci-scratch/*.json)`, not a bare `Write`: a bare rule lets the Write tool write any
       #   path the runner user can, outside the workspace too, `~/.config/git/config` among them.
+      #   The one file the command writes is the review JSON. A pattern that reached subfolders or
+      #   names with no extension would let the agent lay out a bare repository (`HEAD`, `config`,
+      #   `objects/`) whose config a git call run inside it reads.
       # - the deny rule: `git diff:*`, `git log:*` and `git show:*` match any arguments, and all
       #   three take `--output=<path>`, which writes anywhere. The rule refuses every git call
       #   carrying `--output`, quoted or escaped; deny outranks allow, so plain calls still run.
+      # None of this limits what the agent can read. Any allowed call can read a file the runner
+      # user can — `git diff <path> /dev/null` outside the work tree, `gh api -F body=@<path>`,
+      # which posts it — `/proc/<pid>/environ` included, which holds this job's token and
+      # CLAUDE_CODE_OAUTH_TOKEN. What keeps them in is who can write the text the agent reads:
+      # only the maintainer opens the pull requests this runs on. Accepted while the maintainer is
+      # this repository's only writer; docs/unattended.md → *In CI*, step 5, says what closes it.
       # `Bash(gh api:*)` is broader than the one POST the command needs — it reaches any endpoint
       # the token can — and the allowlist cannot pin the method. The check step below therefore
       # asserts the outcome rather than trusting the instruction. `git remote get-url` and
@@ -171,7 +180,7 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ github.token }}
-          claude_args: '--model opus --effort high --permission-mode default --plugin-dir ${{ steps.gaffer.outputs.dir }} --add-dir ${{ steps.gaffer.outputs.dir }} --allowedTools "Read,Glob,Grep,Edit(./ci-scratch/**),Agent,Bash(mkdir:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git rev-parse:*),Bash(git remote get-url:*),Bash(gh repo view:*),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh issue view:*),Bash(gh api:*)" --disallowedTools "Bash(git *--output*)"'
+          claude_args: '--model opus --effort high --permission-mode default --plugin-dir ${{ steps.gaffer.outputs.dir }} --add-dir ${{ steps.gaffer.outputs.dir }} --allowedTools "Read,Glob,Grep,Edit(./ci-scratch/*.json),Agent,Bash(mkdir:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git rev-parse:*),Bash(git remote get-url:*),Bash(gh repo view:*),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh issue view:*),Bash(gh api:*)" --disallowedTools "Bash(git *--output*)"'
           prompt: |
             Review pull request #${{ env.PR_NUMBER }} in repository ${{ github.repository }}. The default branch is `main`.
 
