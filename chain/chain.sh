@@ -34,17 +34,19 @@
 # carry on degraded and still report success. `--skip-permissions` runs every stage with
 # --dangerously-skip-permissions instead: nothing is denied, including a write anywhere on the
 # machine, so it is an opt-in for a dedicated clone on a machine set aside for the runner, and
-# docs/chain.md says what it exposes. Nothing here passes it unasked.
+# docs/chain.md says what it exposes. `"skip_permissions": true` in the settings file does the same,
+# and the option cannot switch it off. Nothing here passes it unasked.
 #
 # Prerequisites: git, claude, gh, jq and timeout on PATH; claude and gh signed in; a clean main
 # in the repository the chain is started from. All are checked before the first stage starts, so
 # a missing one names itself. Tests: chain.tests.sh beside this file.
 #
 # SETTINGS. The target repository may carry .gaffer/chain.json (docs/chain.md); `--settings
-# <file>` names another. The chain reads one key of it, `stages`, each stage's `model` and `effort`,
-# defaulting to the plugin's own choice below where the file or the key is absent. It refuses a
-# file that still names `pre_review`, the opt-in that made the pre-review stage optional: every run
-# now includes it, and a file that says otherwise is one whose author expects something else.
+# <file>` names another. The chain reads two keys of it: `stages`, each stage's `model` and `effort`,
+# defaulting to the plugin's own choice below where the file or the key is absent, and
+# `skip_permissions` (see PERMISSIONS). It refuses a file that still names `pre_review`, the opt-in
+# that made the pre-review stage optional: every run now includes it, and a file that says
+# otherwise is one whose author expects something else.
 # THE ISSUE is named however the repository's tracker names it, and this script never reads the
 # reference: it is handed to the stages as typed. Reading it is an operation of the tracker skill
 # (skills/tracker/SKILL.md, which every stage command loads), so the build stage's first read of
@@ -94,7 +96,7 @@ usage() {
   echo "  <issue>: one issue, as the repository's tracker names it; it is handed to the stages as typed" >&2
   echo "  --dry-run: list the stages that would run, and run nothing" >&2
   echo "  --skip-permissions: run every stage with --dangerously-skip-permissions (see docs/chain.md)" >&2
-  echo "  --settings <file>: the settings file to read stage models from (default .gaffer/chain.json, if present)" >&2
+  echo "  --settings <file>: the settings file to read stage models and skip_permissions from (default .gaffer/chain.json, if present)" >&2
 }
 
 dry_run=0
@@ -120,7 +122,9 @@ config_refused() {
 }
 
 # A settings file that cannot be read at all, or that names `pre_review`, is refused before report
-# mode, so a dry run refuses what a real run would. `stages` is read further down.
+# mode, so a dry run refuses what a real run would. So is a `skip_permissions` that is not true,
+# false or null, which is read here so the dry run reports the permissions a real run would use.
+# `stages` is read further down.
 if [ -n "$settings_file" ]; then
   # jq reads the file; without it the file would be blamed for a tool that is not installed.
   command -v jq >/dev/null 2>&1 || { echo "chain: refused — jq is not on PATH; no stage was started."; exit 1; }
@@ -130,6 +134,9 @@ if [ -n "$settings_file" ]; then
   if jq -e 'has("pre_review")' "$settings_file" >/dev/null; then
     config_refused "in $settings_file, pre_review is a setting that no longer exists: every chain run includes the pre-review, so remove the key"
   fi
+  file_skip=$(jq -r 'if .skip_permissions == null then false elif (.skip_permissions | type) == "boolean" then .skip_permissions else error("x") end' "$settings_file" 2>/dev/null) \
+    || config_refused "in $settings_file, skip_permissions is not true or false"
+  [ "$file_skip" != true ] || skip_permissions=1
 fi
 STAGE_COUNT=4
 RAISE_PR_PROMPT="/gaffer:raise-pr --draft $issue"
@@ -180,8 +187,8 @@ done
 
 # THE SETTINGS' STAGE ROWS, read before any stage starts, so a stage the file misdescribes stops the run
 # with nothing done and a stage that rewrites the file cannot change a later stage's model. The
-# file's shape was checked before report mode; `stages` is read here. The runner reads the rest
-# of the same file and checks the keys it owns.
+# file's shape and `skip_permissions` were read before report mode; `stages` is read here. The
+# runner reads the rest of the same file and checks the keys it owns.
 SETTINGS_STAGES='{}'
 if [ -n "$settings_file" ]; then
   SETTINGS=$(jq -e 'if type == "object" then . else error("not an object") end' "$settings_file" 2>/dev/null) \

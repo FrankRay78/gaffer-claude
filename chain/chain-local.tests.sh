@@ -250,6 +250,21 @@ new_case; chain_ok; reply 5 "Reviewed."; before_after "$(good)"
 printf '{"stages": {"build": {"model": "m-build"}}}' > "$SB/case$cases/settings.json"
 run --settings "$SB/case$cases/settings.json" 270
 ok "--settings reaches the chain, and sets nothing for the review" '[ "$RC" = 0 ] && call 1 | grep -qF -- "--model|m-build|" && call 5 | grep -qF -- "--model|opus|"'
+new_case; chain_ok; reply 5 "Reviewed."; before_after "$(good)"
+mkdir -p "$REPO/.gaffer"; printf '{"skip_permissions": true}' > "$REPO/.gaffer/chain.json"
+git -C "$REPO" add .gaffer && git -C "$REPO" commit -q -m settings
+run 270
+ok "skip_permissions true in .gaffer/chain.json reaches every chain stage and the review" '[ "$RC" = 0 ] && [ "$(grep -cF -- "--dangerously-skip-permissions|" "$STUB_DIR/log")" = 5 ]'
+new_case; chain_ok; reply 5 "Reviewed."; before_after "$(good)"
+printf '{"skip_permissions": true}' > "$SB/case$cases/settings.json"
+run --settings "$SB/case$cases/settings.json" 270
+ok "skip_permissions true in a file named by --settings reaches every chain stage and the review" '[ "$RC" = 0 ] && [ "$(grep -cF -- "--dangerously-skip-permissions|" "$STUB_DIR/log")" = 5 ]'
+new_case; chain_ok; reply 5 "Reviewed."; before_after "$(good)"
+mkdir -p "$REPO/.gaffer"; printf '{"skip_permissions": true}' > "$REPO/.gaffer/chain.json"
+git -C "$REPO" add .gaffer && git -C "$REPO" commit -q -m settings
+printf '{"skip_permissions": false}' > "$SB/case$cases/settings.json"
+run --settings "$SB/case$cases/settings.json" 270
+ok "a file named by --settings is read instead of .gaffer/chain.json, by the review too" '[ "$RC" = 0 ] && [ "$(calls)" = 5 ] && ! grep -qF -- "--dangerously-skip-permissions|" "$STUB_DIR/log"'
 
 echo "A chain that fails is the chain's failure, and no review runs:"
 new_case

@@ -11,10 +11,8 @@
 #
 #   1. A markdown link — `[text](target)`. Three kinds of target are resolved, every one of them
 #      against the files in this branch and none of them fetched:
-#        a. a relative path, resolved from the linking file's own directory, which is how GitHub
-#           renders it; or a root-relative one, resolved from the repository root, which GitHub
-#           does NOT do — it reads a leading `/` against the site root, so such a link renders
-#           broken there. Resolving it here is a deliberate leniency, not a match for GitHub;
+#        a. a relative path, resolved from the linking file's own directory, or a root-relative
+#           one, resolved from the repository root — both as GitHub renders them;
 #        b. a full `https://github.com/FrankRay78/gaffer-claude/{blob,tree,raw}/main/<path>` link,
 #           mapped onto `<path>` in the checkout — the file the link points at, read locally;
 #        c. an `#anchor`, on either of those or on its own, checked against the headings of the
@@ -74,7 +72,8 @@
 # DESIGN RULE: fail CLOSED — this is a merge gate, and a gate that passes without having run gives
 # exactly the false comfort it exists to remove. Finding no tracked `*.md` at all is therefore a
 # failure, not a clean pass. An unterminated code fence is a failure too, for the same reason —
-# every link below it would be invisible, which is not the same as there being none.
+# every link below it would be invisible, which is not the same as there being none. So is a NUL
+# byte: grep reads a file holding one as binary, prints none of its matches and still exits 0.
 #
 # Not a Claude Code hook. Two ways to run it:
 #   In CI       .github/workflows/link-check.yml, on every pull request to main.
@@ -92,7 +91,7 @@ say() { printf 'link-check: %s\n' "$*"; }
 die() { printf 'link-check: FAIL — %s\n' "$*" >&2; exit 1; }
 
 # --- fail-closed preconditions ----------------------------------------------------
-for tool in git grep sed awk sort tr dirname mktemp; do
+for tool in git grep sed awk sort tr dirname mktemp cmp; do
   command -v "$tool" >/dev/null 2>&1 \
     || die "'$tool' is not available, so the check cannot run. It is a merge gate, so it fails rather than reporting an unverified pass."
 done
@@ -285,6 +284,12 @@ while IFS= read -r -d '' file; do
   # exists to be run during. There is nothing to scan in it; what points AT it is the finding,
   # and that is raised by whichever file carries the pointer.
   [ -f "$path" ] || continue
+
+  # A NUL byte makes grep read the file as binary and report no links, so it fails here instead.
+  LC_ALL=C tr -d '\000' < "$path" > "$TMP/nonul" 2>/dev/null \
+    || die "could not read '$file', so no verdict is possible."
+  cmp -s "$TMP/nonul" "$path" \
+    || die "'$file' holds a NUL byte, so grep would read it as binary and none of its links would be checked. Remove the byte — an unreadable file is not a link-free one."
 
   # Fenced blocks first, dropped by their own delimiter so that a `~~~` block quoting a ``` line
   # stays one block; then backtick spans. A span opens on a run of backticks and closes on the next

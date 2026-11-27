@@ -37,7 +37,9 @@ name: Publish Jira Distribution
 #        git commit -m "Seed the Jira tracker overlay"
 #        git push -u origin jira-tracker-skill
 #
-#   3. The ruleset that keeps the branch from being deleted:
+#   3. The ruleset that keeps the branch from being deleted, and lets only the Repository admin
+#      role push to it, force pushes included. Nothing checks what this workflow publishes, so a
+#      push by anyone else, such as `@claude` with the Claude app's token (claude.yml), is refused:
 #        gh api -X POST repos/FrankRay78/gaffer-claude/rulesets --input .github/ruleset-jira-tracker-skill.json
 #
 #   4. The credential: a fine-grained personal access token whose only repository is

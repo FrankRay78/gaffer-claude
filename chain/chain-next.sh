@@ -122,7 +122,9 @@ read_settings() {
   unknown=$(jq -r 'if (.labels | type) == "object" then (.labels | keys - ["ready", "parked"] | .[]) else empty end' <<<"$s" | paste -sd' ')
   [ -z "$unknown" ] || die "refused — in $f, labels names a label this runner does not know: $unknown. Nothing was run."
   [ "$READY_LABEL" != "$PARKED_LABEL" ] || die "refused — in $f, the ready and parked labels are the same label; nothing was run."
-  SKIP_PERMISSIONS=$(jq -r 'if .skip_permissions == null then false elif (.skip_permissions | type) == "boolean" then .skip_permissions else error("x") end' <<<"$s" 2>/dev/null) \
+  # The chain reads skip_permissions from this same file; it is checked here too, so a bad value
+  # is refused before anything is selected.
+  jq -e '.skip_permissions == null or (.skip_permissions | type) == "boolean"' <<<"$s" >/dev/null 2>&1 \
     || die "refused — in $f, skip_permissions is not true or false; nothing was run."
   STATE=$(jq -r --arg d "${XDG_STATE_HOME:-$HOME/.local/state}/gaffer-chain/$(basename "$CLONE")" \
       'if .state_dir == null then $d elif (.state_dir | type) == "string" and (.state_dir | length) > 0 then .state_dir else error("x") end' <<<"$s" 2>/dev/null) \
@@ -381,8 +383,8 @@ main() {
   attempts=$(keep_attempts "$n") || die "could not set aside an earlier attempt at #$n; nothing was run."
   for kept in $attempts; do say "kept an earlier attempt at #$n as $kept"; done
   log=$(free_name "$STATE/logs/$n-$STAMP" log_exists).log
+  # The chain reads skip_permissions from the settings file itself.
   chain_flags=(--settings "$settings")
-  [ "$SKIP_PERMISSIONS" != true ] || chain_flags+=(--skip-permissions)
   # Started from the freshly reset main. Its stdin is /dev/null and its descriptor 9 is closed, so
   # no stage can hold the lock after the firing ends.
   bash "$CHAIN_DIR/chain.sh" "${chain_flags[@]}" "$n" </dev/null 9>&- 2>&1 | tee "$log"
