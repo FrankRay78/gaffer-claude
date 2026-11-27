@@ -37,10 +37,14 @@ jobs:
           fetch-depth: 0
 
       # The model and effort are this stage's, stated here: opus at high effort.
+      # A label this run adds starts the workflow it triggers, as the maintainer's own does
+      # (review-followup.yml accepts `claude[bot]` as the sender, and says why that is safe). The
+      # appended instruction is what makes "make this change, then add `review-followup`" review
+      # the change.
       - name: Run Claude Code
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          claude_args: '--model opus --effort high'
+          claude_args: '--model opus --effort high --append-system-prompt "When a request asks you both to push a change and to add a label, push first and add the label only once the push has succeeded: a label starts a workflow that reads the head as it is at that moment."'
           additional_permissions: |
             actions: read
