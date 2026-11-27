@@ -177,6 +177,61 @@ new_case
 reply 1 "$(ready)"; reply 2 "$(verified)"; reply 3 "$(raised)"; reply 4 "$(pre_reviewed)"
 chain --skip-permissions 270
 ok "with --skip-permissions every stage runs with --dangerously-skip-permissions" '[ "$RC" = 0 ] && [ "$(grep -cF -- "--dangerously-skip-permissions|" "$STUB_DIR/log" 2>/dev/null)" = 4 ]'
+echo "The settings file's skip_permissions skips them too, and the option cannot switch it off:"
+skipped_everywhere='[ "$(grep -cF -- "--dangerously-skip-permissions|" "$STUB_DIR/log" 2>/dev/null)" = 4 ]'
+skipped_nowhere='! grep -qF -- "--dangerously-skip-permissions|" "$STUB_DIR/log"'
+new_case
+reply 1 "$(ready)"; reply 2 "$(verified)"; reply 3 "$(raised)"; reply 4 "$(pre_reviewed)"
+settings '{"skip_permissions": true}'
+chain 270
+ok "with skip_permissions true in .gaffer/chain.json and no option, every stage skips permissions" '[ "$RC" = 0 ] && '"$skipped_everywhere"
+new_case
+reply 1 "$(ready)"; reply 2 "$(verified)"; reply 3 "$(raised)"; reply 4 "$(pre_reviewed)"
+settings '{"skip_permissions": true}'
+chain --skip-permissions 270
+ok "with skip_permissions true and the option too, every stage skips permissions once" '[ "$RC" = 0 ] && '"$skipped_everywhere"' && [ "$(grep -oF -- "--dangerously-skip-permissions|" "$STUB_DIR/log" | grep -c "")" = 4 ]'
+new_case
+reply 1 "$(ready)"; reply 2 "$(verified)"; reply 3 "$(raised)"; reply 4 "$(pre_reviewed)"
+printf '{"skip_permissions": true}' > "$SB/case$cases/named.json"
+chain --settings "$SB/case$cases/named.json" 270
+ok "with skip_permissions true in a file named by --settings, every stage skips permissions" '[ "$RC" = 0 ] && '"$skipped_everywhere"
+new_case
+reply 1 "$(ready)"; reply 2 "$(verified)"; reply 3 "$(raised)"; reply 4 "$(pre_reviewed)"
+settings '{"skip_permissions": true}'
+printf '{"skip_permissions": false}' > "$SB/case$cases/named.json"
+chain --settings "$SB/case$cases/named.json" 270
+ok "--settings is read instead of .gaffer/chain.json for skip_permissions too" '[ "$RC" = 0 ] && [ "$(calls)" = 4 ] && '"$skipped_nowhere"
+for quiet in '{"skip_permissions": false}' '{"skip_permissions": null}' '{"stages": {}}'; do
+  new_case
+  reply 1 "$(ready)"; reply 2 "$(verified)"; reply 3 "$(raised)"; reply 4 "$(pre_reviewed)"
+  settings "$quiet"
+  chain 270
+  ok "with $quiet and no option, no stage skips permissions" '[ "$RC" = 0 ] && '"$skipped_nowhere"
+  new_case
+  reply 1 "$(ready)"; reply 2 "$(verified)"; reply 3 "$(raised)"; reply 4 "$(pre_reviewed)"
+  settings "$quiet"
+  chain --skip-permissions 270
+  ok "with $quiet, --skip-permissions still skips them for every stage" '[ "$RC" = 0 ] && '"$skipped_everywhere"
+done
+new_case
+settings '{"skip_permissions": true}'
+chain --dry-run 270
+ok "report mode says permissions would be skipped when the file opts in" '[ "$RC" = 0 ] && [ "$(calls)" = 0 ] && grep -qF "permissions: skipped" <<<"$OUTPUT"'
+new_case
+settings '{"skip_permissions": false}'
+chain --dry-run 270
+ok "and that the repository's rules apply when it does not" '[ "$RC" = 0 ] && [ "$(calls)" = 0 ] && grep -qF "permissions: the repository'"'"'s rules" <<<"$OUTPUT"'
+for bad in '{"skip_permissions": "yes"}' '{"skip_permissions": "true"}' '{"skip_permissions": 1}' '{"skip_permissions": []}' '{"skip_permissions": {}}'; do
+  new_case
+  settings "$bad"
+  before="$(repo_state)"
+  chain 270
+  ok "a skip_permissions that is not true, false or null is refused before any stage, as a configuration fault: $bad" '[ "$RC" = 78 ] && [ "$(calls)" = 0 ] && grep -qF "skip_permissions is not true or false" <<<"$OUTPUT" && [ "$(repo_state)" = "$before" ]'
+  chain --dry-run 270
+  ok "… and so is the dry run" '[ "$RC" = 78 ] && [ "$(calls)" = 0 ] && grep -qF "skip_permissions" <<<"$OUTPUT" && ! grep -qF "permissions: " <<<"$OUTPUT"'
+  chain --skip-permissions 270
+  ok "… and the option does not stand in for it" '[ "$RC" = 78 ] && [ "$(calls)" = 0 ]'
+done
 echo "The settings file names each stage's model and effort:"
 new_case
 reply 1 "$(ready)"; reply 2 "$(verified)"; reply 3 "$(raised)"; reply 4 "$(pre_reviewed)"
@@ -190,9 +245,9 @@ chain 270
 ok "a stage, or a field, the file leaves out keeps its default" '[ "$RC" = 0 ] && default_flags 1 "$DEFAULT_BUILD" && flags_are 2 opus max && default_flags 3 "$DEFAULT_RAISE_PR"'
 new_case
 reply 1 "$(ready)"; reply 2 "$(verified)"; reply 3 "$(raised)"; reply 4 "$(pre_reviewed)"
-settings '{"clone": "~/x", "writers": ["User:someone"], "skip_permissions": true, "stages": {"build": {"model": "m-build"}}}'
+settings '{"clone": "~/x", "writers": ["User:someone"], "stages": {"build": {"model": "m-build"}}}'
 chain 270
-ok "the runner's keys in the same file are not the chain's business, and skip_permissions there does not skip them here" '[ "$RC" = 0 ] && flags_are 1 m-build high && ! grep -qF -- "--dangerously-skip-permissions|" "$STUB_DIR/log"'
+ok "the runner's keys in the same file are not the chain's business" '[ "$RC" = 0 ] && flags_are 1 m-build high'
 new_case
 reply 1 "$(ready)"; reply 2 "$(verified)"; reply 3 "$(raised)"; reply 4 "$(pre_reviewed)"
 settings '{"stages": {"build": {"model": "m-repo", "effort": "low"}}}'
