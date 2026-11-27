@@ -632,6 +632,7 @@ for bad in \
   '{"clone": "CLONE", "writers": ["User:maintainer"], "labels": {"queued": "x"}}' \
   '{"clone": "CLONE", "writers": ["User:maintainer"], "labels": {"ready": "same", "parked": "same"}}' \
   '{"clone": "CLONE", "writers": ["User:maintainer"], "skip_permissions": "yes"}' \
+  '{"clone": "CLONE", "writers": ["User:maintainer"], "skip_permissions": 1}' \
   '{"clone": "CLONE", "writers": ["User:maintainer"], "pre_review": "yes"}' \
   '{"clone": "CLONE", "writers": ["User:maintainer"], "state_dir": ""}' \
   '{"clone": "CLONE", "writers": ["User:maintainer"], "tracker": "github"}' \
@@ -662,12 +663,16 @@ ok "a failure parks with the settings' parked label, and the comment names it" '
 new_case
 issues '[{"number":5,"state":"OPEN","labels":["ready"]}]'
 fire
-ok "without skip_permissions the chain is not told to skip them" '[ "$RC" = 0 ] && [ "$(start_of 1 flags)" = "--settings|$SETTINGS|" ]'
-new_case
-issues '[{"number":5,"state":"OPEN","labels":["ready"]}]'
-settings "{\"clone\": \"$CLONE\", \"writers\": [\"User:maintainer\"], \"skip_permissions\": true, \"state_dir\": \"$STATE\"}"
-fire
-ok "with skip_permissions true the chain is handed the opt-in, and the settings file" '[ "$RC" = 0 ] && [ "$(start_of 1 flags)" = "--settings|$SETTINGS|--skip-permissions|" ]'
+ok "without skip_permissions the chain is handed only the settings file" '[ "$RC" = 0 ] && [ "$(start_of 1 flags)" = "--settings|$SETTINGS|" ]'
+# The chain reads skip_permissions from the file it is handed (chain.tests.sh), so the runner
+# passes no option of its own: the file is the one place the opt-in lives.
+for value in true false null; do
+  new_case
+  issues '[{"number":5,"state":"OPEN","labels":["ready"]}]'
+  settings "{\"clone\": \"$CLONE\", \"writers\": [\"User:maintainer\"], \"skip_permissions\": $value, \"state_dir\": \"$STATE\"}"
+  fire
+  ok "with skip_permissions $value the chain is handed the settings file that says so, and no option" '[ "$RC" = 0 ] && [ "$(start_of 1 flags)" = "--settings|$SETTINGS|" ] && [ "$(jq -c .skip_permissions "$SETTINGS")" = '"$value"' ]'
+done
 new_case
 issues '[{"number":5,"state":"OPEN","labels":["ready"]}]'
 HOME="$SB/case$cases/home"; mkdir -p "$HOME/Repos"; mv "$CLONE" "$HOME/Repos/runner"; CLONE="$HOME/Repos/runner"
