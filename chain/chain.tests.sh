@@ -189,7 +189,7 @@ new_case
 reply 1 "$(ready)"; reply 2 "$(verified)"; reply 3 "$(raised)"; reply 4 "$(pre_reviewed)"
 settings '{"skip_permissions": true}'
 chain --skip-permissions 270
-ok "with skip_permissions true and the option too, every stage skips permissions once" '[ "$RC" = 0 ] && '"$skipped_everywhere"' && ! grep -qF -- "--dangerously-skip-permissions|--dangerously-skip-permissions|" "$STUB_DIR/log"'
+ok "with skip_permissions true and the option too, every stage skips permissions once" '[ "$RC" = 0 ] && '"$skipped_everywhere"' && [ "$(grep -oF -- "--dangerously-skip-permissions|" "$STUB_DIR/log" | grep -c "")" = 4 ]'
 new_case
 reply 1 "$(ready)"; reply 2 "$(verified)"; reply 3 "$(raised)"; reply 4 "$(pre_reviewed)"
 printf '{"skip_permissions": true}' > "$SB/case$cases/named.json"
@@ -197,10 +197,10 @@ chain --settings "$SB/case$cases/named.json" 270
 ok "with skip_permissions true in a file named by --settings, every stage skips permissions" '[ "$RC" = 0 ] && '"$skipped_everywhere"
 new_case
 reply 1 "$(ready)"; reply 2 "$(verified)"; reply 3 "$(raised)"; reply 4 "$(pre_reviewed)"
-settings '{"skip_permissions": false}'
-printf '{"skip_permissions": true}' > "$SB/case$cases/named.json"
+settings '{"skip_permissions": true}'
+printf '{"skip_permissions": false}' > "$SB/case$cases/named.json"
 chain --settings "$SB/case$cases/named.json" 270
-ok "--settings is read instead of .gaffer/chain.json for skip_permissions too" '[ "$RC" = 0 ] && '"$skipped_everywhere"
+ok "--settings is read instead of .gaffer/chain.json for skip_permissions too" '[ "$RC" = 0 ] && [ "$(calls)" = 4 ] && '"$skipped_nowhere"
 for quiet in '{"skip_permissions": false}' '{"skip_permissions": null}' '{"stages": {}}'; do
   new_case
   reply 1 "$(ready)"; reply 2 "$(verified)"; reply 3 "$(raised)"; reply 4 "$(pre_reviewed)"

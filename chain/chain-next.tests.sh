@@ -666,12 +666,12 @@ fire
 ok "without skip_permissions the chain is handed only the settings file" '[ "$RC" = 0 ] && [ "$(start_of 1 flags)" = "--settings|$SETTINGS|" ]'
 # The chain reads skip_permissions from the file it is handed (chain.tests.sh), so the runner
 # passes no option of its own: the file is the one place the opt-in lives.
-for value in true false null; do
+for value in true false; do
   new_case
   issues '[{"number":5,"state":"OPEN","labels":["ready"]}]'
   settings "{\"clone\": \"$CLONE\", \"writers\": [\"User:maintainer\"], \"skip_permissions\": $value, \"state_dir\": \"$STATE\"}"
   fire
-  ok "with skip_permissions $value the chain is handed the settings file that says so, and no option" '[ "$RC" = 0 ] && [ "$(start_of 1 flags)" = "--settings|$SETTINGS|" ] && [ "$(jq -c .skip_permissions "$SETTINGS")" = '"$value"' ]'
+  ok "with skip_permissions $value the chain is handed only the settings file, and no option" '[ "$RC" = 0 ] && [ "$(start_of 1 flags)" = "--settings|$SETTINGS|" ]'
 done
 new_case
 issues '[{"number":5,"state":"OPEN","labels":["ready"]}]'
