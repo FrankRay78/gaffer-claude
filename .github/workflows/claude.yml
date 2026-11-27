@@ -40,8 +40,7 @@ jobs:
       # A label this run adds starts the workflow it triggers, as the maintainer's own does
       # (review-followup.yml accepts `claude[bot]` as the sender, and says why that is safe). The
       # appended instruction is what makes "make this change, then add `review-followup`" review
-      # the change: the round reads the pull request's head when it starts, so the push has to land
-      # first.
+      # the change.
       - name: Run Claude Code
         uses: anthropics/claude-code-action@v1
         with:
