@@ -22,8 +22,9 @@ name: Claude Code
 # - `jira-tracker-skill`, which publish-jira.yml lays over `main` into the Jira distribution
 #   unchecked, takes a push, force or not, from the Repository admin role only
 #   (.github/ruleset-jira-tracker-skill.json).
-# - The app cannot change files under `.github/workflows/`.
-# The token is revoked when the job ends.
+# Separately, the token cannot change files under `.github/workflows/`: the action asks for
+# contents, pull requests and issues, plus the `additional_permissions` below, and no `workflows`.
+# The action tries to revoke the token when the job ends; failing that, it expires within the hour.
 
 on:
   issue_comment:

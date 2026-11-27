@@ -562,6 +562,7 @@ chmod 000 "$REPO/docs/guide.md" || setup_fail "chmod guide"
 check
 ok "a file that cannot be read fails rather than being passed over" 'failed && names "no verdict is possible"'
 
+# SCENARIO: a file the link check cannot read as text fails the check
 # grep reads a file holding a NUL byte as binary: it prints no match and exits 0, so without the
 # guard the broken link below would go unread and the verdict would be OK.
 new_case
