@@ -22,7 +22,8 @@
 # in interactively lets the two collide. This runner owns a clone nobody else touches.
 #
 # WHAT IT COSTS. A firing with something eligible spends a full chain run of model time and opens
-# a real pull request. An empty firing costs a few gh calls and changes nothing.
+# a real pull request. An empty firing costs a few gh calls and changes nothing but the clone's
+# remote-tracking refs.
 #
 # THE RESET IS DESTRUCTIVE: `git checkout -f`, `reset --hard` and `clean -fdx`. It runs only in a
 # clone marked `git config chain-next.dedicated true`, never in a worktree, and only once an issue
@@ -48,7 +49,7 @@ PLUGIN_ROOT="$(cd "$CHAIN_DIR/.." && pwd)"
 usage() {
   echo "usage: chain-next.sh [--dry-run] <settings-file>" >&2
   echo "  <settings-file>: the repository's chain settings, usually its .gaffer/chain.json" >&2
-  echo "  --dry-run: name the issue the next firing would build, and change nothing" >&2
+  echo "  --dry-run: name the issue the next firing would build, and change nothing but the clone's remote-tracking refs" >&2
 }
 
 # chain.sh's exit codes, as the literals it defines. The two files sit in one checkout and change
@@ -68,14 +69,17 @@ expand_home() { case "$1" in "~/"*) printf '%s' "$HOME/${1#\~/}" ;; *) printf '%
 # load_settings <file> — read_settings on the copy the runner trusts. Where the file sits in a git
 # checkout — the clone, as its committed .gaffer/chain.json does — that is origin's main's copy,
 # freshly fetched, never the one on disk: the chain leaves its feature branch checked out, so the
-# disk copy is whatever the last build made of it. That checkout must be the clone main's copy
-# names. A file outside any checkout is read as it stands.
+# disk copy is whatever the last build made of it. That checkout must be the clone that main's
+# copy names. A file outside any checkout is read as it stands.
 load_settings() {
-  local f=$1 dir rest top path
+  local f=$1 dir rest top path err
   dir=$(dirname "$f"); rest=$(basename "$f")
   # The branch left checked out may have deleted the file's directory too.
   while [ ! -d "$dir" ]; do rest="$(basename "$dir")/$rest"; dir=$(dirname "$dir"); done
   if ! top=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null); then
+    err=$(LC_ALL=C git -C "$dir" rev-parse --show-toplevel 2>&1)
+    [[ $err == *"not a git repository"* ]] \
+      || die "refused — git could not read the checkout around $f: $err; nothing was run."
     [ -f "$f" ] || die "refused — the settings file $f does not exist; nothing was run."
     read_settings "$(cat "$f")" "$f"
     return
@@ -90,7 +94,7 @@ load_settings() {
     || die "refused — the settings file $f sits in $top, but origin's main names $CLONE as the clone; nothing was run."
 }
 
-# read_settings <json> <name> — every key the runner owns, checked before anything else happens, so a
+# read_settings <json> <source> — every key the runner owns, checked before anything else happens, so a
 # fault in the file is reported with nothing selected, reset or run. The clone path and the
 # writers have no default: the clone because it is where the destructive reset runs, the writers
 # because they are what stops the runner building a stranger's issue on a public repository — a

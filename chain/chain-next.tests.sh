@@ -698,7 +698,7 @@ on_branch() {
   commit_all "$CLONE" "Refs #9: edit the settings"
 }
 main_json="{\"clone\": \"CLONE\", \"writers\": [\"User:maintainer\"], \"state_dir\": \"STATE\"}"
-wide_json="{\"clone\": \"CLONE\", \"writers\": [\"User:maintainer\", \"User:someone-else\"], \"labels\": {\"ready\": \"queued\"}, \"state_dir\": \"STATE\"}"
+wide_json="{\"clone\": \"CLONE\", \"writers\": [\"User:maintainer\", \"User:someone-else\"], \"labels\": {\"ready\": \"queued\"}, \"skip_permissions\": true, \"state_dir\": \"STATE\"}"
 in_case() { local j=${1//CLONE/$CLONE}; printf '%s' "${j//STATE/$STATE}"; }
 three_issues='[{"number":3,"state":"OPEN","labels":["ready","queued"],"author":"someone-else"},{"number":4,"state":"OPEN","labels":["queued"]},{"number":5,"state":"OPEN","labels":["ready"]}]'
 # SCENARIO: unmerged settings edit is not applied
@@ -711,7 +711,7 @@ fire_with "$CLONE/.gaffer/chain.json" --dry-run
 ok "report mode selects with main's writers and labels, not the branch's" '[ "$RC" = 0 ] && grep -qF "would build #5" <<<"$OUTPUT" && grep -qF "skipped #3" <<<"$OUTPUT"'
 ok "and leaves the clone's branches and tree as they were" '[ "$(checkout_state "$CLONE")" = "$before" ]'
 fire_with "$CLONE/.gaffer/chain.json"
-ok "a real firing builds what report mode named" '[ "$RC" = 0 ] && [ "$(chain_calls)" = 5 ]'
+ok "a real firing builds what report mode named, without the branch's skip_permissions" '[ "$RC" = 0 ] && [ "$(chain_calls)" = 5 ] && [ "$(start_of 1 flags)" = "--settings|$CLONE/.gaffer/chain.json|" ]'
 new_case
 issues "$three_issues"
 on_main "$(in_case "$main_json")"
@@ -736,7 +736,7 @@ new_case
 issues "$three_issues"
 on_main "$(in_case "$main_json")"
 git -C "$CLONE" checkout -q -b feature/9-other
-printf '%s' "$(in_case "$wide_json")" > "$SEED/.gaffer/chain.json"; commit_all "$SEED" "widen"; git -C "$SEED" push -q origin main
+in_case "$wide_json" > "$SEED/.gaffer/chain.json"; commit_all "$SEED" "widen"; git -C "$SEED" push -q origin main
 fire_with "$CLONE/.gaffer/chain.json" --dry-run
 ok "a change merged since the clone last fetched is in effect at the next firing" '[ "$RC" = 0 ] && grep -qF "would build #3" <<<"$OUTPUT"'
 new_case
@@ -744,19 +744,25 @@ issues "$three_issues"
 on_main '{"clone": '
 on_branch "$(in_case "$main_json")"
 fire_with "$CLONE/.gaffer/chain.json"
-ok "settings invalid on main are refused before any issue is selected, whatever the branch holds" '[ "$RC" != 0 ] && grep -qF "chain.json" <<<"$OUTPUT" && [ -z "$(chain_calls)" ] && ! grep -q "^issue|list|" "$STUB_DIR/gh-log" 2>/dev/null && [ ! -e "$STATE" ]'
+ok "settings invalid on main are refused before any issue is selected, whatever the branch holds" '[ "$RC" != 0 ] && grep -qF "main is not a JSON object" <<<"$OUTPUT" && [ -z "$(chain_calls)" ] && ! grep -q "^issue|list|" "$STUB_DIR/gh-log" 2>/dev/null && [ ! -e "$STATE" ]'
 new_case
 issues "$three_issues"
 on_main "$(in_case "$main_json")"
 in_case "$main_json" > "$CLONE/.gaffer/other.json"
 fire_with "$CLONE/.gaffer/other.json"
-ok "a path main has no settings file at is refused, saying so, never read from disk" '[ "$RC" != 0 ] && grep -qF "other.json" <<<"$OUTPUT" && grep -qF "main" <<<"$OUTPUT" && [ -z "$(chain_calls)" ] && ! grep -q "^issue|list|" "$STUB_DIR/gh-log" 2>/dev/null'
+ok "a path main has no settings file at is refused, saying so, never read from disk" '[ "$RC" != 0 ] && grep -qF "other.json" <<<"$OUTPUT" && grep -qF "has no settings file" <<<"$OUTPUT" && [ -z "$(chain_calls)" ] && ! grep -q "^issue|list|" "$STUB_DIR/gh-log" 2>/dev/null'
 new_case
 issues "$three_issues"
 git -C "$OTHER" config chain-next.dedicated true
 on_main "$(in_case "${main_json//CLONE/$OTHER}")"
 fire_with "$CLONE/.gaffer/chain.json"
 ok "main's copy naming another clone than the one it sits in is refused" '[ "$RC" != 0 ] && grep -qF "$OTHER" <<<"$OUTPUT" && [ -z "$(chain_calls)" ] && ! grep -q "^issue|list|" "$STUB_DIR/gh-log" 2>/dev/null'
+new_case
+issues "$three_issues"
+on_main "$(in_case "$main_json")"
+in_case "$main_json" > "$CLONE/.git/chain.json"
+fire_with "$CLONE/.git/chain.json"
+ok "a checkout git cannot read is refused with git's reason, never read from disk" '[ "$RC" != 0 ] && grep -qF "work tree" <<<"$OUTPUT" && [ -z "$(chain_calls)" ] && ! grep -q "^issue|list|" "$STUB_DIR/gh-log" 2>/dev/null'
 new_case
 issues "$three_issues"
 on_main "$(in_case "$main_json")"
