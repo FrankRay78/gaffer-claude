@@ -1,7 +1,8 @@
 name: Review Followup
 
-# Runs /gaffer:review-followup when FrankRay78 adds the `review-followup` label to one of their pull
-# requests on this repository. The round logic is the command file, loaded from gaffer's main by a
+# Runs /gaffer:review-followup when the `review-followup` label is added to one of FrankRay78's pull
+# requests on this repository — by FrankRay78, or by Claude answering FrankRay78's `@claude` request
+# (claude.yml), so one comment can ask for a change and then the round. The round logic is the command file, loaded from gaffer's main by a
 # step below; this workflow adds only the environmental deltas in the prompt. The label is removed
 # when the run ends, successful or not, so adding it again starts the next round — the label is the
 # request, not the state. The removal step is inside the job, so a label the `if` below rejects is
@@ -39,9 +40,20 @@ jobs:
     # Both logins are checked because they answer different questions. `sender` is who asked for
     # the round; `pull_request.user` is whose pull request the round spends the subscription on.
     # Neither decides what code runs: nothing from the checkout is executed.
+    #
+    # WHY `claude[bot]` COUNTS AS THE MAINTAINER. A label claude.yml's run applies arrives with the
+    # sender `claude[bot]`, because that run acts with the Claude app's token. It is the maintainer's
+    # request for two reasons, both kept elsewhere: claude.yml answers only FrankRay78's comments,
+    # and it is the only workflow here that acts as the Claude app — review-pr.yml and this file hand
+    # the action `github_token`, so what they do arrives as `github-actions[bot]` and starts nothing.
+    # A new workflow that exchanges OIDC for the app's token, or one that answers anyone else's
+    # comments, would widen this gate too. What stays open is an injected label: a mention run that
+    # applies `review-followup` because text anyone can write — a PR body, another account's
+    # comment — asked it to. Such a round still runs only on FrankRay78's own pull request, from
+    # main's commands and rules, so the cost is one unrequested round, not a different one.
     if: >-
       github.event.label.name == 'review-followup' &&
-      github.event.sender.login == 'FrankRay78' &&
+      (github.event.sender.login == 'FrankRay78' || github.event.sender.login == 'claude[bot]') &&
       github.event.pull_request.user.login == 'FrankRay78' &&
       github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
@@ -67,7 +79,10 @@ jobs:
       # Resolved live rather than from the event payload: the payload's head sha is as it was when
       # the label was applied, and the round reviews and posts against the current head. This is
       # the one read of the head: the check after the agent requires the round on this commit, the
-      # one checked out, not on whatever the head has become by the time the run ends.
+      # one checked out, not on whatever the head has become by the time the run ends. It is also
+      # what makes "make this change, then run the follow-up" in one `@claude` comment review the
+      # change: claude.yml tells Claude to push before it adds a label, so the head read here is the
+      # commit it pushed.
       - name: Resolve the PR head
         id: pr
         env:
