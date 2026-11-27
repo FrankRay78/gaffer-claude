@@ -11,6 +11,7 @@ This repository's additions to the gaffer plugin's default review criteria. Each
 ## What not to flag
 
 - **The `shell-tests` gate** — every committed `*.tests.sh` passing, every tracked JSON file parsing, and `claude plugin validate .` — [`.github/workflows/shell-tests.yml`](.github/workflows/shell-tests.yml).
+- **A missing test for a Markdown change** — a command, skill, default, template or doc has no test by design, and none is written for its wording — [`CONVENTIONS.md`](CONVENTIONS.md) → *Test-driven development*.
 - **The `link-check` gate** — every markdown link to a file in this repository, and the heading it names, resolving — [`.github/workflows/link-check.yml`](.github/workflows/link-check.yml).
 
 ## Contracts
