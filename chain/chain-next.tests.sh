@@ -541,7 +541,7 @@ fire
 ok "a failed pull request lookup selects nothing rather than assuming none is open" '[ "$RC" != 0 ] && [ -z "$(chain_calls)" ]'
 
 echo "A fork clone, where gh would choose another repository than origin:"
-# Report mode alone, which fetches nothing, so origin can be a GitHub URL the sandbox never reaches.
+# Report mode, with the settings file outside the clone, fetches nothing, so origin can be a GitHub URL the sandbox never reaches.
 new_case
 issues '[{"number":5,"state":"OPEN","labels":["ready"]}]'
 git -C "$CLONE" remote set-url origin https://github.com/o/r.git
@@ -712,6 +712,14 @@ ok "report mode selects with main's writers and labels, not the branch's" '[ "$R
 ok "and leaves the clone's branches and tree as they were" '[ "$(checkout_state "$CLONE")" = "$before" ]'
 fire_with "$CLONE/.gaffer/chain.json"
 ok "a real firing builds what report mode named, without the branch's skip_permissions" '[ "$RC" = 0 ] && [ "$(chain_calls)" = 5 ] && [ "$(start_of 1 flags)" = "--settings|$CLONE/.gaffer/chain.json|" ]'
+new_case
+issues "$three_issues"
+git -C "$OTHER" config chain-next.dedicated true
+on_main "$(in_case "$main_json")"
+on_branch "{\"clone\": \"$OTHER\", \"writers\": [\"User:maintainer\"], \"state_dir\": \"$STATE-branch\"}"
+other_before="$(checkout_state "$OTHER")"
+fire_with "$CLONE/.gaffer/chain.json"
+ok "a real firing builds in main's clone and keeps its lock and logs in main's state_dir, not the branch's" '[ "$RC" = 0 ] && [ "$(chain_calls)" = 5 ] && grep -qF "building #5 in $CLONE" <<<"$OUTPUT" && [ -e "$STATE/lock" ] && ls "$STATE"/logs/5-*.log >/dev/null 2>&1 && [ ! -e "$STATE-branch" ] && [ "$(checkout_state "$OTHER")" = "$other_before" ]'
 new_case
 issues "$three_issues"
 on_main "$(in_case "$main_json")"

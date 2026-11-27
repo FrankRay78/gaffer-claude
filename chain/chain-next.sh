@@ -49,7 +49,7 @@ PLUGIN_ROOT="$(cd "$CHAIN_DIR/.." && pwd)"
 usage() {
   echo "usage: chain-next.sh [--dry-run] <settings-file>" >&2
   echo "  <settings-file>: the repository's chain settings, usually its .gaffer/chain.json" >&2
-  echo "  --dry-run: name the issue the next firing would build, and change nothing but the clone's remote-tracking refs" >&2
+  echo "  --dry-run: name the issue the next firing would build, and change nothing but the remote-tracking refs of the checkout the settings file sits in" >&2
 }
 
 # chain.sh's exit codes, as the literals it defines. The two files sit in one checkout and change
@@ -354,7 +354,7 @@ main() {
   common_dir=$(cd "$(git rev-parse --git-common-dir)" && pwd -P)
   if [ "$(cd "$top" && pwd -P)" != "$(pwd -P)" ] || [ "$git_dir" != "$common_dir" ] \
       || [ "$(git config --get chain-next.dedicated)" != true ]; then
-    die "refused — $CLONE is not the runner's dedicated clone (a full clone marked with \`git config chain-next.dedicated true\`); nothing was changed."
+    die "refused — $CLONE is not the runner's dedicated clone (a full clone marked with \`git config chain-next.dedicated true\`); nothing was run."
   fi
   check_repo
 
