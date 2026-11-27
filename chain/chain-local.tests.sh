@@ -362,6 +362,12 @@ ok "the review runs with --dry-run" 'call 5 | grep -qF -- "-p|/gaffer:review-pr 
 ok "the chain runs its own stages, not told about it" '[ "$(calls)" = 5 ] && call 1 | grep -qF -- "-p|/gaffer:build 270|"'
 ok "the branch's pull request is still checked, and no review is read" '[ "$(pr_calls)" = 1 ] && [ "$(review_reads)" = 0 ]'
 ok "the closing line says nothing was posted" 'last_line | grep -qF "$PR reviewed as a dry run; nothing was posted"'
+new_case; chain_ok; reply 5 "Would post: …"; echo 3 > "$STUB_DIR/rc-5"
+run --review-dry-run 270
+ok "a failed dry-run review offers the resume, and the review again with --dry-run" '[ "$RC" = 1 ] && last_line | grep -qF "claude --resume sess-5" && last_line | grep -qF "\`/gaffer:review-pr $PR --dry-run\` again"'
+new_case; chain_ok; printf 'not json\n' > "$STUB_DIR/reply-5.json"
+run --review-dry-run 270
+ok "with no session to resume, it offers the review by hand with --dry-run" '[ "$RC" = 1 ] && last_line | grep -qF "\`/gaffer:review-pr $PR --dry-run\` to review it" && ! last_line | grep -qF "claude --resume"'
 
 echo "--dry-run lists the chain's stages and the review, and runs nothing:"
 new_case

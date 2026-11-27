@@ -130,13 +130,14 @@ branch_pr=$(gh pr view "$branch" --repo "$repo" --json url --jq .url 2>/dev/null
 
 session=
 # review_fail <reason> [exit code] — the pull request is confirmed, so the closing line names it
-# and how to continue the review.
+# and how to continue the review. The command it names is the one this run started, so under
+# --review-dry-run it carries --dry-run and copying it posts nothing either.
 review_fail() {
   echo "chain-local: FAILED at review-pr — $1"
   if [ -n "$session" ]; then
-    echo "chain-local: $pr is left open as the chain raised it; continue the review with \`claude --resume $session\`, or run \`/gaffer:review-pr $pr\` again."
+    echo "chain-local: $pr is left open as the chain raised it; continue the review with \`claude --resume $session\`, or run \`$(review_prompt "$pr")\` again."
   else
-    echo "chain-local: $pr is left open as the chain raised it; run \`/gaffer:review-pr $pr\` to review it."
+    echo "chain-local: $pr is left open as the chain raised it; run \`$(review_prompt "$pr")\` to review it."
   fi
   exit "${2:-1}"
 }
