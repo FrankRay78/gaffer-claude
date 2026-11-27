@@ -5,9 +5,13 @@ name: Claude Code
 # maintainer's Claude subscription. An inline review comment or a review body is not a trigger —
 # `issue_comment` carries only conversation comments, on issues and pull requests alike.
 #
-# It answers and does not change code. The action is handed this run's token, whose `contents:
-# read` cannot push, instead of the Claude app's, which could; and the commit tools are denied as
-# well, so the agent does not spend its turn on a push that would be refused.
+# It can commit and push to the branch it is working on, when asked to. The action exchanges OIDC
+# for the Claude app's token (hence `id-token: write`), which pushes under the app's own
+# installation permissions, as NetPace's copy of this workflow does; `contents: read` is this
+# run's token's only. It is not handed `github_token`: a push under that token starts no workflow,
+# so `shell-tests` and `link-check` would never run on the commit it pushes.
+# `main` takes no direct push (its ruleset requires a pull request and has no bypass actors), and
+# the app cannot change files under `.github/workflows/`.
 
 on:
   issue_comment:
@@ -25,6 +29,7 @@ jobs:
       pull-requests: write
       issues: write
       actions: read
+      id-token: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -36,7 +41,6 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          github_token: ${{ github.token }}
-          claude_args: '--model opus --effort high --disallowedTools "Bash(git commit:*),Bash(git push:*),mcp__github_file_ops__commit_files,mcp__github_file_ops__delete_files"'
+          claude_args: '--model opus --effort high'
           additional_permissions: |
             actions: read
