@@ -7,8 +7,6 @@
 # fixture files into it, and points the real, unmodified check at that sandbox via
 # CLAUDE_PROJECT_DIR. No case touches this repo's own files.
 #
-# TWO THINGS THIS FILE IS CAREFUL ABOUT:
-#
 # Passing is not one outcome. "nothing dangling" is the only pass, but a check stubbed to `exit 0`
 # on line one would satisfy a bare `rc == 0`. Every passing case therefore asserts that the verdict
 # names a non-zero number of checked references, so a pass that scanned nothing cannot be mistaken
@@ -563,6 +561,14 @@ commit_file "docs/guide.md" '# Guide'
 chmod 000 "$REPO/docs/guide.md" || setup_fail "chmod guide"
 check
 ok "a file that cannot be read fails rather than being passed over" 'failed && names "no verdict is possible"'
+
+# grep reads a file holding a NUL byte as binary: it prints no match and exits 0, so without the
+# guard the broken link below would go unread and the verdict would be OK.
+new_case
+printf 'See [gone](docs/gone.md).\n\000\n' > "$REPO/README.md" || setup_fail "write NUL file"
+git -C "$REPO" add README.md && git -C "$REPO" commit -q -m "add NUL file" || setup_fail "commit NUL file"
+check
+ok "a file holding a NUL byte fails rather than passing with its links unread" 'failed && names "README.md" && names "NUL byte"'
 
 echo
 echo "cases: $cases  assertions passed: $pass  failed: $fail"

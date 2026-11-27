@@ -77,15 +77,16 @@ jobs:
           ref: ${{ steps.pr.outputs.head }}
           fetch-depth: 0
 
-      # The action restores `.claude/` and CLAUDE.md from the base branch, and nothing else — not
-      # the files CLAUDE.md imports — so the review criteria the command reads, and the conventions
-      # CLAUDE.md loads, are put in place here from main's copy: the PR head's copy is the one the
-      # review must not judge by. Where main has no such file the PR's is removed, so the review
-      # runs on the command's generic rules rather than on text the pull request wrote — said in
-      # the log, because the posted review is weaker then. The ref is checked first and separately:
-      # `git cat-file -e` exits the same way for a missing ref as for a missing path, so without the
-      # check a checkout with no origin/main would silently take the "main has none" branch. The
-      # file is text the agent reads, as the command file is; nothing from it is executed.
+      # The action restores `.claude/`, CLAUDE.md and a few other config files from the base
+      # branch, but not the files CLAUDE.md imports, so the review criteria the command reads, and
+      # the conventions CLAUDE.md loads, are put in place here from main's copy: the PR head's copy
+      # is the one the review must not judge by. Where main has no such file the PR's is removed,
+      # so the review runs on the command's generic rules rather than on text the pull request
+      # wrote — said in the log, because the posted review is weaker then. The ref is checked first
+      # and separately: `git cat-file -e` exits the same way for a missing ref as for a missing
+      # path, so without the check a checkout with no origin/main would silently take the "main has
+      # none" branch. The file is text the agent reads, as the command file is; nothing from it is
+      # executed.
       - name: Put main's review criteria and conventions in place
         run: |
           set -euo pipefail
@@ -113,11 +114,10 @@ jobs:
           set -euo pipefail
           git clone -q --depth 1 --branch main https://github.com/FrankRay78/gaffer-claude.git "$RUNNER_TEMP/gaffer"
           echo "gaffer $(git -C "$RUNNER_TEMP/gaffer" rev-parse HEAD)"
-          # Read-only before the agent starts: --add-dir makes the clone a working directory the
-          # agent's Write reaches, and the plugin's hook runs from it on every Bash call, so a
-          # writable clone would let text the agent was handed get a script run with this job's
-          # token. The agent's allowlist has no way to lift the mode back: it allows no chmod, and
-          # the deny rule on the agent step keeps git's --output from writing anywhere.
+          # Read-only before the agent starts: --add-dir makes the clone one of the agent's working
+          # directories, and the plugin's hook runs from it on every Bash call, so a writable clone
+          # would let text the agent was handed get a script run with this job's token. Nothing
+          # the agent step allows can lift the mode back, for the reasons that step gives.
           chmod -R a-w "$RUNNER_TEMP/gaffer"
           echo "dir=$RUNNER_TEMP/gaffer" >> "$GITHUB_OUTPUT"
 
@@ -144,18 +144,22 @@ jobs:
           fi
           echo "prior=$(awk '{ s += $1 } END { print s + 0 }' "$RUNNER_TEMP/review-pr-before.txt")" >> "$GITHUB_OUTPUT"
 
-      # The model and effort are this stage's, stated here: opus at high effort.
+      # Nothing the agent may run can write a file that a later command reads as config — git's
+      # config names programs a later `git diff` runs — or lift the gaffer clone's read-only mode.
+      # Three settings hold that, and each closes a hole the others leave:
+      # - `--permission-mode default`: the action otherwise starts the agent in auto mode, where a
+      #   safety review can pass a command no rule allows, so the allowlist is a floor, not a
+      #   ceiling. In default mode what no rule allows is denied, as no one is there to approve it.
+      # - `Edit(./ci-scratch/**)`, not a bare `Write`: a bare rule lets the Write tool write any
+      #   path the runner user can, outside the workspace too, `~/.config/git/config` among them.
+      # - the deny rule: `git diff:*`, `git log:*` and `git show:*` match any arguments, and all
+      #   three take `--output=<path>`, which writes anywhere. The rule refuses every git call
+      #   carrying `--output`, quoted or escaped; deny outranks allow, so plain calls still run.
       # `Bash(gh api:*)` is broader than the one POST the command needs — it reaches any endpoint
       # the token can — and the allowlist cannot pin the method. The check step below therefore
       # asserts the outcome rather than trusting the instruction. `git remote get-url` and
       # `gh repo view` are the tracker skill's (docs/tracker.md → *What a headless stage needs
       # allowed*).
-      # `Bash(git diff:*)`, `git log:*` and `git show:*` match any arguments, and all three take
-      # `--output=<path>`, which writes text the agent chooses to any path the runner user can
-      # write: git config that names a program for a later `git diff` to run, or Claude Code's own
-      # settings and shell snapshot. The deny rule refuses every git call carrying `--output`, in
-      # its `=` and separate-argument forms and its quoted spellings; deny outranks allow, so plain
-      # `git diff`, `git log` and `git show` still run.
       # `github_token` hands the action this run's token instead of exchanging OIDC for the Claude
       # app's, which refuses a workflow file that differs from main's copy — so a change to this
       # file runs on its own pull request, even though the command file it reads comes from main.
@@ -167,7 +171,7 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ github.token }}
-          claude_args: '--model opus --effort high --plugin-dir ${{ steps.gaffer.outputs.dir }} --add-dir ${{ steps.gaffer.outputs.dir }} --allowedTools "Read,Glob,Grep,Write,Agent,Bash(mkdir:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git rev-parse:*),Bash(git remote get-url:*),Bash(gh repo view:*),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh issue view:*),Bash(gh api:*)" --disallowedTools "Bash(git *--output*)"'
+          claude_args: '--model opus --effort high --permission-mode default --plugin-dir ${{ steps.gaffer.outputs.dir }} --add-dir ${{ steps.gaffer.outputs.dir }} --allowedTools "Read,Glob,Grep,Edit(./ci-scratch/**),Agent,Bash(mkdir:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git rev-parse:*),Bash(git remote get-url:*),Bash(gh repo view:*),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh issue view:*),Bash(gh api:*)" --disallowedTools "Bash(git *--output*)"'
           prompt: |
             Review pull request #${{ env.PR_NUMBER }} in repository ${{ github.repository }}. The default branch is `main`.
 

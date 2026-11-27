@@ -36,7 +36,13 @@ jobs:
         with:
           fetch-depth: 0
 
-      # The model and effort are this stage's, stated here: opus at high effort.
+      # The action starts the agent in auto mode, where a safety review decides each command no
+      # rule covers. That is kept, so the agent can run what the maintainer would — the tests, the
+      # scripts, `gh` — but the review is a judgement, not a boundary. The deny rules are the
+      # boundary for the one move that turns injected text into a program run with this job's
+      # tokens: writing git's config, which names programs a later git call runs. `git config`
+      # and `git -c` set it directly, and `--output`, which `git diff`, `git log` and `git show`
+      # take, writes anywhere. Deny outranks auto mode's review, quoted or escaped spellings too.
       # A label this run adds starts the workflow it triggers, as the maintainer's own does
       # (review-followup.yml accepts `claude[bot]` as the sender, and says why that is safe). The
       # appended instruction is what makes "make this change, then add `review-followup`" review
@@ -45,6 +51,6 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          claude_args: '--model opus --effort high --append-system-prompt "When a request asks you both to push a change and to add a label, push first and add the label only once the push has succeeded: a label starts a workflow that reads the head as it is at that moment."'
+          claude_args: '--model opus --effort high --disallowedTools "Bash(git config *),Bash(git -c *),Bash(git *--output*)" --append-system-prompt "When a request asks you both to push a change and to add a label, push first and add the label only once the push has succeeded: a label starts a workflow that reads the head as it is at that moment."'
           additional_permissions: |
             actions: read
