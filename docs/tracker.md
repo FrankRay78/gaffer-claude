@@ -25,7 +25,7 @@ Every operation is required. No command carries a fallback for a missing one: wh
 | `states` | — | Each state, what shows it in this tracker, and whether it exists yet, with how to create one that is missing. Creates nothing. |
 | `ref` | `<reference>` | The reference in its normal form, and its forms for a branch name and for commit subjects and prose. Refuses a reference the tracker does not recognise. |
 | `branch-ref` | `<branch>` | The reference a branch name carries, or none. |
-| `view` | `<ref>`, and optionally `no-comments` | The issue's title, body and URL, whether it is open or closed, the states it is in, the pull requests that will close it, and every comment with its id, author, time and body. With `no-comments`, no comment: `build` reads none, since anyone can write one. |
+| `view` | `<ref>`, and optionally `no-comments` | The issue's title, body and URL, whether it is open or closed, the states it is in, the pull requests that will close it, and every comment with its id, author, time and body. With `no-comments`, no comment: `build` and `review-pr` read none, since anyone can write one. |
 | `create` | `--title <title> --body-file <file>` | A new issue with that title and body. Its reference and URL. |
 | `body-set` | `<ref> <file>` | The issue body replaced with the file's text. |
 | `state-add`, `state-remove` | `<ref> <state>` | The issue put in, or taken out of, the state. Repeating either is no error. |
@@ -75,7 +75,7 @@ With this plugin's file, those calls are:
 |---|---|---|
 | `git remote get-url origin`, `gh repo view` | every operation that reaches GitHub | every command below |
 | `gh issue view` | `view`, `pr-reference` | the chain's stages (`build`, `raise-pr`), `review-pr`, and the issue commands |
-| `gh api` reading an issue's comments | `view`, `comment-find` | `review-pr` and the issue commands |
+| `gh api` reading an issue's comments | `view`, `comment-find` | the issue commands |
 | `gh issue create`, `gh issue edit`, `gh issue comment`, `gh issue close`, `gh api` writing an issue or a comment, `jq` | `create`, `state-add`, `state-remove`, `comment-post`, `comment-edit`, `comment-delete`, `body-set`, `link`, `close` | `draftissue`, `reviewissue`, `confirmissue`, `graft`, `audit-codebase` |
 | `gh issue list` | `search-title` | `audit-codebase` |
 | `gh label list` | `states` | `init` |
