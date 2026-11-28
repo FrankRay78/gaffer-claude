@@ -76,7 +76,7 @@
 # byte: grep reads a file holding one as binary, prints none of its matches and still exits 0.
 #
 # Not a Claude Code hook. Two ways to run it:
-#   In CI       .github/workflows/link-check.yml, on every pull request to main.
+#   In CI       .github/workflows/link-check.yml, on every pull request, whatever its base.
 #   Locally     bash .github/scripts/link-check.sh
 #               Run it after renaming or deleting anything that is linked to.
 #
