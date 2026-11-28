@@ -1,8 +1,9 @@
 name: Claude Code
 
 # Answers an `@claude` mention in a conversation comment on an issue or a pull request, on the same
-# thread. Only FrankRay78's comments are answered: the repository is public, and a run spends the
-# maintainer's Claude subscription. An inline review comment or a review body is not a trigger —
+# thread. Only FrankRay78's comments are answered, and only on a thread FrankRay78 opened: the
+# repository is public, a run spends the maintainer's Claude subscription, and the thread's body
+# goes into the prompt unfiltered, so on a stranger's thread it would be the stranger's text. An inline review comment or a review body is not a trigger —
 # `issue_comment` carries only conversation comments, on issues and pull requests alike.
 #
 # It can commit and push to the branch it is working on, when asked to. The action exchanges OIDC
@@ -22,8 +23,10 @@ name: Claude Code
 # - `jira-tracker-skill`, which publish-jira.yml lays over `main` into the Jira distribution
 #   unchecked, takes a push, force or not, from the Repository admin role only
 #   (.github/ruleset-jira-tracker-skill.json).
-# Separately, the token cannot change files under `.github/workflows/`: the action asks for
-# contents, pull requests and issues, plus the `additional_permissions` below, and no `workflows`.
+# The action asks for contents, pull requests and issues, plus the `additional_permissions` below,
+# and no `workflows`. That is the action's request, not a limit on the agent: the Claude app's
+# installation holds `workflows`, `actions` and `repository_hooks` write, and a token minted for
+# it outside the action would carry them.
 # The action tries to revoke the token when the job ends; failing that, it expires within the hour.
 
 on:
@@ -34,6 +37,7 @@ jobs:
   respond:
     if: >-
       github.event.comment.user.login == 'FrankRay78' &&
+      github.event.issue.user.login == 'FrankRay78' &&
       contains(github.event.comment.body, '@claude')
     runs-on: ubuntu-latest
     timeout-minutes: 60
