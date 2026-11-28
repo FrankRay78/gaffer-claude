@@ -417,7 +417,7 @@ main() {
     exit 0
   fi
   if [ "$rc" = "$CHAIN_CONFIG_EXIT" ]; then
-    die "refused — the chain stopped on its own configuration (the settings, or the plugin checkout; see the log), so #$n was not parked. Log: $log"
+    die "refused — the chain stopped on its own configuration (the settings, the plugin checkout, or CHAIN_STAGE_TIMEOUT; see the log), so #$n was not parked. Log: $log"
   fi
   park "$n" "$log" "$rc"
   exit 1
