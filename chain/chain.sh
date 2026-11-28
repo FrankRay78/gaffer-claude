@@ -86,8 +86,8 @@ DEFAULT_PRE_REVIEW_MODEL_EFFORT='opus high'
 # EX_TEMPFAIL — the failure that clears on its own — and collides with none of the codes the chain
 # already reports: timeout's 124, the shell's 125-127, and 137 for a stage killed by SIGKILL.
 USAGE_LIMIT_EXIT=75
-# And for a fault in the chain's own configuration — a settings file that cannot be read, or a
-# checkout that is not a plugin: the fault is not in the issue being built, so a runner must not
+# And for a fault in the chain's own configuration — a settings file that cannot be read, a
+# checkout that is not a plugin, or a CHAIN_STAGE_TIMEOUT it cannot use: the fault is not in the issue being built, so a runner must not
 # park the issue for it. 78 is sysexits' EX_CONFIG.
 CONFIG_EXIT=78
 
