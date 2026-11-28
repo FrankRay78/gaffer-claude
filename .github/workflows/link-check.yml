@@ -13,9 +13,9 @@ name: Link Check
 # The check's own behaviour is gated separately — .github/scripts/link-check.tests.sh is a
 # committed `*.tests.sh`, so shell-tests.yml discovers and runs it with no entry needed here.
 
+# Every pull request, whatever its base, so a PR stacked on another feature branch is checked too.
 on:
   pull_request:
-    branches: [ "main" ]
 
 permissions:
   contents: read

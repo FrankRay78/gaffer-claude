@@ -5,9 +5,9 @@ name: Shell Tests
 # script. A second job validates the plugin manifests: every JSON file the plugin ships parses,
 # and `claude plugin validate` accepts the layout.
 
+# Every pull request, whatever its base, so a PR stacked on another feature branch is tested too.
 on:
   pull_request:
-    branches: [ "main" ]
   push:
     branches: [ "main" ]
 
