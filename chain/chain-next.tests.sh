@@ -43,9 +43,9 @@ unset CHAIN_MODEL CHAIN_STAGE_TIMEOUT XDG_STATE_HOME
 # body's edits in edits-<n>.json, with more to page through when an edits-more-<n> file exists. A
 # comments-fail-<n> file makes it fail; a comments-<n>.json that is not JSON is passed through as
 # the reply. `gh api user` answers with the login in gh-user, or maintainer, and gh-fail-user
-# makes it fail. A gh-fail file makes every
-# call fail, as an outage would; gh-fail-<command> fails only that command (gh-fail-pr, gh-fail-api). Label and comment writes are applied to the stub's own state,
-# so a parked issue stays parked for the next firing. `gh repo view` answers as JSON unless asked
+# makes it fail. A gh-fail file makes every call fail, as an outage would; gh-fail-<command> fails
+# only that command (gh-fail-pr, gh-fail-api). Label and comment writes are applied to the stub's
+# own state, so a parked issue stays parked for the next firing. `gh repo view` answers as JSON unless asked
 # for `-q .nameWithOwner`. Named a repository, it gives that repository's current name: the
 # gh-renamed file, or the name it was given if there is none, and gh-fail-repo-lookup makes it fail.
 # Named none, it gives the repository gh resolves the clone to: the gh-repo file, o/r if there is
@@ -315,29 +315,32 @@ ok "and a real firing builds that one, parking nothing" '[ "$RC" = 0 ] && [ "$(c
 
 echo "An issue whose ready label, body or title someone else touched is not built:"
 new_case
-issues '[{"number":3,"state":"OPEN","labels":["ready"]},{"number":5,"state":"OPEN","labels":["ready"]},{"number":6,"state":"OPEN","labels":["ready"]},{"number":7,"state":"OPEN","labels":["ready"]},{"number":8,"state":"OPEN","labels":["ready"]}]'
+issues '[{"number":3,"state":"OPEN","labels":["ready"]},{"number":4,"state":"OPEN","labels":["ready"]},{"number":5,"state":"OPEN","labels":["ready"]},{"number":6,"state":"OPEN","labels":["ready"]},{"number":7,"state":"OPEN","labels":["ready"]},{"number":8,"state":"OPEN","labels":["ready"]}]'
 echo '[{"actor":{"__typename":"User","login":"someone-else"},"label":{"name":"ready"}}]' > "$STUB_DIR/comments-3.json"
+echo '[{"author":null}]' > "$STUB_DIR/comments-4.json"
 echo '[{"editor":{"__typename":"User","login":"maintainer"}},{"editor":{"__typename":"User","login":"someone-else"}}]' > "$STUB_DIR/edits-5.json"
 echo '[{"actor":{"__typename":"User","login":"someone-else"}}]' > "$STUB_DIR/comments-6.json"
 echo '[{"actor":{"__typename":"User","login":"someone-else"},"label":{"name":"READY"}}]' > "$STUB_DIR/comments-7.json"
-echo '[{"actor":{"__typename":"User","login":"someone-else"},"label":{"name":"ready"}},{"actor":{"__typename":"User","login":"maintainer"},"label":{"name":"ready"}}]' > "$STUB_DIR/comments-8.json"
+echo '[{"actor":{"__typename":"User","login":"someone-else"},"label":{"name":"ready"}},{"actor":{"__typename":"User","login":"maintainer"},"label":{"name":"ready"}},{"actor":{"__typename":"User","login":"maintainer"}}]' > "$STUB_DIR/comments-8.json"
 echo '[{"editor":{"__typename":"User","login":"maintainer"}}]' > "$STUB_DIR/edits-8.json"
 fire --dry-run
 ok "an issue someone else last labelled ready is passed over" '[ "$RC" = 0 ] && grep -qF "skipped #3" <<<"$OUTPUT"'
+ok "and so is one commented on by an account that no longer exists" 'grep -qF "skipped #4" <<<"$OUTPUT"'
 ok "and so is one whose body someone else edited" 'grep -qF "skipped #5" <<<"$OUTPUT"'
 ok "and one whose title someone else changed" 'grep -qF "skipped #6" <<<"$OUTPUT"'
 ok "the ready label is matched whatever its case" 'grep -qF "skipped #7" <<<"$OUTPUT"'
-ok "one the maintainer labelled ready again after someone else, and edited, is built" 'grep -qF "would build #8" <<<"$OUTPUT"'
+ok "one the maintainer labelled ready again after someone else, edited and retitled, is built" 'grep -qF "would build #8" <<<"$OUTPUT"'
+ok "the runner's own account is looked up once per firing, however many issues are checked" '[ "$(grep -c "^api|user|" "$STUB_DIR/gh-log")" = 1 ]'
 new_case
 issues '[{"number":9,"state":"OPEN","labels":["ready"]}]'
 touch "$STUB_DIR/edits-more-9"
 fire --dry-run
-ok "an issue whose edit history is too long to read in full is passed over" '[ "$RC" = 0 ] && grep -qF "skipped #9" <<<"$OUTPUT" && grep -qF "nothing eligible" <<<"$OUTPUT"'
+ok "an issue whose edit history is too long to read in full is passed over, and says why" '[ "$RC" = 0 ] && grep -qF "skipped #9 — its edit history is too long to check." <<<"$OUTPUT" && grep -qF "nothing eligible" <<<"$OUTPUT"'
 new_case
 issues '[{"number":9,"state":"OPEN","labels":["ready"]}]'
 touch "$STUB_DIR/no-label-event-9"
 fire --dry-run
-ok "and so is one with no record of who labelled it ready" '[ "$RC" = 0 ] && grep -qF "skipped #9" <<<"$OUTPUT" && grep -qF "nothing eligible" <<<"$OUTPUT"'
+ok "and so is one with no record of who labelled it ready, and says why" '[ "$RC" = 0 ] && grep -qF "skipped #9 — nothing records who labelled it ready." <<<"$OUTPUT" && grep -qF "nothing eligible" <<<"$OUTPUT"'
 
 echo "The runner's own comments do not disqualify an issue:"
 new_case
@@ -354,7 +357,12 @@ new_case
 issues '[{"number":12,"state":"OPEN","labels":["ready"]}]'
 touch "$STUB_DIR/gh-fail-user"
 fire
-ok "a failed lookup of the runner's own account selects nothing" '[ "$RC" != 0 ] && [ -z "$(chain_calls)" ]'
+ok "a failed lookup of the runner's own account selects nothing, parks nothing, and says so" '[ "$RC" != 0 ] && [ -z "$(chain_calls)" ] && [ "$(gh_writes)" = 0 ] && grep -qF "could not read which account gh is signed in as" <<<"$OUTPUT"'
+new_case
+issues '[{"number":12,"state":"OPEN","labels":["ready"]}]'
+: > "$STUB_DIR/gh-user"
+fire
+ok "and so does an empty one" '[ "$RC" != 0 ] && [ -z "$(chain_calls)" ] && grep -qF "could not read which account gh is signed in as" <<<"$OUTPUT"'
 
 echo "A failed comment lookup selects nothing:"
 new_case
