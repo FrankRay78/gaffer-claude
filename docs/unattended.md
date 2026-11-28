@@ -35,7 +35,7 @@ No command merges a PR, closes an issue by commit message, edits a source docume
 The model's report is not the result. Check:
 
 - **build, verify, raise-pr, pre-review** — the verdict, by position ([`verdict-schema.md`](verdict-schema.md)). A success verdict that also carries a `reason` is not a success.
-- **review-pr, review-followup** — a new review marked `<!-- review-pr -->` on the commit it reviewed (even where the pull request's head has moved since): count the marked reviews on that commit before the run and require one more after, since a round on an unchanged head finds the last round's review there already. The review carries the `Risk tier: … · Human review: …` line.
+- **review-pr, review-followup** — a new review marked `<!-- review-pr -->`, by the account the run posts as, on the commit it reviewed (even where the pull request's head has moved since): count the marked reviews on that commit before the run and require one more after, since a round on an unchanged head finds the last round's review there already. The review carries the `Risk tier: … · Human review: …` line.
 - **reviewissue** — the marked comment on the issue and the `needs answers` label.
 - **confirmissue** — `## Confirmed decisions` in the body, `ready` present, `needs answers` gone, the marked comment deleted.
 - **init** — the setup files in the working tree, uncommitted, or a report that nothing was missing; either way the branch, the history and the tracker untouched.

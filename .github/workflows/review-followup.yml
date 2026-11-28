@@ -116,7 +116,7 @@ jobs:
           # prior rounds, which is the one wrong answer that looks like a legitimate skip.
           # `--paginate` answers once per page, so each column's per-page counts are summed.
           if ! gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/reviews" \
-            --jq '[.[] | select(((.body // "") | contains("<!-- review-pr -->")))] | "\(length) \(map(select(.commit_id == $ENV.HEAD_SHA)) | length)"' \
+            --jq '[.[] | select(((.body // "") | contains("<!-- review-pr -->")) and (.user.login | IN("github-actions[bot]", "FrankRay78")))] | "\(length) \(map(select(.commit_id == $ENV.HEAD_SHA)) | length)"' \
             > "$RUNNER_TEMP/review-pr-rounds.txt"; then
             echo "::error::Could not read the reviews on PR #$PR_NUMBER — nothing was posted, and the round this would have been cannot be told."
             exit 1
@@ -249,7 +249,7 @@ jobs:
         run: |
           set -euo pipefail
           if ! gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/reviews" \
-            --jq '[.[] | select(((.body // "") | contains("<!-- review-pr -->")) and .commit_id == $ENV.HEAD_SHA)] | length' \
+            --jq '[.[] | select(((.body // "") | contains("<!-- review-pr -->")) and .commit_id == $ENV.HEAD_SHA and .user.login == "github-actions[bot]")] | length' \
             > "$RUNNER_TEMP/review-pr-after.txt"; then
             echo "::error::Could not read back the reviews on PR #$PR_NUMBER."
             exit 1

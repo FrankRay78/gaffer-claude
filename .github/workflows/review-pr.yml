@@ -137,7 +137,7 @@ jobs:
           # failed query would otherwise reach awk as empty input and come out as zero prior
           # reviews, which is the one wrong answer that lets a non-posting run look like a round.
           if ! gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/reviews" \
-            --jq '[.[] | select(((.body // "") | contains("<!-- review-pr -->")) and .commit_id == $ENV.HEAD_SHA)] | length' \
+            --jq '[.[] | select(((.body // "") | contains("<!-- review-pr -->")) and .commit_id == $ENV.HEAD_SHA and .user.login == "github-actions[bot]")] | length' \
             > "$RUNNER_TEMP/review-pr-before.txt"; then
             echo "::error::Could not read the reviews already on PR #$PR_NUMBER — nothing was posted."
             exit 1
@@ -234,7 +234,7 @@ jobs:
         run: |
           set -euo pipefail
           if ! gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/reviews" \
-            --jq '[.[] | select(((.body // "") | contains("<!-- review-pr -->")) and .commit_id == $ENV.HEAD_SHA)] | length' \
+            --jq '[.[] | select(((.body // "") | contains("<!-- review-pr -->")) and .commit_id == $ENV.HEAD_SHA and .user.login == "github-actions[bot]")] | length' \
             > "$RUNNER_TEMP/review-pr-after.txt"; then
             echo "::error::Could not read back the reviews on PR #$PR_NUMBER."
             exit 1
