@@ -3,7 +3,7 @@ name: Claude Code
 # Answers an `@claude` mention in a conversation comment on an issue or a pull request, on the same
 # thread. Only FrankRay78's comments are answered, and only on a thread FrankRay78 opened: the
 # repository is public, a run spends the maintainer's Claude subscription, and the thread's body
-# goes into the prompt unfiltered, so on a stranger's thread it would be the stranger's text. An inline review comment or a review body is not a trigger —
+# goes into the prompt unfiltered. An inline review comment or a review body is not a trigger —
 # `issue_comment` carries only conversation comments, on issues and pull requests alike.
 #
 # It can commit and push to the branch it is working on, when asked to. The action exchanges OIDC
