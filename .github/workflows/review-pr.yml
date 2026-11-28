@@ -144,6 +144,19 @@ jobs:
           fi
           echo "prior=$(awk '{ s += $1 } END { print s + 0 }' "$RUNNER_TEMP/review-pr-before.txt")" >> "$GITHUB_OUTPUT"
 
+      # The sandbox the agent step's scrub runs each subprocess in. Ubuntu's runner image stops an
+      # unprivileged process making a user namespace, which bubblewrap needs, so that is lifted
+      # first; the last line fails this step, rather than the review, when the sandbox cannot start.
+      - name: Install the subprocess sandbox
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -q bubblewrap > /dev/null
+          if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+            sudo sysctl -q -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+          bwrap --ro-bind / / --proc /proc --dev /dev --unshare-pid true
+
       # Nothing the agent may run can write a file that a later command reads as config — git's
       # config names programs a later `git diff` runs — or lift the gaffer clone's read-only mode.
       # Three settings hold that, and each closes a hole the others leave:
@@ -160,10 +173,13 @@ jobs:
       #   carrying `--output`, quoted or escaped; deny outranks allow, so plain calls still run.
       # None of this limits what the agent can read. Any allowed call can read a file the runner
       # user can — `git diff <path> /dev/null` outside the work tree, `gh api -F body=@<path>`,
-      # which posts it — `/proc/<pid>/environ` included, which holds this job's token and
-      # CLAUDE_CODE_OAUTH_TOKEN. What keeps them in is who can write the text the agent reads:
-      # only the maintainer opens the pull requests this runs on. Accepted while the maintainer is
-      # this repository's only writer; docs/unattended.md → *In CI*, step 5, says what closes it.
+      # which posts it. Only the maintainer opens the pull requests this runs on, but the agent also
+      # reads the issue a pull request refers to, which anyone can have edited or answered, so the
+      # long-lived CLAUDE_CODE_OAUTH_TOKEN is kept out of reach as docs/unattended.md → *In CI*,
+      # step 5, says: the scrub keeps it out of every subprocess's environment and runs each in its
+      # own PID namespace (the step above installs the sandbox), and `Read(//proc/**)` keeps the
+      # Read tool, which runs in Claude's own process, off `/proc`. This job's token stays in reach,
+      # since `gh` needs it; it can write only to this pull request, and expires with the job.
       # `Bash(gh api:*)` is broader than the one POST the command needs — it reaches any endpoint
       # the token can — and the allowlist cannot pin the method. The check step below therefore
       # asserts the outcome rather than trusting the instruction. `git remote get-url` and
@@ -177,10 +193,11 @@ jobs:
         uses: anthropics/claude-code-action@4411a9e9b0283becf4b924f7bce360fd7756c78c # v1.0.290
         env:
           GH_TOKEN: ${{ github.token }}
+          CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1'
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ github.token }}
-          claude_args: '--model opus --effort high --permission-mode default --plugin-dir ${{ steps.gaffer.outputs.dir }} --add-dir ${{ steps.gaffer.outputs.dir }} --allowedTools "Read,Glob,Grep,Edit(./ci-scratch/*.json),Agent,Bash(mkdir:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git rev-parse:*),Bash(git remote get-url:*),Bash(gh repo view:*),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh issue view:*),Bash(gh api:*)" --disallowedTools "Bash(git *--output*)"'
+          claude_args: '--model opus --effort high --permission-mode default --plugin-dir ${{ steps.gaffer.outputs.dir }} --add-dir ${{ steps.gaffer.outputs.dir }} --allowedTools "Read,Glob,Grep,Edit(./ci-scratch/*.json),Agent,Bash(mkdir:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git rev-parse:*),Bash(git remote get-url:*),Bash(gh repo view:*),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh issue view:*),Bash(gh api:*)" --disallowedTools "Bash(git *--output*),Read(//proc/**)"'
           prompt: |
             Review pull request #${{ env.PR_NUMBER }} in repository ${{ github.repository }}. The default branch is `main`.
 
