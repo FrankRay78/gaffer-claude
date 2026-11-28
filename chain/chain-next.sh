@@ -5,12 +5,12 @@
 # Each firing reads one settings file (docs/chain.md), as origin's main holds it where the file
 # sits in the clone, picks the lowest-numbered eligible issue of the repository the settings
 # name — open, carrying the ready label, not the parked label, with no open pull request linked
-# to it, no open blocking issue, and nothing written on it by
-# anyone outside the settings' writers — resets the runner's own dedicated clone of that
-# repository to the latest main, and runs chain.sh, beside this file, against the issue there. It
-# ends with either an open pull request (the chain's last stage) or the issue labelled parked with
-# a comment naming the failed stage, the log and the kept branch. Where the chain's own exit code
-# says a stage was cut off by the account's Claude usage limit, that comment says so instead and
+# to it, no open blocking issue, and nothing raised, edited, retitled, labelled ready or
+# commented on by anyone outside the settings' writers — resets the runner's own dedicated
+# clone of that repository to the latest main, and runs chain.sh, beside this file, against the
+# issue there. It ends with either an open pull request (the chain's last stage) or the issue
+# labelled parked with a comment naming the failed stage, the log and the kept branch. Where the
+# chain's own exit code says a stage was cut off by the account's Claude usage limit, that comment says so instead and
 # tells the maintainer the issue itself needs only its parked label removed once the limit has
 # reset. It never merges, and it never itself deletes or pushes anything on GitHub; only the
 # chain's raise-pr and pre-review stages push. A pre-review that fails leaves its pull request
@@ -136,7 +136,7 @@ read_settings() {
 # any GitHub query that fails or returns something unreadable ends the firing with an error
 # rather than guessing, because a guess in either direction builds the wrong thing or nothing.
 select_issue() {
-  local issues prs raised candidates n blockers open writers
+  local issues prs raised candidates n blockers open writers why runner=
   issues=$(gh issue list --state open --label "$READY_LABEL" --json number,labels --limit 1000) \
     || die "refused — could not list $READY_LABEL issues; nothing selected."
   prs=$(gh pr list --state open --json number,headRefName,closingIssuesReferences --limit 1000) \
@@ -157,22 +157,44 @@ select_issue() {
     open=$(jq -s '[.[][] | select(.state == "open")] | length' <<<"$blockers") \
       || die "refused — the blocker list for #$n was unreadable; nothing selected."
     [ "$open" = 0 ] || continue
-    # Who has written on the issue, as type and login: the type matters because GraphQL names a
+    # The runner's own account, once: its park comments are its own, so they do not count
+    # against the issue. Only its comments — an issue it raised, edited or labelled still does.
+    if [ -z "$runner" ]; then
+      runner=$(gh api user --jq .login) && [ -n "$runner" ] \
+        || die "refused — could not read which account gh is signed in as; nothing selected."
+      runner="User:$runner"
+    fi
+    # Who has written on the issue, as type and login: who raised it, edited its body, changed its
+    # title, last added the ready label, or commented. The type matters because GraphQL names a
     # bot by a login an unrelated person can also hold. Deleted comments count: GitHub records
     # the author of a comment someone else deleted, so a stranger's comment that a confirmation
     # folded in and then deleted still shows here.
     writers=$(gh api graphql --paginate -F owner='{owner}' -F repo='{repo}' -F n="$n" -f query='
       query($owner: String!, $repo: String!, $n: Int!, $endCursor: String) {
         repository(owner: $owner, name: $repo) { issue(number: $n) { author { __typename login }
-          timelineItems(first: 100, after: $endCursor, itemTypes: [ISSUE_COMMENT, COMMENT_DELETED_EVENT]) {
+          userContentEdits(first: 100) { pageInfo { hasNextPage } nodes { editor { __typename login } } }
+          timelineItems(first: 100, after: $endCursor, itemTypes: [ISSUE_COMMENT, COMMENT_DELETED_EVENT, LABELED_EVENT, RENAMED_TITLE_EVENT]) {
             pageInfo { hasNextPage endCursor }
-            nodes { ... on IssueComment { author { __typename login } } ... on CommentDeletedEvent { deletedCommentAuthor { __typename login } } } } } } }') \
+            nodes { ... on IssueComment { author { __typename login } } ... on CommentDeletedEvent { deletedCommentAuthor { __typename login } }
+              ... on LabeledEvent { actor { __typename login } label { name } } ... on RenamedTitleEvent { actor { __typename login } } } } } } }') \
       || die "refused — could not read who has written on #$n; nothing selected."
-    writers=$(jq -s --argjson allowed "$WRITERS" '[.[].data.repository.issue | .author,
-        (.timelineItems.nodes[] | .author // .deletedCommentAuthor) | "\(.__typename):\(.login)"] - $allowed | length' <<<"$writers") \
+    # Prints why the issue is passed over, or nothing. A label event carries a label; a title
+    # change carries only its actor. Label names compare without regard to case, as GitHub's do.
+    why=$(jq -rs --argjson allowed "$WRITERS" --arg runner "$runner" --arg ready "$READY_LABEL" '
+        def who: if . == null then "unknown" else "\(.__typename):\(.login)" end;
+        .[0].data.repository.issue as $i | [.[].data.repository.issue.timelineItems.nodes[]] as $t
+        | ([$t[] | select(has("label") and (.label.name | ascii_downcase) == ($ready | ascii_downcase))] | last) as $l
+        | if $i.userContentEdits.pageInfo.hasNextPage then "its edit history is too long to check."
+          elif $l == null then "nothing records who labelled it \($ready)."
+          elif ([($i.author | who), ($i.userContentEdits.nodes[] | .editor | who),
+                 ($t[] | select(has("actor") and (has("label") | not)) | .actor | who), ($l.actor | who),
+                 ($t[] | select(has("author") or has("deletedCommentAuthor")) | (.author // .deletedCommentAuthor) | who | select(. != $runner))]
+                - $allowed | length) != 0
+          then "someone outside the settings'"'"' writers has raised, edited, labelled or commented on it."
+          else empty end' <<<"$writers") \
       || die "refused — the writer list for #$n was unreadable; nothing selected."
-    if [ "$writers" != 0 ]; then
-      say "skipped #$n — someone outside the settings' writers has written on it." >&2
+    if [ -n "$why" ]; then
+      say "skipped #$n — $why" >&2
       continue
     fi
     echo "$n"; return 0

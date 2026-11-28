@@ -1,5 +1,5 @@
 {
   "clone": "~/Repos/gaffer-claude-runner",
-  "writers": ["User:FrankRay78", "Bot:claude"],
+  "writers": ["User:FrankRay78"],
   "skip_permissions": true
 }

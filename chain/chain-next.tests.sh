@@ -38,8 +38,12 @@ unset CHAIN_MODEL CHAIN_STAGE_TIMEOUT XDG_STATE_HOME
 # and --label the runner asks for, so a runner that forgot to ask would see closed or unready ones.
 # An issue with no author was raised by the maintainer. Open pull requests live in prs.json;
 # blockers in blocked-<n>.json. The GraphQL lookup of who has written on an issue answers with
-# that author, always a User, and the timeline nodes in comments-<n>.json, and a comments-fail-<n>
-# file makes it fail; a comments-<n>.json that is not JSON is passed through as the reply. A gh-fail file makes every
+# that author, always a User; a labelled event by the maintainer for each label the issue carries,
+# unless a no-label-event-<n> file exists; then the timeline nodes in comments-<n>.json; and the
+# body's edits in edits-<n>.json, with more to page through when an edits-more-<n> file exists. A
+# comments-fail-<n> file makes it fail; a comments-<n>.json that is not JSON is passed through as
+# the reply. `gh api user` answers with the login in gh-user, or maintainer, and gh-fail-user
+# makes it fail. A gh-fail file makes every
 # call fail, as an outage would; gh-fail-<command> fails only that command (gh-fail-pr, gh-fail-api). Label and comment writes are applied to the stub's own state,
 # so a parked issue stays parked for the next firing. `gh repo view` answers as JSON unless asked
 # for `-q .nameWithOwner`. Named a repository, it gives that repository's current name: the
@@ -78,15 +82,28 @@ case "$1 $2" in
   "issue comment")
     printf '%s' "$(opt --body)" > "$STUB_DIR/comment-$3.txt" ;;
   *)
+    if [ "$1 $2" = "api user" ]; then
+      [ ! -f "$STUB_DIR/gh-fail-user" ] || { echo "gh: HTTP 401: Bad credentials" >&2; exit 1; }
+      if [ -f "$STUB_DIR/gh-user" ]; then cat "$STUB_DIR/gh-user"; else echo maintainer; fi
+      exit 0
+    fi
     if [ "$1 $2" = "api graphql" ]; then
       n=$(printf '%s\n' "$@" | sed -n 's/^n=//p')
       if [ -f "$STUB_DIR/comments-fail-$n" ]; then echo "gh: HTTP 502: Bad Gateway" >&2; exit 1; fi
       f="$STUB_DIR/comments-$n.json"
       [ -f "$f" ] || f=/dev/null
       jq . "$f" >/dev/null 2>&1 || { cat "$f"; exit 0; }
-      jq -n --argjson n "$n" --slurpfile i "$STUB_DIR/issues.json" --slurpfile c "$f" \
-        '{data: {repository: {issue: {author: {__typename: "User", login: ($i[0][] | select(.number == $n) | .author // "maintainer")},
-          timelineItems: {pageInfo: {hasNextPage: false}, nodes: ($c[0] // [])}}}}}'
+      e="$STUB_DIR/edits-$n.json"
+      [ -f "$e" ] || e=/dev/null
+      more=0; [ ! -f "$STUB_DIR/edits-more-$n" ] || more=1
+      nolabel=0; [ ! -f "$STUB_DIR/no-label-event-$n" ] || nolabel=1
+      jq -n --argjson n "$n" --slurpfile i "$STUB_DIR/issues.json" --slurpfile c "$f" --slurpfile e "$e" \
+          --argjson more "$more" --argjson nolabel "$nolabel" \
+        '($i[0][] | select(.number == $n)) as $issue
+        | {data: {repository: {issue: {author: {__typename: "User", login: ($issue.author // "maintainer")},
+          userContentEdits: {pageInfo: {hasNextPage: ($more == 1)}, nodes: ($e[0] // [])},
+          timelineItems: {pageInfo: {hasNextPage: false},
+            nodes: ((if $nolabel == 1 then [] else [$issue.labels[] | {actor: {__typename: "User", login: "maintainer"}, label: {name: .}}] end) + ($c[0] // []))}}}}}'
       exit $?
     fi
     if [ "$1" = api ]; then
@@ -295,6 +312,49 @@ ok "issues with someone else's comment, live or deleted, are passed over for one
 ok "a person whose login matches the bot's is someone else too" 'grep -qF "skipped #5" <<<"$OUTPUT"'
 fire
 ok "and a real firing builds that one, parking nothing" '[ "$RC" = 0 ] && [ "$(chain_calls)" = 7 ] && [ "$(gh_writes)" = 0 ]'
+
+echo "An issue whose ready label, body or title someone else touched is not built:"
+new_case
+issues '[{"number":3,"state":"OPEN","labels":["ready"]},{"number":5,"state":"OPEN","labels":["ready"]},{"number":6,"state":"OPEN","labels":["ready"]},{"number":7,"state":"OPEN","labels":["ready"]},{"number":8,"state":"OPEN","labels":["ready"]}]'
+echo '[{"actor":{"__typename":"User","login":"someone-else"},"label":{"name":"ready"}}]' > "$STUB_DIR/comments-3.json"
+echo '[{"editor":{"__typename":"User","login":"maintainer"}},{"editor":{"__typename":"User","login":"someone-else"}}]' > "$STUB_DIR/edits-5.json"
+echo '[{"actor":{"__typename":"User","login":"someone-else"}}]' > "$STUB_DIR/comments-6.json"
+echo '[{"actor":{"__typename":"User","login":"someone-else"},"label":{"name":"READY"}}]' > "$STUB_DIR/comments-7.json"
+echo '[{"actor":{"__typename":"User","login":"someone-else"},"label":{"name":"ready"}},{"actor":{"__typename":"User","login":"maintainer"},"label":{"name":"ready"}}]' > "$STUB_DIR/comments-8.json"
+echo '[{"editor":{"__typename":"User","login":"maintainer"}}]' > "$STUB_DIR/edits-8.json"
+fire --dry-run
+ok "an issue someone else last labelled ready is passed over" '[ "$RC" = 0 ] && grep -qF "skipped #3" <<<"$OUTPUT"'
+ok "and so is one whose body someone else edited" 'grep -qF "skipped #5" <<<"$OUTPUT"'
+ok "and one whose title someone else changed" 'grep -qF "skipped #6" <<<"$OUTPUT"'
+ok "the ready label is matched whatever its case" 'grep -qF "skipped #7" <<<"$OUTPUT"'
+ok "one the maintainer labelled ready again after someone else, and edited, is built" 'grep -qF "would build #8" <<<"$OUTPUT"'
+new_case
+issues '[{"number":9,"state":"OPEN","labels":["ready"]}]'
+touch "$STUB_DIR/edits-more-9"
+fire --dry-run
+ok "an issue whose edit history is too long to read in full is passed over" '[ "$RC" = 0 ] && grep -qF "skipped #9" <<<"$OUTPUT" && grep -qF "nothing eligible" <<<"$OUTPUT"'
+new_case
+issues '[{"number":9,"state":"OPEN","labels":["ready"]}]'
+touch "$STUB_DIR/no-label-event-9"
+fire --dry-run
+ok "and so is one with no record of who labelled it ready" '[ "$RC" = 0 ] && grep -qF "skipped #9" <<<"$OUTPUT" && grep -qF "nothing eligible" <<<"$OUTPUT"'
+
+echo "The runner's own comments do not disqualify an issue:"
+new_case
+settings "{\"clone\": \"$CLONE\", \"writers\": [\"User:maintainer\"], \"state_dir\": \"$STATE\"}"
+echo runner-account > "$STUB_DIR/gh-user"
+issues '[{"number":3,"state":"OPEN","labels":["ready"],"author":"runner-account"},{"number":4,"state":"OPEN","labels":["ready"]},{"number":5,"state":"OPEN","labels":["ready"]}]'
+echo '[{"author":{"__typename":"Bot","login":"runner-account"}}]' > "$STUB_DIR/comments-4.json"
+echo '[{"author":{"__typename":"User","login":"runner-account"}},{"deletedCommentAuthor":{"__typename":"User","login":"runner-account"}}]' > "$STUB_DIR/comments-5.json"
+fire --dry-run
+ok "an issue only the runner's account commented on, as a park comment, is built" '[ "$RC" = 0 ] && grep -qF "would build #5" <<<"$OUTPUT"'
+ok "but one the runner's account raised is passed over" 'grep -qF "skipped #3" <<<"$OUTPUT"'
+ok "and so is one a bot with the runner's login commented on" 'grep -qF "skipped #4" <<<"$OUTPUT"'
+new_case
+issues '[{"number":12,"state":"OPEN","labels":["ready"]}]'
+touch "$STUB_DIR/gh-fail-user"
+fire
+ok "a failed lookup of the runner's own account selects nothing" '[ "$RC" != 0 ] && [ -z "$(chain_calls)" ]'
 
 echo "A failed comment lookup selects nothing:"
 new_case
