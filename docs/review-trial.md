@@ -122,6 +122,8 @@ One row per run:
 | PR | Arm | Arm commit | Run | Cost ($) | Duration (min) | Critical | Major | Minor findings | Notes | Verifier runs |
 |---|---|---|---|---|---|---|---|---|---|---|
 
+A run as step 5 writes it, without `--with-notes`, verifies and prints no notes, so the Notes column is 0 unless every arm's runs pass `--with-notes`.
+
 Under the table, list every Critical and Major finding from every run, deduplicated by root cause across arms. Give each one an ID, the runs that found it, `file:line` and a one-line claim.
 
 ### 8. Judging and pass rule
