@@ -1,5 +1,5 @@
 ---
-description: Review the current branch's open pull request with /gaffer:review-pr --dry-run, fix what that review confirms once, push the fix, and mark the pull request ready if it was a draft. Posts no review. Runs unattended, so the chain can run it as the stage after raise-pr.
+description: Review the current branch's open pull request with /gaffer:review-pr --dry-run --with-notes, fix what that review confirms once, push the fix, and mark the pull request ready if it was a draft. Posts no review. Runs unattended, so the chain can run it as the stage after raise-pr.
 argument-hint: ""
 ---
 
@@ -7,7 +7,7 @@ Read `CLAUDE.md` for project context, and the conventions as *Repository convent
 
 **Load the `gaffer:tracker` skill with the Skill tool before the first tracker operation.** A line written `tracker: <operation> <arguments>` names an operation that skill says how to carry out on this repository's tracker; it is notation, not a command to run. This command's only operations are the two that read the issue off the branch name for the fix commit.
 
-`/gaffer:pre-review` runs the repository's own review over a pull request before that review is posted, and fixes what it finds while fixing is cheapest. It runs `/gaffer:review-pr --dry-run` against the current branch's open pull request, makes **one** fix pass over what that review confirms, pushes the fix once the suite is green, corrects the pull request body where a finding is about the body, and then marks the pull request ready for review if it was a draft. Marking it ready is what starts the repository's usual review, so the posted review then runs on a pull request whose verified findings are already dealt with.
+`/gaffer:pre-review` runs the repository's own review over a pull request before that review is posted, and fixes what it finds while fixing is cheapest. It runs `/gaffer:review-pr --dry-run --with-notes` against the current branch's open pull request, makes **one** fix pass over what that review confirms, pushes the fix once the suite is green, corrects the pull request body where a finding is about the body, and then marks the pull request ready for review if it was a draft. Marking it ready is what starts the repository's usual review, so the posted review then runs on a pull request whose verified findings are already dealt with.
 
 It is the stage every chain run ends with, after `/gaffer:raise-pr --draft` ([`docs/chain.md`](../docs/chain.md)), and it runs the same way by hand: to pre-review a pull request you raised yourself, or to finish a draft a failed chain run left open. A pull request that is already ready for review stays as it is — only a draft is marked ready.
 
@@ -43,7 +43,7 @@ A section under any other heading is read too, and applied where its text says. 
 
    Note whether the pull request is a draft (`isDraft`); step 5 reads it. Note `headRefOid` as the starting HEAD; step 3 reads it.
 
-1. **Review, posting nothing.** Run `/gaffer:review-pr <url> --dry-run` in this session (the Skill tool, `gaffer:review-pr`), with the pull request's URL from step 0, so it reviews the pull request on `<R>`, and follow it to its end. With HEAD at the pull request's head it reviews this checkout in place. `--dry-run` is not optional: the run must post no review, comment, reply or label, and if you see that it posted anything, STOP. Reason: `the dry-run review posted to the pull request`.
+1. **Review, posting nothing.** Run `/gaffer:review-pr <url> --dry-run --with-notes` in this session (the Skill tool, `gaffer:review-pr`), with the pull request's URL from step 0, so it reviews the pull request on `<R>`, and follow it to its end. With HEAD at the pull request's head it reviews this checkout in place. `--dry-run` is not optional: the run must post no review, comment, reply or label, and if you see that it posted anything, STOP. Reason: `the dry-run review posted to the pull request`. Nor is `--with-notes`: without it the review verifies no notes and prints none, and the mechanical ones would go unfixed.
 
    From what it prints, take every **finding** (Critical or Major, verified) and every **note** (Minor or mechanical, verified), each with its `file:line`, claim and any **Pre-existing** tag. If the review stops before it composes a review, STOP with its reason.
 
@@ -56,11 +56,12 @@ A section under any other heading is read too, and applied where its text says. 
    | Item | Outcome |
    |---|---|
    | Critical or Major finding | **Fix it** |
-   | Mechanical note | **Fix it** |
+   | Mechanical note | **Fix it**, held to the no-added-complexity test |
    | Minor note | **Left** |
    | Anything tagged **Pre-existing** | **Left** |
 
-   - **Fix it** — fix it in the working tree with the smallest change that removes the defect: correct the one fact, change the lines that misbehave, add the missing test where the finding is that a test is missing. Do not restructure around it; anything larger belongs in an issue of its own. Findings and notes were both verified by the review, so do not re-judge either, and do not re-rate a finding down or a mechanical note up to Minor. If one that must be fixed genuinely cannot be, STOP, naming it, and say that the edits already in the tree are uncommitted and unverified and that discarding them is the recovery.
+   - **The no-added-complexity test.** A mechanical note's fix adds no complexity likely to cause further findings: no new branch, guard, helper, option or test case added just to satisfy the note. A mechanical note whose fix would fail it is **Left**. This is not re-rating the note: it stays mechanical, and the report names it as left for this reason.
+   - **Fix it** — fix it in the working tree with the smallest change that removes the defect: correct the one fact, change the lines that misbehave, add the missing test where the finding is that a test is missing. Do not restructure around it; anything larger belongs in an issue of its own. Findings and notes were both verified by the review, so do not re-judge either, and do not re-rate a finding down or a mechanical note up to Minor. Mechanical notes are fixed alongside the findings, in step 3's one fix commit, never in a commit of their own. If one that must be fixed genuinely cannot be, STOP, naming it, and say that the edits already in the tree are uncommitted and unverified and that discarding them is the recovery.
    - **A finding about the pull request body** — missing evidence, an unstated breaking change, a body that disagrees with the diff — is fixed in the body, not the code: write the corrected body in full and hold it for step 4. Correct what the finding names and nothing else, and leave no trace of this review in it.
    - **Left** — not fixed and not carried anywhere: a Minor note needs the author's judgement, and a Pre-existing item is work the branch did not cause, so fixing it would fold an unrelated mission into the branch. Name each in the report.
 
@@ -85,7 +86,7 @@ Report, in this order:
 - The pull request, and whether it was a draft and is now ready.
 - What the review found: the counts of findings by severity, of Minor notes and of mechanical notes, and the risk tier and human-review level it gave.
 - What was fixed: each finding and mechanical note fixed, by `file:line` and claim; the fix commit, and that the suite passed against it; and whether the body was corrected. Or that there was nothing to fix and no commit was added.
-- What was left: each Minor note, each Pre-existing item, and each mechanical note whose claim did not hold, by `file:line` and claim. This report is the only place they are recorded — do not raise an issue for one, write it to a file, or put it in the pull request.
+- What was left: each Minor note, each Pre-existing item, each mechanical note whose fix would fail the no-added-complexity test (step 2), and each mechanical note whose claim did not hold, by `file:line` and claim. This report is the only place they are recorded — do not raise an issue for one, write it to a file, or put it in the pull request.
 - Whether the branch edits `REVIEW.md` (step 1).
 
 **Close the report with the verdict as its last line** — one JSON object on one line, at column 1, nothing else on that line and nothing after it. Exactly one of:
