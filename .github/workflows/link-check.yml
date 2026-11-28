@@ -13,9 +13,12 @@ name: Link Check
 # The check's own behaviour is gated separately — .github/scripts/link-check.tests.sh is a
 # committed `*.tests.sh`, so shell-tests.yml discovers and runs it with no entry needed here.
 
+# Every pull request, whatever its base, so a PR stacked on another feature branch is checked too.
+# `edited` is listed because changing a PR's base sends only that, and a green run against the old
+# base would otherwise stand as the required check for a merge nobody tested.
 on:
   pull_request:
-    branches: [ "main" ]
+    types: [ opened, synchronize, reopened, edited ]
 
 permissions:
   contents: read
@@ -23,7 +26,7 @@ permissions:
 jobs:
   # Do NOT add a `paths:` filter or an `if:` condition to this job. To GitHub a skipped job is not
   # a failure, so a required `link-check` context is satisfied by one that never ran — and since
-  # `pull_request` workflows are evaluated from the head ref, the branch adding the filter is the
+  # `pull_request` workflows are evaluated from the merge ref, the branch adding the filter is the
   # branch it stops gating. A docs-only `paths` filter would be especially wrong here: a branch
   # that deletes a linked-to script under `chain/` or `hooks/` is exactly what this catches.
   link-check:
