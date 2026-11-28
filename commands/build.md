@@ -67,6 +67,7 @@ Two named exceptions, because the project reserves them for discussion. `CONVENT
    - `git rev-parse --abbrev-ref HEAD` is `main`. If not, STOP: "Run /gaffer:build from main — it creates the issue's branch itself." Reason: `/gaffer:build was not run from main`.
    - `git fetch origin main` succeeds. If not, STOP. Reason: `git fetch origin main failed`.
    - `git log origin/main..main --oneline` is empty. If not, STOP: "Local main has unpushed commits — push or discard them before building." Step 4 branches from `origin/main`, so those commits would be silently absent from the issue's branch. Reason: `local main has unpushed commits`.
+   - `git merge --ff-only origin/main` succeeds, bringing local `main` level with what step 4 branches from. The later stages measure the branch against local `main`, so a `main` left behind would count every upstream commit since as the branch's own. If it fails, STOP. Reason: `local main could not be fast-forwarded to origin/main`.
 
 2. **Read the issue.**
 

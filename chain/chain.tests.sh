@@ -996,7 +996,7 @@ echo "A zero time limit is refused:"
 new_case
 before="$(repo_state)"
 CHAIN_STAGE_TIMEOUT=0 chain 270
-ok "exits 1 naming the override, no stage started, nothing changed" '[ "$RC" = 1 ] && [ "$(calls)" = 0 ] && grep -q "CHAIN_STAGE_TIMEOUT" <<<"$OUTPUT" && [ "$(repo_state)" = "$before" ]'
+ok "exits 78, a configuration fault, naming the override, no stage started, nothing changed" '[ "$RC" = 78 ] && [ "$(calls)" = 0 ] && grep -q "CHAIN_STAGE_TIMEOUT" <<<"$OUTPUT" && [ "$(repo_state)" = "$before" ]'
 new_case
 before="$(repo_state)"
 CHAIN_STAGE_TIMEOUT=0 chain --dry-run 270
@@ -1008,7 +1008,7 @@ ok "a non-zero override is still accepted" '[ "$RC" = 0 ] && [ "$(calls)" = 4 ]'
 new_case
 before="$(repo_state)"
 CHAIN_STAGE_TIMEOUT=abc chain 270
-ok "an override that is not a whole number is refused before any stage starts" '[ "$RC" = 1 ] && [ "$(calls)" = 0 ] && grep -q "CHAIN_STAGE_TIMEOUT" <<<"$OUTPUT" && [ "$(repo_state)" = "$before" ]'
+ok "an override that is not a whole number is refused as a configuration fault (78) before any stage starts" '[ "$RC" = 78 ] && [ "$(calls)" = 0 ] && grep -q "CHAIN_STAGE_TIMEOUT" <<<"$OUTPUT" && [ "$(repo_state)" = "$before" ]'
 new_case
 reply 1 "$(ready)"; reply 2 "$(verified)"; reply 3 "$(raised)"; reply 4 "$(pre_reviewed)"
 CHAIN_STAGE_TIMEOUT= chain 270

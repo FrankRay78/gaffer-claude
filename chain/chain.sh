@@ -167,10 +167,10 @@ fi
 # the limits above already treat as no override, is not read as a zero one.
 if [ -n "${CHAIN_STAGE_TIMEOUT:-}" ]; then
   case "$CHAIN_STAGE_TIMEOUT" in *[!0-9]*)
-    echo "chain: refused — CHAIN_STAGE_TIMEOUT must be a whole number of seconds; got '$CHAIN_STAGE_TIMEOUT'." >&2; exit 1 ;;
+    config_refused "CHAIN_STAGE_TIMEOUT must be a whole number of seconds; got '$CHAIN_STAGE_TIMEOUT'" ;;
   esac
   if [ "$CHAIN_STAGE_TIMEOUT" -eq 0 ]; then
-    echo "chain: refused — CHAIN_STAGE_TIMEOUT=0 means no time limit, so a hung stage would never be reported; no stage was started." >&2; exit 1
+    config_refused "CHAIN_STAGE_TIMEOUT=0 means no time limit, so a hung stage would never be reported"
   fi
 fi
 
