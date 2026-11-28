@@ -6,9 +6,9 @@
 # sits in the clone, picks the lowest-numbered eligible issue of the repository the settings
 # name — open, carrying the ready label, not the parked label, with no open pull request linked
 # to it, no open blocking issue, and nothing raised, edited, retitled, last labelled ready or
-# commented on by anyone outside the settings' writers — resets the runner's own dedicated
-# clone of that repository to the latest main, and runs chain.sh, beside this file, against the
-# issue there. It ends with either an open pull request (the chain's last stage) or the issue
+# commented on by anyone outside the settings' writers, the runner's own comments aside —
+# resets the runner's own dedicated clone of that repository to the latest main, and runs
+# chain.sh, beside this file, against the issue there. It ends with either an open pull request (the chain's last stage) or the issue
 # labelled parked with a comment naming the failed stage, the log and the kept branch. Where the
 # chain's own exit code says a stage was cut off by the account's Claude usage limit, that comment
 # says so instead and tells the maintainer the issue itself needs only its parked label removed once the limit has
@@ -114,7 +114,7 @@ read_settings() {
     || die "refused — $f must name the runner's dedicated clone as \"clone\"; nothing was run."
   CLONE=$(expand_home "$CLONE")
   WRITERS=$(jq -c 'if (.writers | type) == "array" and (.writers | length) > 0 and all(.writers[]; type == "string" and test("^[A-Za-z]+:.+$")) then .writers else error("x") end' <<<"$s" 2>/dev/null) \
-    || die "refused — $f must name the accounts whose issues may be built, as \"writers\": a non-empty list of \"<Type>:<login>\" (\"User:octocat\", \"Bot:claude\"); with none named, no issue is ever built. Nothing was run."
+    || die "refused — $f must name the accounts whose issues may be built, as \"writers\": a non-empty list of \"<Type>:<login>\" (\"User:octocat\", \"Bot:dependabot\"); with none named, no issue is ever built. Nothing was run."
   READY_LABEL=$(jq -r 'if .labels == null then "ready" elif (.labels | type) == "object" and (.labels.ready == null or ((.labels.ready | type) == "string" and (.labels.ready | length) > 0)) then (.labels.ready // "ready") else error("x") end' <<<"$s" 2>/dev/null) \
     || die "refused — in $f, labels.ready is not a non-empty string; nothing was run."
   PARKED_LABEL=$(jq -r 'if .labels == null then "parked" elif (.labels | type) == "object" and (.labels.parked == null or ((.labels.parked | type) == "string" and (.labels.parked | length) > 0)) then (.labels.parked // "parked") else error("x") end' <<<"$s" 2>/dev/null) \
@@ -417,7 +417,7 @@ main() {
     exit 0
   fi
   if [ "$rc" = "$CHAIN_CONFIG_EXIT" ]; then
-    die "refused — the chain stopped on its own configuration (the settings, or the plugin checkout; see the log), so #$n was not parked. Log: $log"
+    die "refused — the chain stopped on its own configuration (the settings, the plugin checkout, or CHAIN_STAGE_TIMEOUT; see the log), so #$n was not parked. Log: $log"
   fi
   park "$n" "$log" "$rc"
   exit 1
