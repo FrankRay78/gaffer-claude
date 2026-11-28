@@ -6,8 +6,11 @@ name: Shell Tests
 # and `claude plugin validate` accepts the layout.
 
 # Every pull request, whatever its base, so a PR stacked on another feature branch is tested too.
+# `edited` is listed because changing a PR's base sends only that, and a green run against the old
+# base would otherwise stand as the required check for a merge nobody tested.
 on:
   pull_request:
+    types: [ opened, synchronize, reopened, edited ]
   push:
     branches: [ "main" ]
 
