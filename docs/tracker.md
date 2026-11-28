@@ -74,13 +74,13 @@ With this plugin's file, those calls are:
 | Calls | Operations | Needed by |
 |---|---|---|
 | `git remote get-url origin`, `gh repo view` | every operation that reaches GitHub | every command below |
-| `gh issue view` | `view`, `pr-reference` | the chain's stages (`build`, `raise-pr`), `review-pr`, and the issue commands |
+| `gh issue view` | `view`, `pr-reference` | the chain's stages (`build`, `raise-pr`, and `pre-review`, through the `review-pr` it runs), `review-pr`, and the issue commands |
 | `gh api` reading an issue's comments | `view`, `comment-find` | the issue commands |
 | `gh issue create`, `gh issue edit`, `gh issue comment`, `gh issue close`, `gh api` writing an issue or a comment, `jq` | `create`, `state-add`, `state-remove`, `comment-post`, `comment-edit`, `comment-delete`, `body-set`, `link`, `close` | `draftissue`, `reviewissue`, `confirmissue`, `graft`, `audit-codebase` |
 | `gh issue list` | `search-title` | `audit-codebase` |
 | `gh label list` | `states` | `init` |
 
-`verify` and `pre-review` use only `ref` and `branch-ref`, which make no call. A rule that allows `gh api` by prefix allows every `gh api` call, writes and deletes included; a stage that only reads needs a rule for the comments path alone. Loading the skill needs no rule of its own. A replacement file that reaches its tracker through an MCP connector needs that connector's tools allowed instead.
+`verify` uses only `ref` and `branch-ref`, which make no call. `pre-review`'s own calls are those two as well, but the `/gaffer:review-pr --dry-run` it runs in the same session calls `view`, so the stage needs `gh issue view` allowed. A rule that allows `gh api` by prefix allows every `gh api` call, writes and deletes included; a stage that only reads needs a rule for the comments path alone. Loading the skill needs no rule of its own. A replacement file that reaches its tracker through an MCP connector needs that connector's tools allowed instead.
 
 ## What stays on GitHub
 
