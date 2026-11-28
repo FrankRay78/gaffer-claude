@@ -348,9 +348,9 @@ settings "{\"clone\": \"$CLONE\", \"writers\": [\"User:maintainer\"], \"state_di
 echo runner-account > "$STUB_DIR/gh-user"
 issues '[{"number":3,"state":"OPEN","labels":["ready"],"author":"runner-account"},{"number":4,"state":"OPEN","labels":["ready"]},{"number":5,"state":"OPEN","labels":["ready"]}]'
 echo '[{"author":{"__typename":"Bot","login":"runner-account"}}]' > "$STUB_DIR/comments-4.json"
-echo '[{"author":{"__typename":"User","login":"runner-account"}},{"deletedCommentAuthor":{"__typename":"User","login":"runner-account"}}]' > "$STUB_DIR/comments-5.json"
+echo '[{"author":{"__typename":"User","login":"runner-account"}},{"deletedCommentAuthor":{"__typename":"User","login":"runner-account"}},{"actor":{"__typename":"User","login":"runner-account"},"label":{"name":"parked"}},{"actor":{"__typename":"User","login":"someone-else"},"label":{"name":"bug"}}]' > "$STUB_DIR/comments-5.json"
 fire --dry-run
-ok "an issue only the runner's account commented on, as a park comment, is built" '[ "$RC" = 0 ] && grep -qF "would build #5" <<<"$OUTPUT"'
+ok "an issue only the runner's account commented on and labelled parked, and someone else labelled otherwise, is built" '[ "$RC" = 0 ] && grep -qF "would build #5" <<<"$OUTPUT"'
 ok "but one the runner's account raised is passed over" 'grep -qF "skipped #3" <<<"$OUTPUT"'
 ok "and so is one a bot with the runner's login commented on" 'grep -qF "skipped #4" <<<"$OUTPUT"'
 new_case
