@@ -5,13 +5,13 @@
 # Each firing reads one settings file (docs/chain.md), as origin's main holds it where the file
 # sits in the clone, picks the lowest-numbered eligible issue of the repository the settings
 # name — open, carrying the ready label, not the parked label, with no open pull request linked
-# to it, no open blocking issue, and nothing raised, edited, retitled, labelled ready or
+# to it, no open blocking issue, and nothing raised, edited, retitled, last labelled ready or
 # commented on by anyone outside the settings' writers — resets the runner's own dedicated
 # clone of that repository to the latest main, and runs chain.sh, beside this file, against the
 # issue there. It ends with either an open pull request (the chain's last stage) or the issue
 # labelled parked with a comment naming the failed stage, the log and the kept branch. Where the
-# chain's own exit code says a stage was cut off by the account's Claude usage limit, that comment says so instead and
-# tells the maintainer the issue itself needs only its parked label removed once the limit has
+# chain's own exit code says a stage was cut off by the account's Claude usage limit, that comment
+# says so instead and tells the maintainer the issue itself needs only its parked label removed once the limit has
 # reset. It never merges, and it never itself deletes or pushes anything on GitHub; only the
 # chain's raise-pr and pre-review stages push. A pre-review that fails leaves its pull request
 # open as a draft, and the comment names it.
@@ -36,8 +36,8 @@
 # or with local commits its origin's main does not have — a headless run must use what main holds,
 # and a checkout that has been edited is a fault to look at, not one to force past.
 #
-# Prerequisites: git, gh, jq and flock on PATH, plus chain.sh's own (claude, timeout); gh and
-# claude signed in; a git identity in the clone. flock comes from util-linux, so on macOS it is
+# Prerequisites: git, gh, jq and flock on PATH, plus chain.sh's own (claude, timeout); gh signed
+# in as a user account, and claude signed in; a git identity in the clone. flock comes from util-linux, so on macOS it is
 # installed separately. Tests: chain-next.tests.sh beside this file.
 
 # No -e: every failure below is reported by name rather than killing the firing silently.
@@ -157,8 +157,9 @@ select_issue() {
     open=$(jq -s '[.[][] | select(.state == "open")] | length' <<<"$blockers") \
       || die "refused — the blocker list for #$n was unreadable; nothing selected."
     [ "$open" = 0 ] || continue
-    # The runner's own account, once: its park comments are its own, so they do not count
-    # against the issue. Only its comments — an issue it raised, edited or labelled still does.
+    # The runner's own account, read once: its park comments do not count against the issue.
+    # Only its comments are exempt; an issue it raised, edited, retitled or labelled still counts.
+    # `gh api user` needs a user's token: an app or Actions token is refused, and so is the firing.
     if [ -z "$runner" ]; then
       runner=$(gh api user --jq .login) && [ -n "$runner" ] \
         || die "refused — could not read which account gh is signed in as; nothing selected."
@@ -190,7 +191,7 @@ select_issue() {
                  ($t[] | select(has("actor") and (has("label") | not)) | .actor | who), ($l.actor | who),
                  ($t[] | select(has("author") or has("deletedCommentAuthor")) | (.author // .deletedCommentAuthor) | who | select(. != $runner))]
                 - $allowed | length) != 0
-          then "someone outside the settings'"'"' writers has raised, edited, labelled or commented on it."
+          then "someone outside the settings'"'"' writers has raised, edited, retitled, labelled or commented on it."
           else empty end' <<<"$writers") \
       || die "refused — the writer list for #$n was unreadable; nothing selected."
     if [ -n "$why" ]; then
